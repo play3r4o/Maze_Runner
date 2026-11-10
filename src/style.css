@@ -45,6 +45,22 @@ kbd { font: 11px ui-monospace, monospace; min-width: 23px; height: 23px; padding
 .diagnostics-label { font-size: 9px; letter-spacing: 0.07em; }
 .separator { color: #78907b; padding: 0 6px; }
 .footer-controls { margin-left: auto; font-size: 9px; }
+.shift-panel { position: absolute; top: 124px; left: 32px; width: 238px; padding: 17px; background: #192923ee; border: 1px solid #c9d6ca26; border-radius: 3px; }
+.shift-panel .eyebrow { font-size: 8px; letter-spacing: .1em; display: flex; justify-content: space-between; gap: 8px; }
+.shift-panel .eyebrow span { letter-spacing: 0; text-transform: none; }
+.shift-phase { font-size: 16px; margin: 13px 0 5px; color: #e1c58c; }
+.shift-layout { margin: 0 0 14px; font-size: 10px; color: #aebdb1; }
+.gate-statuses { display: grid; grid-template-columns: 1fr 1fr; gap: 9px 14px; padding: 12px 0; border-block: 1px solid #c9d6ca26; }
+.gate-statuses div { display: flex; justify-content: space-between; gap: 6px; font: 9px ui-monospace, monospace; }
+.gate-statuses div > span { color: #aebdb1; }
+.gate-statuses [data-status='open'] { color: #b6d5ad; }
+.gate-statuses [data-status='closed'] { color: #bfc7c1; }
+.gate-statuses [data-status='moving'] { color: #e1c58c; }
+.gate-statuses [data-status='held'] { color: #f3a38b; }
+.shift-notice { font-size: 11px; line-height: 1.6; min-height: 52px; color: #d0d8cc; margin: 12px 0; }
+.shift-help { display: flex; align-items: center; gap: 7px; font: 9px ui-monospace, monospace; margin: 0; color: #e1c58c; }
+.shift-help span { font: 9px/1.5 system-ui, sans-serif; color: #aebdb1; }
+[data-state='paused'] .shift-panel { visibility: hidden; }
 
 @media (max-width: 620px) {
   .prototype-header { top: 18px; left: 18px; }
@@ -52,6 +68,7 @@ kbd { font: 11px ui-monospace, monospace; min-width: 23px; height: 23px; padding
   .diagnostics { left: 18px; right: 18px; bottom: 16px; gap: 12px; }
   .footer-controls { display: none; }
   .pause-panel { padding: 25px; }
+  .shift-panel { left: 18px; top: 108px; width: 218px; }
 }
 @media (max-height: 600px) {
   .pause-overlay { padding-top: 85px; padding-bottom: 75px; place-items: start center; }

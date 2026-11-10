@@ -4,15 +4,16 @@
 
 - Planning documents saved from the approved proposal.
 - M0 implementation approved by the instruction to implement the proposed plan, bounded by one-milestone-at-a-time development.
-- M1 and later are not approved to start.
-- On 2026-11-10 the developer authorized GitHub hosting to make M0 playable without a local installation. This authorizes the deployment workflow and source upload; M1 remains unapproved.
+- On 2026-11-10 the developer authorized GitHub hosting to make the prototype playable without a local installation. Approved pushes use the existing Pages workflow.
+- The developer confirmed M0 mouse/WASD/collision worked, then confirmed all remaining manual checks passed and explicitly approved the next step. M0 is accepted; M1 is approved. M2 and later are not approved to start.
 
 ## Status
 
 | Milestone | Status |
 | --- | --- |
-| M0 | Implemented; automated checks passed; ready for manual testing; not human accepted |
-| M1–M8 | Not started |
+| M0 | Human accepted on 2026-11-10 |
+| M1 | Implemented; automated checks passed; ready for manual testing; not human accepted |
+| M2–M8 | Not started |
 | M9 (scheduled after M7) | Not started |
 | M10–M12 | Not started |
 | M13 | Conditional, not started |
@@ -70,8 +71,24 @@ At the end of the original M0 implementation, changes were local to this cloud c
 
 ## Human verification
 
-Pending. Use [the M0 checklist](milestones/M0.md#human-acceptance-not-substitutable-by-automation) in both development and production preview. CPU/GPU/browser reference details are not yet supplied.
+M0 accepted: the developer confirmed mouse movement, WASD, collision, then all remaining checks (pause/resume, switching tabs, movement edges, camera/resize and reload) passed. CPU/GPU/browser reference details are not yet supplied; performance targets are not yet verified.
+
+M1 acceptance is pending. Use the [M1 checklist](milestones/M1.md#human-checklist); no automatic acceptance is claimed.
+
+### M1 implementation — 2026-11-10
+
+- Four-way fixture with a fixed perimeter return loop, four stable gate IDs, signs, moving slabs and marked safety areas. NORTH/SOUTH and EAST/WEST are the two intended arrangements.
+- Pure shift state machine: two-second warning, 1.25-second opening then 1.25-second closing, three-second cooldown. Repeated G is not queued; pause freezes simulation. Five-node fixture connectivity is checked before planning and during motion.
+- Occupancy checks hold closing gates before each step. A two-second obstruction cancels to all-open recovery, then cooldown; retry preserves the cancelled target. All-open is explicitly labelled, not counted as a completed shift.
+- Rendered gate poses and movement colliders use the same rectangle function. No application assets, dependencies, procedural generation, general maze framework or physics engine were added.
+- The accepted M0 reference is retained at `?scene=room`, and its browser regressions select it explicitly.
+- Verification passed: `npm test` ran 46 tests across three files. `CI=1 PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium npm run test:browser` passed TypeScript/build and all ten browser checks (three M1 scenarios plus seven M0 regressions), with one worker and no skips/retries.
+- M1 browser scenarios cover a closed corridor becoming usable after a warned shift, busy request rejection, occupied-gate hold/cancel/all-open recovery without displacement, and pause freezing shift time/ignoring G input while paused.
+- The initial M1 test pass exposed two test synchronization errors: reading a stale 10 Hz position diagnostic after key release, and issuing G before the pointer-lock event handler had marked input active. Tests now wait for the running HUD and the post-keyup diagnostic sample. The movement/safety assertions were retained; the complete corrected suite passed.
+- Separate development-browser verification captured and visually inspected startup, NORTH open, EAST closed, a moving EAST gate and EAST open. No console/page errors were observed. Software rendering/system Chromium was used; matching Playwright browser installation remains blocked by the previously documented CDN policy.
+- Local production output is about 551 kB minified / 138 kB gzip in its main JS chunk, retaining the existing non-failing Vite size warning. No dependencies or thresholds were changed.
+- The approved GitHub update triggers the existing Pages workflow. Hosted M1 availability awaits that deployment; no remote success or human M1 acceptance is claimed. Refresh the hosted page after deployment and check its M1 label before following the checklist.
 
 ## Next action
 
-Wait for the developer's M0 manual results. Fix reported M0 defects if any. Do not start M1 without acceptance and explicit approval.
+Wait for the developer's M1 manual results after the GitHub Pages deployment. Fix M1 defects if reported. Do not start M2 without acceptance and explicit approval.

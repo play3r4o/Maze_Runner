@@ -1,8 +1,8 @@
 # Shifting Labyrinth
 
-Working title. A browser game project starting with a small, first-person shifting-maze prototype. **Only M0, a room with movement and collision, is implemented.** Gates, extraction and other gameplay are later milestones.
+Working title. A browser game project starting with a small, first-person shifting-maze prototype. **M0 is accepted; M1, one shifting junction, is implemented for manual testing.** Extraction and the wider maze are later milestones.
 
-Read [the brief](project_brief.md), [development plan](docs/development_plan.md), [M0 specification](docs/milestones/M0.md), and [current progress](docs/progress.md).
+Read [the brief](project_brief.md), [development plan](docs/development_plan.md), [M1 specification](docs/milestones/M1.md), and [current progress](docs/progress.md).
 
 ## Run
 
@@ -15,9 +15,11 @@ npm run dev
 
 Open Vite's printed address in a current desktop browser. The development server binds to all interfaces for cloud access. Use your platform's supported browser/port access when working remotely; your own computer's localhost is not the cloud machine. No credentials or external services are required.
 
-Click **Start exploring** to capture the mouse. **WASD** moves, **mouse** looks, and **Escape** pauses/releases the cursor. Click **Resume exploring** to continue. Switching tabs or losing focus pauses and clears movement.
+Click **Start exploring** to capture the mouse. **WASD** moves, **mouse** looks, **G** requests a gate shift, and **Escape** pauses/releases the cursor. Click **Resume exploring** to continue. Switching tabs or losing focus pauses and clears movement and pending shift requests.
 
-Walk into each wall and the central block, slide along their edges, pause while holding W, resume, and resize. Follow the [full manual checklist](docs/milestones/M0.md#human-acceptance-not-substitutable-by-automation) before accepting M0. The room has no objective, jumping or sprinting.
+The default scene is a four-way junction. NORTH/SOUTH initially open; G warns for two seconds, opens the other pair, then closes the old pair. Gold lines mark gate travel areas. An occupied closing area holds the shift; after two seconds of obstruction, it cancels and safely reopens all gates. Wait through the three-second cooldown, move clear and press G to retry. The outside loop always provides a return route.
+
+Follow the [M1 manual checklist](docs/milestones/M1.md#human-checklist) before approving M2. The accepted M0 reference room is retained by adding `?scene=room` to the page URL. Neither prototype has an objective, jumping or sprinting yet.
 
 ## Check and build
 
@@ -64,7 +66,7 @@ One-time repository setup:
 
 For the current repository, the expected default URL is `https://play3r4o.github.io/Maze_Runner/`. It becomes usable only after GitHub reports a successful deployment; an expected URL alone is not proof of publication.
 
-Open the game in a desktop browser tab and click **Start exploring**. No local Node.js installation is required for the hosted version. Use the same M0 manual checklist before approving M1.
+Open the game in a desktop browser tab and click **Start exploring**. No local Node.js installation is required for the hosted version. After a new deployment, refresh and check the M1 header before testing the junction.
 
 If Pages is unavailable for the repository's visibility or account plan, keep those settings unchanged and report the limitation. Enabling Pages does not require adding credentials to the game or creating a separate server.
 
@@ -81,4 +83,4 @@ The local npm cache is ignored `.cache/npm` to work inside restricted cloud work
 
 Stop the development server before reinstalling dependencies and restart it afterward. If Vite reports an outdated optimized dependency after an install, restart the server rather than changing application code.
 
-Next milestone is M1 (one shifting junction), **after M0 human acceptance and explicit approval**. Nothing has been pushed or published automatically.
+Next milestone is M2 (a tiny hand-built maze), **after M1 human acceptance and explicit approval**. Approved GitHub pushes trigger the Pages workflow; a successful local build alone does not establish a successful hosted deployment.

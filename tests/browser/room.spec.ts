@@ -37,7 +37,7 @@ async function moveMouseRelative(page: Page, movementX: number) {
 
 test('production room draws geometry, shows controls, and resizes', async ({ page }, testInfo) => {
   const errors = watchErrors(page);
-  await page.goto('/');
+  await page.goto('/?scene=room');
   await expect(page.getByRole('heading', { name: 'A place to begin.' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Start exploring' })).toBeVisible();
   const canvas = page.locator('#scene');
@@ -77,7 +77,7 @@ test('production room draws geometry, shows controls, and resizes', async ({ pag
 
 test('real pointer lock, movement, block collision, pause and clean resume', async ({ page }) => {
   const errors = watchErrors(page);
-  await page.goto('/');
+  await page.goto('/?scene=room');
   await moveMouseRelative(page, 220);
   await start(page);
   await page.keyboard.down('KeyW');
@@ -104,7 +104,7 @@ test('real pointer lock, movement, block collision, pause and clean resume', asy
 for (const [direction, movementX] of [['right', 220], ['left', -220]] as const) {
   test(`relative mouse input turns forward movement ${direction}`, async ({ page }) => {
     const errors = watchErrors(page);
-    await page.goto('/');
+    await page.goto('/?scene=room');
     await start(page);
     await moveMouseRelative(page, movementX);
     await page.keyboard.down('KeyW');
@@ -120,7 +120,7 @@ for (const [direction, movementX] of [['right', 220], ['left', -220]] as const) 
 
 test('losing focus clears movement and pauses', async ({ page }) => {
   const errors = watchErrors(page);
-  await page.goto('/');
+  await page.goto('/?scene=room');
   await start(page);
   await page.keyboard.down('KeyS');
   await expect.poll(async () => (await position(page)).z).toBeGreaterThan(8.2);
@@ -143,7 +143,7 @@ test('blocked pointer lock gives a recoverable message', async ({ page }) => {
   await page.addInitScript(() => {
     HTMLCanvasElement.prototype.requestPointerLock = () => Promise.reject(new Error('Blocked by test'));
   });
-  await page.goto('/');
+  await page.goto('/?scene=room');
   await page.getByRole('button', { name: 'Start exploring' }).click();
   await expect(page.getByText('Mouse capture was blocked. Click Start or Resume to try again.')).toBeVisible();
   await expect(page.getByTestId('hud')).toHaveAttribute('data-state', 'paused');
@@ -158,7 +158,7 @@ test('unavailable WebGL gives a readable fallback', async ({ page }) => {
       return getContext.apply(this, args);
     } as typeof getContext;
   });
-  await page.goto('/');
+  await page.goto('/?scene=room');
   await expect(page.getByRole('heading', { name: 'Unable to start the room.' })).toBeVisible();
   await expect(page.getByText(/WebGL 2 could not start/)).toBeVisible();
   await expect(page.getByRole('button')).toBeHidden();

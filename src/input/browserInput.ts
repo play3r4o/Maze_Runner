@@ -10,6 +10,7 @@ export class BrowserInput {
   private active = false;
   private yaw = 0;
   private pitch = 0;
+  private shiftRequested = false;
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -21,6 +22,9 @@ export class BrowserInput {
       if (!this.active) return;
       if (event.code === 'Escape') {
         this.pause();
+      } else if (event.code === 'KeyG') {
+        event.preventDefault();
+        if (!event.repeat) this.shiftRequested = true;
       } else if (MOVEMENT_KEYS.has(event.code)) {
         event.preventDefault();
         this.keys.add(event.code);
@@ -40,6 +44,7 @@ export class BrowserInput {
 
     document.addEventListener('pointerlockchange', () => {
       this.keys.clear();
+      this.shiftRequested = false;
       this.active = document.pointerLockElement === canvas && !document.hidden;
       this.onModeChange(this.active);
     }, options);
@@ -69,6 +74,7 @@ export class BrowserInput {
   pause(message?: string) {
     this.active = false;
     this.keys.clear();
+    this.shiftRequested = false;
     this.onModeChange(false, message);
     if (document.pointerLockElement === this.canvas) document.exitPointerLock();
   }
@@ -83,6 +89,12 @@ export class BrowserInput {
         strafe: Number(this.keys.has('KeyD')) - Number(this.keys.has('KeyA')),
       },
     };
+  }
+
+  consumeShiftRequest(): boolean {
+    const requested = this.active && this.shiftRequested;
+    this.shiftRequested = false;
+    return requested;
   }
 
   dispose() {

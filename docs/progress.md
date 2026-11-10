@@ -59,6 +59,15 @@ At the end of the original M0 implementation, changes were local to this cloud c
 - A separate static-server browser check mounted production output at `/Maze_Runner/` and passed asset loading, actual pointer lock, movement and pause with no HTTP/console/page errors.
 - Deployment mechanism is prepared and locally verified. Hosted availability is unconfirmed: the repository's Pages source must be GitHub Actions and a deploy job must succeed. See README for the one-time setting and workflow steps.
 
+### Pages CI mouse-input correction — 2026-11-10
+
+- The developer's Actions screenshot shows five browser checks passed, while the coordinate-driven mouse-look check failed with X staying at zero. The deployment was therefore blocked; no successful public deployment is claimed.
+- Local validation used system Chromium 156; Actions installs Playwright Chromium 158 headless shell. Installing that exact browser here failed with an explicit proxy `403 Domain forbidden` for `cdn.playwright.dev`, so the precise CI backend failure has not been independently reproduced.
+- Removed the test's assumption that absolute automated cursor coordinates reliably generate pointer-locked relative movement. Look tests now acquire actual pointer lock, dispatch explicit relative DOM mouse events through the production input handler, then use actual keyboard input and assert forward movement in both left and right directions. The pause/collision test also checks that those mouse events are ignored before locking and while paused.
+- No application input code, movement assertions, retries, or timeout limits were loosened. Genuine mouse-device behavior remains a human acceptance item; these integration tests do not claim to reproduce physical mouse motion.
+- CI now uses one browser worker to reduce software-WebGL CPU contention. Failed jobs preserve screenshots/traces as the `browser-test-diagnostics` Actions artifact for seven days.
+- Corrected local checks passed: 23 unit tests; type check/build; all seven browser tests with `CI=1 PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium npm run test:browser` (one worker). Workflow YAML and conditional artifact upload were checked. The next GitHub Actions result must still be verified separately with its bundled Chromium.
+
 ## Human verification
 
 Pending. Use [the M0 checklist](milestones/M0.md#human-acceptance-not-substitutable-by-automation) in both development and production preview. CPU/GPU/browser reference details are not yet supplied.

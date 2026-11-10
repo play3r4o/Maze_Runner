@@ -23,6 +23,18 @@ async function position(page: Page) {
   };
 }
 
+async function moveMouseRelative(page: Page, movementX: number) {
+  // Pointer-locked look consumes relative deltas. Absolute CDP mouse.move
+  // coordinates do not guarantee those deltas across headless backends.
+  // Dispatch input through the real DOM handler, never through game state.
+  // Genuine mouse-device feel still requires the human acceptance checklist.
+  await page.locator('#scene').dispatchEvent('mousemove', {
+    bubbles: true,
+    movementX,
+    movementY: 0,
+  });
+}
+
 test('production room draws geometry, shows controls, and resizes', async ({ page }, testInfo) => {
   const errors = watchErrors(page);
   await page.goto('/');
@@ -66,13 +78,16 @@ test('production room draws geometry, shows controls, and resizes', async ({ pag
 test('real pointer lock, movement, block collision, pause and clean resume', async ({ page }) => {
   const errors = watchErrors(page);
   await page.goto('/');
+  await moveMouseRelative(page, 220);
   await start(page);
   await page.keyboard.down('KeyW');
   await expect.poll(async () => (await position(page)).z, { timeout: 15_000 }).toBeCloseTo(1.3, 1);
+  expect((await position(page)).x).toBeCloseTo(0);
   await page.keyboard.press('Escape');
   await expect(page.getByTestId('hud')).toHaveAttribute('data-state', 'paused');
   await expect.poll(() => page.evaluate(() => document.pointerLockElement)).toBeNull();
   const paused = await position(page);
+  await moveMouseRelative(page, 220);
   await page.getByRole('button', { name: 'Resume exploring' }).click();
   await expect(page.getByTestId('hud')).toHaveAttribute('data-state', 'running');
   // Deliberately keep W physically held: unlock must have cleared its input.
@@ -82,22 +97,26 @@ test('real pointer lock, movement, block collision, pause and clean resume', asy
   await page.keyboard.down('KeyD');
   await expect.poll(async () => (await position(page)).x).toBeGreaterThan(paused.x + 0.5);
   await page.keyboard.up('KeyD');
+  expect((await position(page)).z).toBeCloseTo(paused.z);
   expect(errors).toEqual([]);
 });
 
-test('mouse look changes the direction of forward movement', async ({ page }) => {
-  const errors = watchErrors(page);
-  await page.goto('/');
-  const buttonBounds = await page.getByRole('button', { name: 'Start exploring' }).boundingBox();
-  expect(buttonBounds).not.toBeNull();
-  await start(page);
-  await page.mouse.move(buttonBounds!.x + buttonBounds!.width / 2 + 220, buttonBounds!.y + buttonBounds!.height / 2, { steps: 4 });
-  await page.keyboard.down('KeyW');
-  await expect.poll(async () => (await position(page)).x).toBeGreaterThan(0.25);
-  await page.keyboard.up('KeyW');
-  expect((await position(page)).z).toBeLessThan(7.8);
-  expect(errors).toEqual([]);
-});
+for (const [direction, movementX] of [['right', 220], ['left', -220]] as const) {
+  test(`relative mouse input turns forward movement ${direction}`, async ({ page }) => {
+    const errors = watchErrors(page);
+    await page.goto('/');
+    await start(page);
+    await moveMouseRelative(page, movementX);
+    await page.keyboard.down('KeyW');
+    try {
+      await expect.poll(async () => Math.sign(movementX) * (await position(page)).x).toBeGreaterThan(0.25);
+      expect((await position(page)).z).toBeLessThan(7.8);
+    } finally {
+      await page.keyboard.up('KeyW');
+    }
+    expect(errors).toEqual([]);
+  });
+}
 
 test('losing focus clears movement and pauses', async ({ page }) => {
   const errors = watchErrors(page);

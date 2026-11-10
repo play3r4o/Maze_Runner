@@ -49,6 +49,8 @@ PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium npm run test:browser
 
 That shell syntax is for Linux/macOS. On other systems use the default Playwright install above. Failure artifacts go to ignored `test-results/`. Automated pointer-lock checks supplement, but do not replace, human testing of the controls.
 
+Mouse-look checks acquire real pointer lock, dispatch DOM mouse events with explicit relative deltas, and assert resulting movement using actual keyboard input. Absolute automated cursor coordinates do not reliably produce relative motion in every headless Chromium backend. Real mouse-device feel remains a manual check. CI uses one browser worker to reduce software-rendering contention.
+
 ## Play through GitHub Pages
 
 The workflow in `.github/workflows/pages.yml` tests the app, builds `dist/`, and publishes that directory when `main` changes. Source documents and development dependencies are not part of the published website. Vite uses relative asset paths, so the build supports the repository's `/Maze_Runner/` URL path.

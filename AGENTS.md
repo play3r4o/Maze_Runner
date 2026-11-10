@@ -1,0 +1,14 @@
+# Working on Shifting Labyrinth
+
+Read `project_brief.md`, `docs/development_plan.md`, `docs/progress.md`, and the current milestone specification before editing.
+
+- Implement only the currently approved milestone. M0 is approved; M1 and later require a new instruction after human testing.
+- Each cloud task already has an isolated checkout. Use it; do not create worktrees unless requested.
+- Keep simulation and game rules independent of Three.js, DOM, storage, and networking. Rendering consumes state.
+- Prefer small explicit modules, plain types, primitive geometry, and minimal dependencies.
+- Preserve user changes. Do not rewrite the brief, change scope silently, or push/publish without authorization.
+- Use `npm ci` with the lockfile. Run `npm run typecheck`, `npm test`, and `npm run test:browser` (which includes the production build).
+- Record test evidence and limitations in `docs/progress.md`. Automated tests do not constitute human acceptance.
+- At the milestone boundary, provide launch instructions and a manual checklist, then stop. Do not start the next milestone automatically.
+
+M0 intentionally excludes gates, generation, interaction/loot, enemies, persistence, multiplayer, art assets, gravity, sprint, and jumping.

@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import type { Page } from '@playwright/test';
+import { freezeBrowserClock, installBrowserClock } from './clock';
 
 // These scenarios include warnings, motion, obstruction recovery and cooldown.
 // Allow time for those deliberate phases on software-rendered CI browsers.
@@ -49,26 +50,35 @@ test('warned shift opens a previously blocked corridor and closes the old routes
 
 test('occupied closing area holds then cancels to safe all-open recovery', async ({ page }, testInfo) => {
   const errors = watchErrors(page);
+  await installBrowserClock(page);
   await start(page);
+  await freezeBrowserClock(page);
   await page.keyboard.down('KeyW');
-  await expect.poll(() => position(page, 'z'), { intervals: [50], timeout: 15_000 }).toBeLessThan(-3.8);
+  // Walk four meters with the real keyboard handler, without relying on CDP
+  // round-trip speed to release W inside the 1.4-meter gate safety region.
+  await page.clock.runFor(1334);
   await page.keyboard.up('KeyW');
-  // Position diagnostics sample at 10 Hz; capture the post-keyup sample.
-  await page.waitForTimeout(150);
+  await page.clock.runFor(120);
   const stopped = await position(page, 'z');
+  expect(stopped).toBeLessThan(-3.8);
   expect(stopped).toBeGreaterThan(-4.7);
   await page.keyboard.press('KeyG');
+  // Warning (2s), replacement opening (1.25s), then an occupied closing step.
+  await page.clock.runFor(3500);
   await expect(page.getByTestId('shift-notice')).toContainText('Closing held: NORTH', { timeout: 20_000 });
   await expect(page.getByTestId('gate-north')).toHaveText('HELD');
   await testInfo.attach('gate-held', { body: await page.screenshot(), contentType: 'image/png' });
+  await page.clock.runFor(2200);
   await expect(page.getByTestId('shift-layout')).toHaveText('All routes open · safe recovery', { timeout: 15_000 });
   for (const id of ['north', 'east', 'south', 'west']) await expect(page.getByTestId(`gate-${id}`)).toHaveText('OPEN');
   await expect(page.getByTestId('shift-notice')).toContainText('Shift cancelled');
   await expect(page.getByTestId('shift-count')).toHaveText('0 shifts');
   expect(await position(page, 'z')).toBe(stopped);
   await page.keyboard.down('KeyW');
-  await expect.poll(() => position(page, 'z')).toBeLessThan(-5);
+  await page.clock.runFor(500);
   await page.keyboard.up('KeyW');
+  await page.clock.runFor(120);
+  expect(await position(page, 'z')).toBeLessThan(-5);
   expect(errors).toEqual([]);
 });
 

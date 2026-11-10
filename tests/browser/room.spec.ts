@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import type { Page } from '@playwright/test';
+import { freezeBrowserClock, installBrowserClock } from './clock';
 
 function watchErrors(page: Page) {
   const errors: string[] = [];
@@ -17,10 +18,11 @@ async function start(page: Page) {
 }
 
 async function position(page: Page) {
-  return {
-    x: Number(await page.getByTestId('position-x').textContent()),
-    z: Number(await page.getByTestId('position-z').textContent()),
-  };
+  // Read one visible HUD sample, without rendering/input between coordinates.
+  return page.evaluate(() => ({
+    x: Number(document.querySelector('[data-testid="position-x"]')!.textContent),
+    z: Number(document.querySelector('[data-testid="position-z"]')!.textContent),
+  }));
 }
 
 async function moveMouseRelative(page: Page, movementX: number) {
@@ -104,16 +106,23 @@ test('real pointer lock, movement, block collision, pause and clean resume', asy
 for (const [direction, movementX] of [['right', 220], ['left', -220]] as const) {
   test(`relative mouse input turns forward movement ${direction}`, async ({ page }) => {
     const errors = watchErrors(page);
+    await installBrowserClock(page);
     await page.goto('/?scene=room');
     await start(page);
+    await freezeBrowserClock(page);
     await moveMouseRelative(page, movementX);
     await page.keyboard.down('KeyW');
     try {
-      await expect.poll(async () => Math.sign(movementX) * (await position(page)).x).toBeGreaterThan(0.25);
-      expect((await position(page)).z).toBeLessThan(7.8);
+      await page.clock.runFor(1000);
     } finally {
       await page.keyboard.up('KeyW');
     }
+    // Let the 10 Hz diagnostics render the stopped position, then assert both
+    // axes from the same snapshot. The player cannot drift during assertions.
+    await page.clock.runFor(120);
+    const stopped = await position(page);
+    expect(Math.sign(movementX) * stopped.x).toBeGreaterThan(0.25);
+    expect(stopped.z).toBeLessThan(7.8);
     expect(errors).toEqual([]);
   });
 }

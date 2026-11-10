@@ -10,6 +10,9 @@ export default defineConfig({
   use: {
     baseURL: 'http://127.0.0.1:4174',
     browserName: 'chromium',
+    // Use full Chromium's new headless mode, matching the installed Chromium
+    // used locally instead of switching CI to the separate headless shell.
+    channel: 'chromium',
     viewport: { width: 1280, height: 800 },
     launchOptions: {
       executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH,

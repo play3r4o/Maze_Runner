@@ -7,13 +7,15 @@ import { PLAYER_SPAWN, ROOM_WALLS } from './simulation/room';
 import { createJunctionRun, requestRunShift, stepJunctionRun } from './game/junctionRun';
 import { createHud } from './ui/hud';
 import { createMazeRun, requestMazeRunShift, stepMazeRun } from './game/mazeRun';
+import { createMazeDebug } from './ui/mazeDebug';
 
 const canvas = document.querySelector<HTMLCanvasElement>('#scene')!;
 const requestedScene = new URLSearchParams(location.search).get('scene');
 const mode = requestedScene === 'room' ? 'room' : requestedScene === 'junction' ? 'junction' : 'maze';
-document.title = `Shifting Labyrinth · ${mode === 'maze' ? 'M2' : mode === 'junction' ? 'M1' : 'M0'}`;
+document.title = `Shifting Labyrinth · ${mode === 'maze' ? 'M3' : mode === 'junction' ? 'M1' : 'M0'}`;
 canvas.setAttribute('aria-label', mode === 'maze' ? 'First-person hand-built maze' : mode === 'junction' ? 'First-person shifting junction' : 'First-person gray room');
 const hud = createHud(document.querySelector<HTMLElement>('#hud')!, mode);
+const debug = mode === 'maze' ? createMazeDebug(document.querySelector<HTMLElement>('#hud')!) : null;
 
 function startRoom() {
   let scene: ReturnType<typeof createScene>;
@@ -54,7 +56,7 @@ function startRoom() {
   const input = new BrowserInput(canvas, (running, message) => {
     stepper.reset();
     hud.setMode(running, message);
-  });
+  }, debug ? (action) => { if (action === 'toggle') debug.toggle(); else debug.probe(mazeRun); } : undefined);
   const onStart = () => {
     if (run.crushedBy || mazeRun.crushedBy) {
       run = createJunctionRun();
@@ -62,6 +64,7 @@ function startRoom() {
       input.resetLook();
       stepper.reset();
       hud.resetAttempt();
+      debug?.resetAttempt();
     }
     void input.start();
   };
@@ -87,6 +90,7 @@ function startRoom() {
     hud.updatePosition(player, timestamp);
     if (mode === 'junction') hud.updateJunction(run.junction, timestamp, run.pushedBy);
     if (mode === 'maze') hud.updateMaze(mazeRun, timestamp);
+    debug?.update(mazeRun, timestamp);
     frameId = requestAnimationFrame(frame);
   }
   frameId = requestAnimationFrame(frame);
@@ -96,6 +100,7 @@ function startRoom() {
     hud.button.removeEventListener('click', onStart);
     canvas.removeEventListener('webglcontextlost', onContextLost);
     input.dispose();
+    debug?.dispose();
     scene.dispose();
   }
   import.meta.hot?.dispose(dispose);

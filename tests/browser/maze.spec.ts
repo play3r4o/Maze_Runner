@@ -11,7 +11,7 @@ function watchErrors(page: Page) {
 async function start(page: Page) {
   await installBrowserClock(page); await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Find your way home.' })).toBeVisible();
-  await expect(page.getByText('DEVELOPMENT BUILD / M2 · HAND-BUILT MAZE')).toBeVisible();
+  await expect(page.getByText('DEVELOPMENT BUILD / M3 · GRAPH DIAGNOSTICS')).toBeVisible();
   await page.getByRole('button', { name: 'Start exploring' }).click();
   await expect.poll(() => page.evaluate(() => document.pointerLockElement?.id)).toBe('scene');
   await expect(page.getByTestId('hud')).toHaveAttribute('data-state', 'running');
@@ -36,26 +36,23 @@ async function centerNorthRoom(page: Page) {
   }
   expect((await position(page)).z).toBeCloseTo(-12, 2);
 }
-test('visit three landmarks, close the old shortcut, take a detour and return home', async ({ page }, testInfo) => {
+test('visit three landmarks, close the old shortcut, take a detour and return home', async ({ page }) => {
   // This is a full walk at ordinary game speed, executing every fixed tick.
   // A supported smaller viewport limits software-WebGL cost on CI runners.
   test.setTimeout(360_000);
   await page.setViewportSize({ width: 960, height: 640 });
   const errors = watchErrors(page); await start(page);
-  await expect(page).toHaveTitle('Shifting Labyrinth · M2');
-  await page.screenshot({ path: testInfo.outputPath('sanctuary.png') });
+  await expect(page).toHaveTitle('Shifting Labyrinth · M3');
   await expect(page.getByTestId('return-status')).toHaveAttribute('data-complete', 'false');
   await walk(page, 'KeyW', 8000);
   expect((await position(page)).z).toBeCloseTo(-24, 1);
   await expect(page.getByTestId('visit-amber')).toHaveText('FOUND');
-  await page.screenshot({ path: testInfo.outputPath('amber.png') });
   await expect(page.getByTestId('visit-blue')).toHaveText('—');
   await page.keyboard.press('KeyG'); await page.clock.runFor(200);
   await expect(page.getByTestId('shift-phase')).toHaveAttribute('data-phase', 'warning');
   await page.clock.runFor(10800);
   await expect(page.getByTestId('gate-north')).toHaveText('CLOSED');
   await expect(page.getByTestId('gate-east')).toHaveText('OPEN');
-  await page.screenshot({ path: testInfo.outputPath('routes-changed.png') });
   await walk(page, 'KeyS', 5000);
   expect((await position(page)).z).toBeCloseTo(-10.3, 1);
   await walk(page, 'KeyW', 567);
@@ -64,16 +61,13 @@ test('visit three landmarks, close the old shortcut, take a detour and return ho
   const home = await position(page); expect(home.x).toBeCloseTo(0, 1); expect(home.z).toBeCloseTo(0, 1);
   await expect(page.getByTestId('return-status')).toHaveAttribute('data-complete', 'false');
   await walk(page, 'KeyD', 8000); await expect(page.getByTestId('visit-blue')).toHaveText('FOUND');
-  await page.screenshot({ path: testInfo.outputPath('blue.png') });
   await walk(page, 'KeyA', 16000); await walk(page, 'KeyS', 8000);
   await expect(page.getByTestId('visit-rose')).toHaveText('FOUND');
-  await page.screenshot({ path: testInfo.outputPath('rose.png') });
   await expect(page.getByTestId('return-status')).toContainText('return to Sanctuary');
   await walk(page, 'KeyD', 8000); await walk(page, 'KeyW', 8000);
   await expect(page.getByTestId('return-status')).toHaveAttribute('data-complete', 'true');
   await expect(page.getByTestId('return-status')).toContainText('Returned to Sanctuary');
   await expect(page.getByTestId('hud')).toHaveAttribute('data-state', 'running');
-  await page.screenshot({ path: testInfo.outputPath('returned.png') });
   expect(errors).toEqual([]);
 });
 test('maze pushing pauses, resumes, crushes and Retry clears navigation and gates', async ({ page }) => {
@@ -93,11 +87,17 @@ test('maze pushing pauses, resumes, crushes and Retry clears navigation and gate
   await expect(page.getByRole('heading', { name: 'Crushed.', exact: true })).toBeVisible();
   expect((await position(page)).x).toBeCloseTo(-1.7, 2);
   await page.clock.runFor(4000); await expect(page.getByTestId('gate-north')).toHaveText('CLOSED');
+  await page.keyboard.press('F2'); await page.clock.runFor(120);
+  await expect(page.getByTestId('debug-revision')).toHaveText('2');
+  await page.getByRole('button', { name: 'Probe isolation' }).click();
+  await expect(page.getByTestId('debug-probe-result')).toHaveAttribute('data-result', 'rejected');
   await page.getByRole('button', { name: 'Retry', exact: true }).click(); await page.clock.runFor(120);
   await expect(page.getByTestId('hud')).toHaveAttribute('data-state', 'running');
   expect(await position(page)).toEqual({ x: 0, z: 0 });
   await expect(page.getByTestId('gate-north')).toHaveText('OPEN');
   await expect(page.getByTestId('shift-count')).toHaveText('0 shifts');
+  await expect(page.getByTestId('debug-revision')).toHaveText('0');
+  await expect(page.getByTestId('debug-probe-result')).not.toHaveAttribute('data-result', 'rejected');
   for (const id of ['amber', 'blue', 'rose']) await expect(page.getByTestId(`visit-${id}`)).toHaveText('—');
   await expect(page.getByTestId('return-status')).toHaveAttribute('data-complete', 'false');
   await walk(page, 'KeyA', 300); expect((await position(page)).x).toBeLessThan(-0.5);

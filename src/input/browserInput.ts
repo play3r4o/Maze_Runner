@@ -15,16 +15,25 @@ export class BrowserInput {
   constructor(
     private readonly canvas: HTMLCanvasElement,
     private readonly onModeChange: (running: boolean, message?: string) => void,
+    private readonly onDebugAction?: (action: 'toggle' | 'probe') => void,
   ) {
     const options = { signal: this.events.signal };
 
     document.addEventListener('keydown', (event) => {
+      if (this.onDebugAction && event.code === 'F2') {
+        event.preventDefault();
+        if (!event.repeat) this.onDebugAction('toggle');
+        return;
+      }
       if (!this.active) return;
       if (event.code === 'Escape') {
         this.pause();
       } else if (event.code === 'KeyG') {
         event.preventDefault();
         if (!event.repeat) this.shiftRequested = true;
+      } else if (event.code === 'KeyV' && this.onDebugAction) {
+        event.preventDefault();
+        if (!event.repeat) this.onDebugAction('probe');
       } else if (MOVEMENT_KEYS.has(event.code)) {
         event.preventDefault();
         this.keys.add(event.code);

@@ -9,6 +9,7 @@
 - On 2026-11-11 the developer confirmed the original gates work, then requested lethal contact instead of obstruction holds, slower closing, and longer crossings. This authorizes an M1 revision with death/Retry; M2 remains unapproved. Proposed tuning defaults are 8 m passages, 2 s warning and 4 s closing.
 - Follow-up instruction on 2026-11-11: the wall must push the character toward the opposite wall first, and kill only when the remaining gap cannot fit the body. This supersedes immediate contact death. Existing passage length/timings remain; M2 is still unapproved.
 - The developer then confirmed “all works perfect. Go next”: M1 push-before-crush is human accepted, and M2 is approved. M3 and later remain unapproved.
+- The next instruction “all works, go next” accepts M2 and authorizes M3 graph validation/diagnostics. M4 and later remain unapproved.
 
 ## Status
 
@@ -16,8 +17,9 @@
 | --- | --- |
 | M0 | Human accepted on 2026-11-10 |
 | M1 | Human accepted on 2026-11-11 |
-| M2 | Locally verified; awaiting GitHub deployment/manual acceptance |
-| M3–M8 | Not started |
+| M2 | Human accepted on 2026-11-11 |
+| M3 | Locally verified; awaiting deployment/manual acceptance |
+| M4–M8 | Not started |
 | M9 (scheduled after M7) | Not started |
 | M10–M12 | Not started |
 | M13 | Conditional, not started |
@@ -107,7 +109,7 @@ The developer confirmed M1's original gates work and subsequently accepted the f
 
 ## Next action
 
-Verify the M2 GitHub deployment and remaining visual evidence, then wait for M2 manual acceptance. Do not start M3 without acceptance and explicit approval.
+Verify the approved M3 GitHub deployment, then wait for M3 manual acceptance. Do not start M4 without acceptance and explicit approval.
 
 ### M1 crushing-gate revision — 2026-11-11
 
@@ -147,3 +149,21 @@ Verify the M2 GitHub deployment and remaining visual evidence, then wait for M2 
 - Full local validation passed: 71 unit tests, strict TypeScript, production build and all 13 browser checks in 5.3 minutes, one worker, no skips/retries. The two M2 scenarios verify physical landmark arrival, closed-shortcut collision, a usable detour, all-landmark return, pause during pushing, crush/death and Retry; M0/M1 regressions remain green.
 - Visually inspected the captured Sanctuary, changed-route, landmark-visit and completed-return states. A mirrored reverse-side sign was found and corrected with separate front-facing text planes sharing geometry/material. After that visual-only correction, unit tests/build/type check passed again; a separate production browser confirmed readable gate labels and the Amber approach. Remaining landmark views and GitHub's full test/deployment run are recorded next.
 - Local checks use system Chromium 156/full headless/SwiftShader; Actions uses its bundled Chromium. Main JS output is about 565.52 kB minified / 142.79 kB gzip, retaining the existing non-failing Vite size warning. No dependencies, thresholds or performance claims were added.
+- Final production visual walk confirmed instructions, corrected gate text and Amber/Blue/Rose approach geometry, including mouse turning toward Blue and Rose, with no console/page errors. Additional Playwright page screenshots stalled after rotating the paused-clock view (30/60 s capture timeouts); native canvas pixels captured in an explicitly advanced RAF resolved that automation limitation. The successful Blue/Rose captures were visually inspected. No game state was set directly and no product change was made for screenshot tooling.
+- Commit `fb13a4b` was pushed to main. GitHub Actions run [42992311873](https://github.com/play3r4o/Maze_Runner/actions/runs/42992311873) completed successfully: build/test 12m 1s, deploy 13s, total 12m 25s. This validates the final source, including the sign correction, with the workflow's locked install, unit checks, bundled Chromium browser suite and Pages deployment. The public summary confirms `https://play3r4o.github.io/Maze_Runner/`.
+- Test the deployed default scene at `?v=fb13a4b` and check **M2 · HAND-BUILT MAZE**. Remove reference-scene query parameters. Hosted contents cannot be independently fetched from this workspace under the current Pages-domain network restriction; deployment is confirmed by Actions. Human input, navigation readability, play feel and performance on the developer's machine remain acceptance items.
+- Post-deployment evidence is intentionally kept for the next source checkpoint instead of causing another documentation-only deployment. M3 remains unapproved.
+
+### M3 graph validation and diagnostics — 2026-11-11
+
+- The developer accepted M2 and approved M3. The fixture, gate timings, pushing/crushing, navigation checklist and reference scenes are preserved; no M4 generation is authorized.
+- Added pure runtime layout validation, deterministic BFS reachability/shortest cell-and-edge routes, real current/opening/target shift checks and intermediate validation. Gate links count only when fully open. Endpoint/ID/adjacency errors are reported instead of creating phantom routes.
+- Added topology revision to simulation state: it changes only when the set of fully open links changes. A normal swap adds two revisions; warnings, partial animation, cooldown, pause and rejected requests do not add one every tick. Retry creates revision zero.
+- Added pure live diagnostic data and an opt-in SVG map (F2/button). It uses the same rooms, passages, wall descriptors, landmarks and gate rectangles as the 3D view, with player position/heading, gate phase/percentage, graph return route and full connection IDs.
+- The V/button isolation probe is explicitly a dry run: propose blocking the incident Sanctuary connections, report rejected topology and IDs, leave all live state unchanged. It uses the same validator as real shifts. It does not add unsafe wall editing or a player GPS/map decision.
+- Clean `npm ci` passed. Initial checks passed: 82 unit tests, strict TypeScript/build, and the targeted production browser diagnostic scenario (44.2 s). Cases include malformed/disconnected/cyclic graphs, missing targets, deterministic routes, actual invalid gate-plan rejection, unchanged invalid poses, revision ordering, conservative moving-gate routes and mutation-free probing.
+- Removed six passive PNG captures from the long M2 functional browser journey because the separate M2 visual walk reproduced paused-clock screenshot stalls. All navigation/collision/visit/return assertions, normal movement speed, timing budgets and M0 pixel-rendering checks remain. M2 death/Retry now also checks revision/probe history reset. Visual capture remains a separate milestone check.
+- Visual startup review found the rejection text below the panel fold. Kept the map and primary controls, shortened route text and moved verbose graph caveats/plan details into an expandable section; added a browser assertion that dry-run rejection is actually in the viewport. Final validation/visual/deployment evidence follows next. Human acceptance remains pending.
+- Final local validation passed: 82 unit tests across eight files, strict TypeScript, production build and all 14 production-browser checks in 5.9 minutes, one worker, no skips/retries. This includes the full accepted landmark/detour/return journey, M0/M1 regressions, new debug-state/route checks, visible dry-run rejection and death/Retry clearing revision and probe history.
+- Visually inspected normal-clock production captures of startup, a visible rejected probe and a shift while standing in the north room. The map showed topology revision 2, the physical slab still closing, NORTH excluded from graph routing and a three-connection detour home. Observed no console/page errors. The compact rejection message was visible at 1280×800 without scrolling.
+- Local browser checks use system Chromium 156/full headless/SwiftShader. Actions must still validate the final source with its bundled browser. Main JS is about 576.60 kB minified / 146.47 kB gzip; the existing non-failing size warning remains. No dependencies, thresholds or game performance claims changed.

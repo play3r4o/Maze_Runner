@@ -1,4 +1,5 @@
 import type { PlayerState, WallRect } from './player';
+import { reachableMazeCells } from './mazeGraph';
 
 export type MazeCell = { id: string; column: number; row: number };
 export const MAZE_GATE_IDS = ['north', 'east'] as const;
@@ -105,16 +106,8 @@ export function inCellRoom(player: PlayerState, id: string): boolean {
   return Math.abs(player.x - x) < 2 && Math.abs(player.z - z) < 2;
 }
 
-// M2 only needs a reachability predicate. Route queries/debug view follow in M3.
+// Compatibility predicate; the shared graph queries also power diagnostics.
 export function mazeConnected(layout: MazeLayout, openness: MazeOpenness): boolean {
-  const reached = new Set([layout.start]);
-  const queue = [layout.start];
-  for (let i = 0; i < queue.length; i++) {
-    for (const edge of layout.edges) {
-      if (edge.gate && openness[edge.gate] !== 1) continue;
-      const next = edge.a === queue[i] ? edge.b : edge.b === queue[i] ? edge.a : undefined;
-      if (next && !reached.has(next)) { reached.add(next); queue.push(next); }
-    }
-  }
+  const reached = reachableMazeCells(layout, openness, layout.start);
   return layout.cells.every((cell) => reached.has(cell.id));
 }

@@ -99,6 +99,8 @@ M2 implementation contract: `milestones/M2.md`. Hand-built cells use 12 m spacin
 - **Done:** Every passage can be explained and invalid route-changing actions are visibly rejected.
 - **Avoid:** Player-facing GPS, sophisticated maps, level editor, generic navigation framework.
 
+M3 implementation contract: `milestones/M3.md`. F2 enables a developer-only diagnostic view in this prototype; it starts hidden and is not a final navigation mechanic. Revision versions the set of fully open links, normally twice per completed gate swap. A separate dry-run isolation probe demonstrates the same validation without altering the live maze. Real shift requests validate current, opening and target graphs before warning/motion.
+
 ### M4 — Seeded layouts (L)
 
 - **Build/why:** Varied reproducible mazes using the same renderer.

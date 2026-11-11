@@ -1,8 +1,8 @@
 # Shifting Labyrinth
 
-Working title. A browser game project starting with a small, first-person shifting-maze prototype. **M0 and M1 are accepted; M2, a tiny hand-built maze, is ready for manual testing.** Extraction and procedural generation are later milestones.
+Working title. A browser game project starting with a small, first-person shifting-maze prototype. **M0–M2 are accepted. M3 adds graph validation and an opt-in developer debug view to the hand-built maze.** Extraction and procedural generation are later milestones.
 
-Read [the brief](project_brief.md), [development plan](docs/development_plan.md), [M2 specification](docs/milestones/M2.md), and [current progress](docs/progress.md).
+Read [the brief](project_brief.md), [development plan](docs/development_plan.md), [M3 specification](docs/milestones/M3.md), and [current progress](docs/progress.md).
 
 ## Run
 
@@ -23,7 +23,13 @@ Two **eight-meter-long crushing shortcuts** alternate: NORTH initially opens and
 
 If crushed, the cursor releases and a **Retry** button appears. Gates finish closing behind the death screen. Retry resets player position/look, gates, shift count and landmark visits, then reacquires the mouse. Pausing while alive still freezes the mechanism.
 
-Follow the [M2 manual checklist](docs/milestones/M2.md#human-checklist) before approving M3. Accepted reference scenes remain available: `?scene=room` for M0 and `?scene=junction` for M1. There is no map, teleport, automatic shifting, jumping or sprinting yet.
+Press **F2** (or click **Debug map** while paused) to toggle M3's developer graph view. It starts hidden. Compare its room/corridor IDs, player marker/heading, gate slab bounds and highlighted graph route to the 3D maze. Only fully open gates count as route links. While in a moving gate passage there is no route preview; escape along the passage. This diagnostic does not guarantee escape time and does not decide the final player map design.
+
+The topology revision starts at **0** and usually reaches **2** per complete swap: one change when the replacement fully opens, another when the old connection starts closing. Animation between those events does not increment it every frame.
+
+With the view open, press **V** or click **Probe isolation** to propose blocking Sanctuary's connections in a **dry run**. Read the rejection and inspect the proposed edge IDs/unreachable cells. This cannot move walls, change the revision or alter the run. Escape releases the cursor so you can scroll/expand the connection and validation details. Retry resets revision/attempt history while keeping the panel's visibility for that page.
+
+Follow the [M3 manual checklist](docs/milestones/M3.md#human-acceptance-checklist) before approving M4. Accepted reference scenes remain available: `?scene=room` for M0 and `?scene=junction` for M1. Teleport, automatic shifting, jumping and sprinting remain deferred.
 
 ## Check and build
 
@@ -72,17 +78,17 @@ One-time repository setup:
 
 For the current repository, the expected default URL is `https://play3r4o.github.io/Maze_Runner/`. It becomes usable only after GitHub reports a successful deployment; an expected URL alone is not proof of publication.
 
-Open the game in a desktop browser tab and click **Start exploring**. No local Node.js installation is required for the hosted version. After a new deployment, refresh and check the **M2 · HAND-BUILT MAZE** header; remove `scene=room` or `scene=junction` from the URL to play M2.
+Open the game in a desktop browser tab and click **Start exploring**. No local Node.js installation is required for the hosted version. After a new deployment, refresh and check the **M3 · GRAPH DIAGNOSTICS** header; remove `scene=room` or `scene=junction` from the URL to play the current maze.
 
 If Pages is unavailable for the repository's visibility or account plan, keep those settings unchanged and report the limitation. Enabling Pages does not require adding credentials to the game or creating a separate server.
 
 ## Structure
 
-- `src/simulation`: pure movement/collision, shared moving-wall pushing, fixed maze cells/edges, geometry derivation and shift rules; no Three.js or browser imports.
+- `src/simulation`: pure movement/collision, shared moving-wall pushing, fixed maze cells/edges, geometry derivation, graph validation/BFS, diagnostic data and shift rules; no Three.js or browser imports.
 - `src/game`: run state, navigation checklist, death and resets.
 - `src/input`: browser input produces movement intentions.
 - `src/rendering`: Three.js scene/camera built from simulation geometry; repeated maze walls use one instanced mesh.
-- `src/ui`: DOM HUD and pause/errors.
+- `src/ui`: DOM HUD, pause/errors and opt-in SVG graph inspection.
 - `src/loop.ts`: testable fixed-step timing.
 - `tests`: pure rule tests and production-browser checks.
 
@@ -90,4 +96,4 @@ The local npm cache is ignored `.cache/npm` to work inside restricted cloud work
 
 Stop the development server before reinstalling dependencies and restart it afterward. If Vite reports an outdated optimized dependency after an install, restart the server rather than changing application code.
 
-Next milestone is M3 (graph validation and visible diagnostics), **after M2 human acceptance and explicit approval**. Approved GitHub pushes trigger the Pages workflow; a successful local build alone does not establish a successful hosted deployment.
+Next milestone is M4 (seeded layouts), **after M3 human acceptance and explicit approval**. Approved GitHub pushes trigger the Pages workflow; a successful local build alone does not establish a successful hosted deployment.

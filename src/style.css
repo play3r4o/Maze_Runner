@@ -66,6 +66,33 @@ kbd { font: 11px ui-monospace, monospace; min-width: 23px; height: 23px; padding
 .landmark-dot { width: 7px; height: 7px; border-radius: 2px; flex-shrink: 0; }
 .navigation-check .return-status { line-height: 1.6; padding-top: 5px; }
 .return-status[data-complete='true'] { color: #d8bc84 !important; }
+.debug-toggle { position: absolute; top: 79px; right: 32px; z-index: 4; pointer-events: auto; cursor: pointer; padding: 7px 11px; border: 1px solid #c9d6ca40; border-radius: 3px; background: #1b2b26ee; color: #d8bc84; font: 10px ui-monospace, monospace; }
+.maze-debug { position: absolute; top: 117px; right: 32px; bottom: 84px; z-index: 4; width: 355px; padding: 16px; overflow-y: auto; background: #192923fa; border: 1px solid #c9d6ca40; border-radius: 4px; pointer-events: auto; }
+.maze-debug .eyebrow { display: flex; justify-content: space-between; font-size: 9px; }
+.maze-debug .eyebrow span { letter-spacing: 0; color: #9cab9d; }
+.debug-summary { font: 12px ui-monospace, monospace; color: #e1c58c; }
+.debug-map svg { width: 100%; display: block; border: 1px solid #b5c9b631; }
+.debug-link { stroke: #6c9277; stroke-width: .55; }
+.debug-link[data-open='false'] { stroke: #d2836a; stroke-dasharray: 1 .7; }
+.debug-link[data-route='true'] { stroke: #c9f2b3; stroke-width: 1.1; }
+.debug-cell-label { fill: #e0e6d5; font: 1.6px ui-monospace, monospace; text-anchor: middle; }
+.debug-gate-label { fill: #f4e9c8; font: bold 1.6px ui-monospace, monospace; text-anchor: middle; }
+.debug-stone { fill: #a67f57; stroke: #c4ad6e; stroke-width: .2; opacity: .85; }
+.debug-stone[data-status='closed'] { fill: #a65d4d; }
+.debug-stone[data-status='warning'], .debug-stone[data-status='opening'], .debug-stone[data-status='closing'] { fill: #d5a448; stroke-dasharray: .7 .4; }
+.debug-legend, .debug-caution { color: #9eafa1; font-size: 9px; line-height: 1.5; margin: 9px 0; }
+.debug-location { font: 10px/1.5 ui-monospace, monospace; color: #e1c58c; overflow-wrap: anywhere; }
+.debug-route, .debug-validation { font-size: 10px; line-height: 1.6; color: #c5d2c3; margin: 8px 0; }
+.debug-probe { width: 100%; padding: 9px; border: 1px solid #c9d6ca40; border-radius: 3px; background: #334b3d; color: #eee5cc; cursor: pointer; font-size: 11px; display: flex; justify-content: space-between; }
+.debug-probe span { font-size: 10px; color: #d8bc84; }
+.debug-validation[data-result='rejected'] { color: #e9b395; }
+.maze-debug details { font-size: 10px; color: #aebfaf; margin: 12px 0; }
+.maze-debug summary { cursor: pointer; padding: 5px 0; }
+.maze-debug ol { list-style: none; padding: 0; max-height: 155px; overflow-y: auto; }
+.maze-debug li { padding: 5px 0; border-top: 1px solid #c9d6ca15; font-size: 8px; display: flex; justify-content: space-between; gap: 4px; }
+.maze-debug li output { color: #dfcb96; white-space: nowrap; }
+.debug-probe-details code { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 9px; }
+[data-state='error'] .debug-toggle, [data-state='error'] .maze-debug { display: none; }
 [data-state='paused'] .shift-panel { visibility: hidden; }
 [data-state='dead'] .pause-overlay { background: #2e0c0ca8; }
 [data-state='dead'] .pause-panel { border-color: #d584694d; }
@@ -79,6 +106,10 @@ kbd { font: 11px ui-monospace, monospace; min-width: 23px; height: 23px; padding
   .footer-controls { display: none; }
   .pause-panel { padding: 25px; }
   .shift-panel { left: 18px; top: 108px; width: 218px; }
+}
+@media (max-width: 1000px) {
+  .maze-debug { width: 300px; right: 18px; }
+  .debug-toggle { right: 18px; }
 }
 @media (max-height: 600px) {
   .pause-overlay { padding-top: 85px; padding-bottom: 75px; place-items: start center; }

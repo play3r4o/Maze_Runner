@@ -14,7 +14,7 @@ export function createHud(root: HTMLElement, scene: 'room' | 'junction' | 'maze'
   const startTitle = isMaze ? 'Find your way home.' : isJunction ? 'The walls can move.' : 'A place to begin.';
   root.innerHTML = `
     <header class="prototype-header">
-      <span class="eyebrow">DEVELOPMENT BUILD / ${isMaze ? 'M2 · HAND-BUILT MAZE' : isJunction ? 'M1 · PUSH &amp; CRUSH' : 'M0'}</span>
+      <span class="eyebrow">DEVELOPMENT BUILD / ${isMaze ? 'M3 · GRAPH DIAGNOSTICS' : isJunction ? 'M1 · PUSH &amp; CRUSH' : 'M0'}</span>
       <p class="wordmark">Shifting Labyrinth<span>Working title</span></p>
     </header>
     <div class="session-status" role="status" aria-live="polite">
@@ -23,7 +23,7 @@ export function createHud(root: HTMLElement, scene: 'room' | 'junction' | 'maze'
     <div class="crosshair" aria-hidden="true"></div>
     <section class="pause-overlay" aria-labelledby="panel-title">
       <div class="pause-panel">
-        <p class="eyebrow">MILESTONE ${isMaze ? '02 · TINY MAZE' : isJunction ? '01 · SINGLE JUNCTION' : '00'}</p>
+        <p class="eyebrow">MILESTONE ${isMaze ? '03 · GRAPH DIAGNOSTICS' : isJunction ? '01 · SINGLE JUNCTION' : '00'}</p>
         <h1 id="panel-title">${startTitle}</h1>
         <p class="panel-description">${isMaze ? 'Leave the warm Sanctuary marker, find three colored landmarks, then return home. G swaps two gate shortcuts. The 8-meter stone passages push and crush; permanent corridors offer detours. Learn the routes as you explore.' : isJunction ? 'Moving stone pushes you toward the opposite wall. Escape the 8-meter passage before the gap becomes too narrow to fit, or take the outer loop. Press G to shift.' : 'One room. Four walls. The foundation for a changing maze.'}</p>
         <div class="control-list" aria-label="Controls">
@@ -31,6 +31,7 @@ export function createHud(root: HTMLElement, scene: 'room' | 'junction' | 'maze'
           <p><span class="control-name">Mouse</span><span>Look around</span></p>
           <p><span><kbd>Esc</kbd></span><span>Pause &amp; release cursor</span></p>
           ${hasGates ? '<p><span><kbd>G</kbd></span><span>Request a shift</span></p>' : ''}
+          ${isMaze ? '<p><span><kbd>F2</kbd></span><span>Developer debug map</span></p>' : ''}
         </div>
         <button type="button" class="start-button">Start exploring <span aria-hidden="true">&gt;</span></button>
         <p class="panel-hint" data-message>Click to capture your mouse. Press Escape to release it.</p>

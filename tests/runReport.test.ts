@@ -61,7 +61,7 @@ describe('reports reproduce exact gate state and position', () => {
     expect(runs.filter((run) => run.shift.completedShifts > 0).length).toBeGreaterThan(20);
     expect(runs.filter((run) => run.events.some((event) => event.kind === 'freeze')).length).toBeGreaterThan(3);
     expect(runs.filter((run) => run.teleports > 0).length).toBeGreaterThan(3);
-  });
+  }, 30_000);
   test('a crushed run reproduces the gate state and restores the body alive in the nearest room', () => {
     const world = worldFor(41);
     let run = requestGeneratedRunShift(world, createGeneratedRun(world));

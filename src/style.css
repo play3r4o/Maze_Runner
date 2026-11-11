@@ -97,6 +97,15 @@ kbd { font: 11px ui-monospace, monospace; min-width: 23px; height: 23px; padding
 .debug-seed input { flex: 1; min-width: 0; padding: 6px 8px; border: 1px solid #c9d6ca40; border-radius: 3px; background: #10201a; color: #eee5cc; font: 11px ui-monospace, monospace; }
 .debug-seed button { margin: 8px 6px 0 0; padding: 6px 10px; border: 1px solid #c9d6ca40; border-radius: 3px; background: #334b3d; color: #eee5cc; cursor: pointer; font-size: 11px; }
 .debug-seed .debug-validation:empty { display: none; }
+
+.debug-tools { border-top: 1px solid #c9d6ca26; border-bottom: 1px solid #c9d6ca26; margin: 6px 0 10px; padding: 4px 0; }
+.debug-tool-row { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+.debug-tool-row button, .debug-report button { padding: 5px 8px; border: 1px solid #c9d6ca40; border-radius: 3px; background: #334b3d; color: #eee5cc; cursor: pointer; font-size: 10px; }
+.debug-tool-row button[aria-pressed='true'] { background: #8a6a2c; }
+.debug-report textarea { width: 100%; box-sizing: border-box; margin: 6px 0; background: #10201a; color: #dfe6d6; border: 1px solid #c9d6ca40; font: 9px ui-monospace, monospace; }
+/* Only rooms take clicks (teleport); labels, links, gates and the player marker let them through. */
+.debug-map svg * { pointer-events: none; }
+.debug-map svg [data-testid='debug-room'] { pointer-events: auto; cursor: pointer; }
 [data-state='error'] .debug-toggle, [data-state='error'] .maze-debug { display: none; }
 [data-state='paused'] .shift-panel { visibility: hidden; }
 [data-state='dead'] .pause-overlay { background: #2e0c0ca8; }

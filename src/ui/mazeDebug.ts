@@ -10,6 +10,11 @@ export type MazeDebugOptions = {
   // Generated mazes only: ring colouring, the entrances used by the dry-run probe, and seed controls.
   rings?: Readonly<Record<string, Ring>>; entrances?: readonly string[];
   seed?: { seed: number; version: string; fingerprint: string; onLoad(seed: number): void; onRandom(): void };
+  // M6 debug tools. Each callback returns a status message for the panel.
+  tools?: {
+    config: string; teleports: readonly { label: string; cell: string }[];
+    onFreeze(): string; onTeleport(cell: string): string; onCopyReport(): string; onLoadReport(text: string): string;
+  };
 };
 export const RING_COLORS: Record<Ring, string> = { sanctuary: '#bba36b', inner: '#3f8a5c', middle: '#a08a3a', outer: '#a44b5a' };
 
@@ -43,6 +48,19 @@ export function createMazeDebug(root: HTMLElement,
     <p class="debug-legend">${rings ? 'N ↑ · pale line: route home · rooms: gold Sanctuary, green inner, ochre middle, red outer' : 'N ↑ · pale line: route · red: closed stone · amber: warning / motion'}</p>
     <p class="debug-location" data-testid="debug-location"></p>
     <p class="debug-route" data-testid="debug-route"></p>
+    ${options.tools ? `<section class="debug-tools" aria-label="Debug tools">
+      <p class="debug-caution">${options.tools.config} · tick <output data-testid="debug-tick">0</output> · page errors <output data-testid="debug-errors">0</output></p>
+      <div class="debug-tool-row"><button type="button" data-action="freeze" data-testid="debug-freeze" aria-pressed="false">Freeze shifts</button>
+        <button type="button" data-action="copy-report">Copy report</button></div>
+      <div class="debug-tool-row" aria-label="Teleport">${options.tools.teleports.map((item) =>
+        `<button type="button" data-teleport="${item.cell}">→ ${item.label}</button>`).join('')}</div>
+      <p class="debug-caution">Teleport: click any room on the map, or use the buttons above. Debug only.</p>
+      <p class="debug-validation" data-testid="debug-tool-status" role="status"></p>
+      <details class="debug-report"><summary>Bug report text</summary>
+        <textarea data-testid="report-text" rows="6" spellcheck="false" aria-label="Bug report JSON"></textarea>
+        <button type="button" data-action="load-report">Load report</button></details>
+      <details class="debug-events"><summary>Events</summary><ol data-testid="debug-events"></ol></details>
+    </section>` : ''}
     <button type="button" class="debug-probe">Probe isolation <span>V · dry run</span></button>
     <p class="debug-validation" data-testid="debug-probe-result" role="status">Dry run: block Sanctuary links. No maze changes.</p>
     <details class="debug-probe-details" hidden><summary>Proposed edges / unreachable cells</summary><code></code></details>
@@ -70,6 +88,7 @@ export function createMazeDebug(root: HTMLElement,
       fill: ring ? RING_COLORS[ring] : cell.id === layout.start ? '#bba36b' : '#294536', 'data-testid': 'debug-room', 'data-cell-id': cell.id,
       ...(ring ? { 'data-ring': ring } : {}) });
     room.append(svg('title', {}, ring ? `${cell.id} · ${ring}` : cell.id)); map.append(room);
+    if (options.tools) room.addEventListener('click', () => status(options.tools!.onTeleport(cell.id)), { signal: events.signal });
   }
   const edges = layout.edges.map((edge) => {
     const a = cellPosition(findCell(layout, edge.a), layout);
@@ -102,6 +121,12 @@ export function createMazeDebug(root: HTMLElement,
     svg('path', { d: 'M 0 0 L 0 -1.9 M -.55 -1.2 L 0 -1.9 L .55 -1.2', fill: 'none', stroke: '#fff6d6', 'stroke-width': 0.35 }));
   map.append(pointer);
   let lastUpdate = -Infinity;
+  // Declared before use by the room click handlers above; hoisted function.
+  function status(message: string) {
+    const output = panel.querySelector<HTMLElement>('[data-testid="debug-tool-status"]');
+    if (output) output.textContent = message;
+    lastUpdate = -Infinity;
+  }
   function setVisible(visible: boolean) {
     panel.hidden = !visible; toggle.setAttribute('aria-expanded', String(visible)); lastUpdate = -Infinity;
   }
@@ -120,6 +145,22 @@ export function createMazeDebug(root: HTMLElement,
   // The callback reads current state; the UI never owns or mutates maze truth.
   let currentRun: DebugView | null = null;
   element('.debug-probe').addEventListener('click', () => { if (currentRun) probe(currentRun); }, { signal: events.signal });
+  if (options.tools) {
+    const tools = options.tools;
+    const on = (selector: string, action: () => string) =>
+      panel.querySelector(selector)!.addEventListener('click', () => status(action()), { signal: events.signal });
+    on('[data-action="freeze"]', () => tools.onFreeze());
+    on('[data-action="copy-report"]', () => {
+      const text = tools.onCopyReport();
+      element<HTMLTextAreaElement>('[data-testid="report-text"]').value = text;
+      element<HTMLDetailsElement>('.debug-report').open = true;
+      return 'Report copied (also shown below). Paste it into the bug description.';
+    });
+    on('[data-action="load-report"]', () => tools.onLoadReport(element<HTMLTextAreaElement>('[data-testid="report-text"]').value));
+    for (const button of panel.querySelectorAll<HTMLButtonElement>('[data-teleport]')) {
+      button.addEventListener('click', () => status(tools.onTeleport(button.dataset.teleport!)), { signal: events.signal });
+    }
+  }
   if (seed) {
     const form = element<HTMLFormElement>('.debug-seed');
     const error = element('[data-testid="seed-error"]');
@@ -153,6 +194,19 @@ export function createMazeDebug(root: HTMLElement,
       element('[data-testid="debug-location"]').textContent = `${data.location}${ring} · X ${data.player.x.toFixed(2)} / Z ${data.player.z.toFixed(2)}`;
       element('[data-testid="debug-route"]').textContent = data.route ? `${data.route.edges.length} connections home from ${data.origin}.` : data.routeNote;
       element('[data-testid="debug-plan"]').textContent = view.validation ?? (hasGates ? 'No shift checked yet.' : 'This layout has no gates yet.');
+      if (view.tools) {
+        element('[data-testid="debug-tick"]').textContent = String(view.tools.tick);
+        element('[data-testid="debug-errors"]').textContent = String(view.tools.errors);
+        const freeze = element('[data-testid="debug-freeze"]');
+        freeze.setAttribute('aria-pressed', String(view.tools.frozen));
+        freeze.textContent = view.tools.frozen ? 'Resume shifts' : 'Freeze shifts';
+        const list = element('[data-testid="debug-events"]');
+        const text = view.tools.events.join('\n');
+        if (list.dataset.text !== text) {
+          list.dataset.text = text;
+          list.replaceChildren(...[...view.tools.events].reverse().map((line) => { const item = document.createElement('li'); item.textContent = line; return item; }));
+        }
+      }
       if (view.log) {
         element<HTMLDetailsElement>('.debug-shift-log').hidden = false;
         const list = element('[data-testid="debug-shift-log"]');

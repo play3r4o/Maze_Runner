@@ -20,7 +20,7 @@ export function createHud(root: HTMLElement, scene: SceneMode, generated?: Gener
   const startTitle = isGenerated ? 'A new labyrinth.' : isMaze ? 'Find your way home.' : isJunction ? 'The walls can move.' : 'A place to begin.';
   root.innerHTML = `
     <header class="prototype-header">
-      <span class="eyebrow">DEVELOPMENT BUILD / ${isGenerated ? 'M5 · SHIFTING MAZE' : isMaze ? 'M3 · GRAPH DIAGNOSTICS' : isJunction ? 'M1 · PUSH &amp; CRUSH' : 'M0'}</span>
+      <span class="eyebrow">DEVELOPMENT BUILD / ${isGenerated ? 'M6 · REPRO TOOLS' : isMaze ? 'M3 · GRAPH DIAGNOSTICS' : isJunction ? 'M1 · PUSH &amp; CRUSH' : 'M0'}</span>
       <p class="wordmark">Shifting Labyrinth<span>Working title</span></p>
     </header>
     <div class="session-status" role="status" aria-live="polite">
@@ -29,7 +29,7 @@ export function createHud(root: HTMLElement, scene: SceneMode, generated?: Gener
     <div class="crosshair" aria-hidden="true"></div>
     <section class="pause-overlay" aria-labelledby="panel-title">
       <div class="pause-panel">
-        <p class="eyebrow">MILESTONE ${isGenerated ? '05 · SHIFTING MAZE' : isMaze ? '03 · GRAPH DIAGNOSTICS' : isJunction ? '01 · SINGLE JUNCTION' : '00'}</p>
+        <p class="eyebrow">MILESTONE ${isGenerated ? '06 · REPRO TOOLS' : isMaze ? '03 · GRAPH DIAGNOSTICS' : isJunction ? '01 · SINGLE JUNCTION' : '00'}</p>
         <h1 id="panel-title">${startTitle}</h1>
         <p class="panel-description">${isGenerated ? `Seed ${generated.seed} built this ${generated.columns}×${generated.rows} maze around the central Sanctuary. Rings grow more remote outward. Find one landmark in each ring, then return home. Press G to shift: one of ${generated.gates.length} stone gates opens, then another closes. Closing stone pushes you and crushes you if you no longer fit. Every room always keeps a route home.` : isMaze ? 'Leave the warm Sanctuary marker, find three colored landmarks, then return home. G swaps two gate shortcuts. The 8-meter stone passages push and crush; permanent corridors offer detours. Learn the routes as you explore.' : isJunction ? 'Moving stone pushes you toward the opposite wall. Escape the 8-meter passage before the gap becomes too narrow to fit, or take the outer loop. Press G to shift.' : 'One room. Four walls. The foundation for a changing maze.'}</p>
         <div class="control-list" aria-label="Controls">
@@ -190,7 +190,7 @@ export function createHud(root: HTMLElement, scene: SceneMode, generated?: Gener
       const labels = { idle: 'Ready · press G', warning: `Shift in ${(WARNING_SECONDS - state.phaseSeconds).toFixed(1)}s`,
         opening: `${plan?.open.toUpperCase()} opening`, closing: run.pushedBy ? 'Being pushed · escape' : `${plan?.close.toUpperCase()} closing`,
         cooldown: 'Cooling down' };
-      generatedPhase!.textContent = labels[state.phase]; generatedPhase!.dataset.phase = state.phase;
+      generatedPhase!.textContent = `${labels[state.phase]}${run.frozen ? ' · frozen (debug)' : ''}`; generatedPhase!.dataset.phase = state.phase;
       generatedCount!.textContent = `${state.completedShifts} shift${state.completedShifts === 1 ? '' : 's'}`;
       const notice = run.pushedBy ? `${run.pushedBy.toUpperCase()} stone is pushing you. Escape along the passage!` : state.notice;
       if (generatedNotice!.textContent !== notice) generatedNotice!.textContent = notice;
@@ -199,7 +199,7 @@ export function createHud(root: HTMLElement, scene: SceneMode, generated?: Gener
         label.dataset.visited = String(run.visited.includes(id));
       }
       if (returnStatus) {
-        returnStatus.textContent = run.returned ? 'Returned to Sanctuary · route check complete.'
+        returnStatus.textContent = run.returned ? `Returned to Sanctuary · route check complete${run.teleports ? ` (${run.teleports} debug teleports)` : ''}.`
           : run.visited.length === 3 ? 'All landmarks found · return to Sanctuary.' : `${run.visited.length}/3 found · visit all three, then return.`;
         returnStatus.dataset.complete = String(run.returned);
       }

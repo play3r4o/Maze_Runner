@@ -22,8 +22,8 @@ async function walk(page: Page, key: string, ms: number) {
 test('a seed rebuilds the same maze; other seeds, reloads and the seed form behave', async ({ page }) => {
   const errors = watchErrors(page);
   await page.goto('/?seed=1');
-  await expect(page).toHaveTitle('Shifting Labyrinth · M5');
-  await expect(page.getByText('DEVELOPMENT BUILD / M5 · SHIFTING MAZE')).toBeVisible();
+  await expect(page).toHaveTitle('Shifting Labyrinth · M6');
+  await expect(page.getByText('DEVELOPMENT BUILD / M6 · REPRO TOOLS')).toBeVisible();
   await expect(page.getByTestId('hud-seed')).toHaveText('seed 1');
   expect(await fingerprint(page)).toBe(layoutFingerprint(generateMaze(1)));
   await page.reload();

@@ -12,7 +12,10 @@ import { debugViewOfMazeRun } from './simulation/mazeDiagnostics';
 import type { DebugView } from './simulation/mazeDiagnostics';
 import type { SceneMode } from './rendering/scene';
 import { MAX_SEED, generateMaze, layoutFingerprint, parseSeed, serializeMaze } from './simulation/mazeGenerator';
-import { buildGeneratedWorld, createGeneratedRun, requestGeneratedRunShift, stepGeneratedRun } from './game/generatedRun';
+import { buildGeneratedWorld, createGeneratedRun, requestGeneratedRunShift, setGeneratedRunFrozen, stepGeneratedRun,
+  teleportGeneratedRun } from './game/generatedRun';
+import { createRunReport, parseRunReport, reproduceRun } from './game/runReport';
+import type { RunReport } from './game/runReport';
 import type { GeneratedRun } from './game/generatedRun';
 import type { ShiftLogEntry } from './simulation/generatedShift';
 import { MAZE_GATE_IDS } from './simulation/maze';
@@ -23,7 +26,7 @@ const requestedScene = params.get('scene');
 // M0 room, M1 junction and M2/M3 hand-built maze stay reachable for regression checks.
 const mode: SceneMode = requestedScene === 'room' ? 'room' : requestedScene === 'junction' ? 'junction'
   : requestedScene === 'maze' ? 'maze' : 'generated';
-document.title = `Shifting Labyrinth · ${{ generated: 'M5', maze: 'M3', junction: 'M1', room: 'M0' }[mode]}`;
+document.title = `Shifting Labyrinth · ${{ generated: 'M6', maze: 'M3', junction: 'M1', room: 'M0' }[mode]}`;
 canvas.setAttribute('aria-label', { generated: 'First-person shifting seeded maze', maze: 'First-person hand-built maze',
   junction: 'First-person shifting junction', room: 'First-person gray room' }[mode]);
 
@@ -46,6 +49,18 @@ if (world) {
   console.info('Seeded maze', { seed, version: world.maze.version, fingerprint: layoutFingerprint(world.maze), layout: serializeMaze(world.maze) });
 }
 
+// Page errors are counted for the debug panel and included in bug reports.
+const pageErrors: string[] = [];
+const recordError = (message: string) => { pageErrors.push(message); if (pageErrors.length > 10) pageErrors.shift(); };
+window.addEventListener('error', (event) => recordError(event.message));
+window.addEventListener('unhandledrejection', (event) => recordError(String(event.reason)));
+
+// A bug report travels in the address hash (#repro=…) so it survives the reload to its seed.
+const reproText = location.hash.startsWith('#repro=') ? decodeURIComponent(location.hash.slice('#repro='.length)) : null;
+if (reproText !== null) history.replaceState(null, '', location.pathname + location.search);
+// Tool callbacks need the live run, which exists only inside startRoom(); it fills this in.
+let debugTools: NonNullable<Parameters<typeof createMazeDebug>[1]>['tools'] | null = null;
+
 const hudRoot = document.querySelector<HTMLElement>('#hud')!;
 const hud = createHud(hudRoot, mode, world?.maze);
 if (world && requestedSeed !== null && parsedSeed === null) {
@@ -54,7 +69,14 @@ if (world && requestedSeed !== null && parsedSeed === null) {
 const debug = mode === 'maze' ? createMazeDebug(hudRoot)
   : world ? createMazeDebug(hudRoot, { layout: world.maze, walls: world.walls, rings: world.maze.rings, entrances: world.maze.entrances,
     seed: { seed, version: world.maze.version, fingerprint: layoutFingerprint(world.maze),
-      onLoad: (value) => location.assign(seedUrl(value)), onRandom: () => location.assign(seedUrl(randomSeed())) } }) : null;
+      onLoad: (value) => location.assign(seedUrl(value)), onRandom: () => location.assign(seedUrl(randomSeed())) },
+    tools: {
+      config: `${world.maze.config.size}×${world.maze.config.size} · loops ${world.maze.config.loopChance} · ${world.maze.config.gateCount} gates`,
+      teleports: [{ label: 'Sanctuary', cell: world.maze.start },
+        ...world.maze.landmarks.map((landmark) => ({ label: landmark.name.split(' ')[0], cell: landmark.cell }))],
+      onFreeze: () => debugTools?.onFreeze() ?? '', onTeleport: (cell) => debugTools?.onTeleport(cell) ?? '',
+      onCopyReport: () => debugTools?.onCopyReport() ?? '', onLoadReport: (text) => debugTools?.onLoadReport(text) ?? '',
+    } }) : null;
 
 function startRoom() {
   let scene: ReturnType<typeof createScene>;
@@ -76,7 +98,9 @@ function startRoom() {
     openness: generatedRun.shift.openness, crushed: generatedRun.crushedBy !== null, phase: generatedRun.shift.phase,
     opening: generatedRun.shift.plan?.open ?? null, closing: generatedRun.shift.plan?.close ?? null,
     revision: generatedRun.shift.revision, validation: generatedRun.shift.validation?.reason ?? null,
-    log: generatedRun.shift.log.map(logLine) } : debugViewOfMazeRun(mazeRun);
+    log: generatedRun.shift.log.map(logLine),
+    tools: { tick: generatedRun.tick, frozen: generatedRun.frozen, teleports: generatedRun.teleports, errors: pageErrors.length,
+      events: generatedRun.events.map((event) => `${(event.tick / 60).toFixed(1)}s ${event.kind}: ${event.detail}`) } } : debugViewOfMazeRun(mazeRun);
   let graphicsAvailable = true;
   const stepper = createFixedStepper((dt) => {
     const state = input.read();
@@ -131,6 +155,53 @@ function startRoom() {
     void input.start();
   };
   hud.button.addEventListener('click', onStart);
+
+  // M6 debug tools (generated maze only). They act on the live run between simulation ticks.
+  function applyReport(report: RunReport): string {
+    if (!world || !generatedRun) return 'No generated maze loaded.';
+    const wasDead = generatedRun.crushedBy !== null;
+    const result = reproduceRun(world, report);
+    generatedRun = result.run;
+    input.setLook(result.run.player.yaw);
+    stepper.reset();
+    if (wasDead) { hud.resetAttempt(); debug?.resetAttempt(); }
+    console.info('Reproduced bug report', { mismatches: result.mismatches, report });
+    return `Reproduced report: seed ${report.seed}, ${report.requests} shift requests, tick ${report.tick}. `
+      + (result.mismatches.length ? `Differences: ${result.mismatches.join(' ')}` : 'Gate state matches the report exactly.');
+  }
+  if (world) debugTools = {
+    config: '', teleports: [],
+    onFreeze() {
+      generatedRun = setGeneratedRunFrozen(generatedRun!, !generatedRun!.frozen);
+      return generatedRun.frozen ? 'Shift timers frozen. Gates hold their pose; walking continues.' : 'Shift timers resumed.';
+    },
+    onTeleport(cell) {
+      const result = teleportGeneratedRun(world, generatedRun!, cell);
+      generatedRun = result.run;
+      return result.error ?? `Teleported to ${cell} (${generatedRun.ring}). Resume to continue from there.`;
+    },
+    onCopyReport() {
+      const report = createRunReport(world, generatedRun!, { errors: pageErrors, shiftLog: generatedRun!.shift.log.map(logLine),
+        note: `${navigator.userAgent} · ${innerWidth}×${innerHeight}` });
+      const text = JSON.stringify(report);
+      navigator.clipboard?.writeText(text).catch(() => undefined);
+      console.info('Bug report', report);
+      return text;
+    },
+    onLoadReport(text) {
+      const parsed = parseRunReport(text.trim());
+      if (!parsed.ok) return `Report not loaded: ${parsed.error}`;
+      if (parsed.report.seed !== seed) {
+        location.assign(`${seedUrl(parsed.report.seed)}#repro=${encodeURIComponent(text.trim())}`);
+        return `Loading seed ${parsed.report.seed}…`;
+      }
+      return applyReport(parsed.report);
+    },
+  };
+  if (world && reproText !== null) {
+    const parsed = parseRunReport(reproText);
+    hud.setMode(false, parsed.ok ? applyReport(parsed.report) : `Report not loaded: ${parsed.error}`);
+  }
 
   const onContextLost = (event: Event) => {
     event.preventDefault();

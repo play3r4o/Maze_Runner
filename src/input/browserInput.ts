@@ -106,6 +106,12 @@ export class BrowserInput {
     return requested;
   }
 
+  // Restore a recorded view direction (debug bug-report reproduction).
+  setLook(yaw: number, pitch = 0) {
+    this.yaw = yaw;
+    this.pitch = Math.max(-MAX_PITCH, Math.min(MAX_PITCH, pitch));
+  }
+
   resetLook() {
     this.yaw = 0;
     this.pitch = 0;

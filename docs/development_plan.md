@@ -208,6 +208,8 @@ M5 implementation contract: `milestones/M5.md`. Decision, 2026-11-11: eight gate
 - **Done:** Reports reproduce specific states; no unexplained errors during the exploration test.
 - **Avoid:** General replay engine, telemetry, editor, large debug infrastructure. Debug cheats stay development-only.
 
+M6 implementation contract: `milestones/M6.md`. Reports replay the seed's shift requests and the ticks the last plan advanced, which rebuilds gate poses exactly without recording input. Seed changes still reload the page, so disposal is the browser's; the browser check loads ten seeds in a row.
+
 ### M7 — Complete solo extraction (M)
 
 - **Build/why:** Test fun in outward travel and changed return routes.

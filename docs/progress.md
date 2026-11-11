@@ -11,6 +11,7 @@
 - The developer then confirmed “all works perfect. Go next”: M1 push-before-crush is human accepted, and M2 is approved. M3 and later remain unapproved.
 - The next instruction “all works, go next” accepts M2 and authorizes M3 graph validation/diagnostics. M4 and later remain unapproved.
 - On 2026-11-11, after the M3 Retry fix deployed (run 43005063616, commit `97d3ad9`), the developer replied “accepted, go next”: M3 is human accepted and M4 seeded generation is approved. M5 and later remain unapproved.
+- On 2026-11-11 the developer replied “all works, go next” after testing the deployed M5: M5 is human accepted and M6 reproduction/stability tools are approved. M7 and later remain unapproved.
 - On 2026-11-11 the developer replied “all works, go next” after testing the deployed M4: M4 is human accepted and M5 safe generated-maze shifts are approved. M6 and later remain unapproved.
 - Planning-only instruction on 2026-11-11: after a concept review the developer chose co-op PvE before PvP and asked for the tension/wayfinding ideas to be added to the plan. This authorizes editing `development_plan.md` only. It does not approve M4 or any later milestone, and no source code changed.
 
@@ -23,8 +24,9 @@
 | M2 | Human accepted on 2026-11-11 |
 | M3 | Human accepted on 2026-11-11 |
 | M4 | Human accepted on 2026-11-11 |
-| M5 | Deployed (run 43047512912); awaiting human acceptance |
-| M6–M7 | Not started |
+| M5 | Human accepted on 2026-11-11 |
+| M6 | Implemented; awaiting CI/deployment and human acceptance |
+| M7 | Not started |
 | M7b (added 2026-11-11) | Not started |
 | M9 (scheduled after M7b) | Not started |
 | M8 | Not started |
@@ -117,7 +119,7 @@ The developer confirmed M1's original gates work and subsequently accepted the f
 
 ## Next action
 
-Wait for M5 manual acceptance. M6 remains unapproved. 
+Confirm the M6 Pages workflow run, then wait for M6 manual acceptance. M7 remains unapproved. M6 remains unapproved. 
 
 ### M1 crushing-gate revision — 2026-11-11
 
@@ -224,3 +226,14 @@ Wait for M5 manual acceptance. M6 remains unapproved.
 - Run 43047512912 (`0f511cf`): browser installed via the fallback; 15 of 17 browser tests passed. The two long M2 scenarios failed on runner slowness (one timed out creating the browser context before the page loaded; the other stalled at the known Retry click). A re-run of the failed job passed the full suite and deployed. M5 is live at `https://play3r4o.github.io/Maze_Runner/?v=0f511cf`.
 - This note is committed locally for the next source checkpoint.
 - Human acceptance pending: use the [M5 checklist](milestones/M5.md#human-acceptance-checklist).
+
+### M6 reproduction and stability tools — 2026-11-11
+
+- M5 accepted by the developer; M6 approved. Contract: `milestones/M6.md`. M7 and later remain unapproved.
+- `game/generatedRun.ts`: `tick`, `shiftTicks` (steps the plan actually advanced), bounded 50-entry event log (shift, freeze, teleport, visit, ring, death, return, report), debug freeze of gate motion and shift timers, validated teleport to clear room centres (alive only), teleport count.
+- `game/runReport.ts`: report format 1 (version, seed, config, fingerprint, replay inputs, expected gate state, context), strict parsing with reasons, exact replay from seed + request count + `shiftTicks`, comparison of phase/revision/shifts/openness, position restore. A crushed body is restored alive in the nearest clear room (first version used the last room, which is unknown in a corridor; changed after the test exposed it).
+- Debug panel: config, tick and page-error count, Freeze/Resume, Copy report, landmark/Sanctuary teleport buttons, click-a-room teleport, report text with Load report, Events. Tools sit below the map after a visual check showed them pushing the map down. Reports for another seed reload via `?seed=N#repro=…`; the hash is cleared after applying. Page errors and unhandled rejections are counted and included in reports. Header and title now M6.
+- Bug found by the browser test: SVG cell labels intercepted clicks on rooms. Map elements other than rooms now ignore pointer events.
+- Unit: 960 tests in eleven files pass, including 40 scripted sessions reproduced exactly (coverage asserted: mid-shift, completed, frozen and teleported states), a crushed-run reproduction, continuation equivalence for 400 steps, two named scenarios, strict parsing cases, teleport validity of every room on three seeds in two gate poses, bounded events.
+- Browser (local Google Chrome, SwiftShader): three new M6 scenarios pass (freeze and teleport with events; mid-closing report copied on seed 41, loaded from seed 1, identical revision, G7 openness, position and phase; wrong-version refusal; ten Random seeds in a row with matching fingerprints and no page errors). Rerun after M6 UI changes: all three generated-maze scenarios, M3 debug map, M0 pointer-lock movement. The long M2 scenarios and the remaining M1/M0 tests are left to GitHub Actions as before.
+- Human acceptance pending: use the [M6 checklist](milestones/M6.md#human-acceptance-checklist).

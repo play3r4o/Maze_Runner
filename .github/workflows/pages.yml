@@ -29,7 +29,9 @@ jobs:
       - name: Test simulation
         run: npm test
       - name: Install test browser
-        run: npx playwright install --with-deps chromium
+        # Fall back to the browser alone if Ubuntu's package mirrors are unreachable; the
+        # runner image already carries Chrome's system libraries. Browser tests still gate deploy.
+        run: npx playwright install --with-deps chromium || npx playwright install chromium
       - name: Build and test production app
         run: npm run test:browser
       - name: Preserve browser failure diagnostics

@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import type { Page } from '@playwright/test';
-import { installBrowserClock, freezeBrowserClock } from './clock';
+import { installBrowserClock, freezeBrowserClock, clickWithBrowserFrames } from './clock';
 
 function watchErrors(page: Page) {
   const errors: string[] = [];
@@ -91,7 +91,10 @@ test('maze pushing pauses, resumes, crushes and Retry clears navigation and gate
   await expect(page.getByTestId('debug-revision')).toHaveText('2');
   await page.getByRole('button', { name: 'Probe isolation' }).click();
   await expect(page.getByTestId('debug-probe-result')).toHaveAttribute('data-result', 'rejected');
-  await page.getByRole('button', { name: 'Retry', exact: true }).click(); await page.clock.runFor(120);
+  // Keep frames available for the native click's actionability checks after
+  // the debug panel changes, while retaining the original test deadline.
+  await clickWithBrowserFrames(page, page.getByRole('button', { name: 'Retry', exact: true }));
+  await page.clock.runFor(120);
   await expect(page.getByTestId('hud')).toHaveAttribute('data-state', 'running');
   expect(await position(page)).toEqual({ x: 0, z: 0 });
   await expect(page.getByTestId('gate-north')).toHaveText('OPEN');

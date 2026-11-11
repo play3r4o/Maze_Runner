@@ -18,7 +18,7 @@
 | M0 | Human accepted on 2026-11-10 |
 | M1 | Human accepted on 2026-11-11 |
 | M2 | Human accepted on 2026-11-11 |
-| M3 | Locally verified; awaiting deployment/manual acceptance |
+| M3 | Retry correction locally verified; awaiting new CI/deployment |
 | M4–M8 | Not started |
 | M9 (scheduled after M7) | Not started |
 | M10–M12 | Not started |
@@ -109,7 +109,7 @@ The developer confirmed M1's original gates work and subsequently accepted the f
 
 ## Next action
 
-Verify the approved M3 GitHub deployment, then wait for M3 manual acceptance. Do not start M4 without acceptance and explicit approval.
+Push the verified Retry synchronization fix and verify its new Pages workflow result. Then wait for M3 manual acceptance. M4 remains unapproved.
 
 ### M1 crushing-gate revision — 2026-11-11
 
@@ -167,3 +167,12 @@ Verify the approved M3 GitHub deployment, then wait for M3 manual acceptance. Do
 - Final local validation passed: 82 unit tests across eight files, strict TypeScript, production build and all 14 production-browser checks in 5.9 minutes, one worker, no skips/retries. This includes the full accepted landmark/detour/return journey, M0/M1 regressions, new debug-state/route checks, visible dry-run rejection and death/Retry clearing revision and probe history.
 - Visually inspected normal-clock production captures of startup, a visible rejected probe and a shift while standing in the north room. The map showed topology revision 2, the physical slab still closing, NORTH excluded from graph routing and a three-connection detour home. Observed no console/page errors. The compact rejection message was visible at 1280×800 without scrolling.
 - Local browser checks use system Chromium 156/full headless/SwiftShader. Actions must still validate the final source with its bundled browser. Main JS is about 576.60 kB minified / 146.47 kB gzip; the existing non-failing size warning remains. No dependencies, thresholds or game performance claims changed.
+- Commit `49ed834` was pushed to main. GitHub Actions run [42999628717](https://github.com/play3r4o/Maze_Runner/actions/runs/42999628717) failed: build/test 14m 15s, total 14m 20s; deploy was skipped. Public annotation links to build step 7 with “Process completed with exit code 1.” This is not a confirmed job timeout. The failing browser case/error is not available anonymously; the user was asked for its test/error block. Public `/logs` download returned HTTP 404, and the job page requires sign-in. Do not claim M3 deployed or change assertions/timeouts on speculation. Last successful hosted version remains M2 (`fb13a4b`).
+
+### M3 CI Retry synchronization correction — 2026-11-11
+
+- The developer supplied the failure screenshot: 13 browser tests passed; the sole failed case was the maze push/pause/death/reset scenario, at the native Retry click after the isolation probe. Its call log was waiting for the button to be visible, enabled and stable. No gameplay assertion failure or job-wide timeout is inferred from the cropped screenshot.
+- Reproduced that same actionability stall locally under 2× Chromium CPU throttling, using a temporary five-second click limit within the unchanged 90-second scenario budget. The test failed in 44.6 s, at `Retry.click`, waiting for visibility/enabled/stability. Before the click, Retry retained identical bounds (X=470, Y=453.828125, 340×46) and its center hit-tested to the button itself. This separates the reproduced stall from exhausting the overall scenario budget or a covering debug panel.
+- Added `clickWithBrowserFrames`: one ordinary native click stays pending while at most ten 100 ms controlled frame intervals run. Playwright retains its normal visibility/stability/hit checks; errors propagate. Use is limited to the stationary Retry transition after the probe. Game rules, input handlers, level data, production UI, test deadlines, retries and reset assertions are unchanged.
+- With that synchronization, the same 2×-throttled scenario passed all checks in 52.8 s, including the diagnostic five-second click limit. Temporary CPU hooks, stage logging and the diagnostic per-click timeout were removed; the committed path uses the original test deadline. No game state is set directly by the test.
+- Complete corrected local validation passed: 82 unit tests, strict TypeScript/build and all 14 production-browser checks in 6.0 minutes, one worker, no skips/retries. The previously failed scenario passed within its original 90-second budget, including every reset assertion. The production app bundle is unchanged; only test synchronization and documentation changed. Matching bundled-browser CI verification and deployment are still required. Human acceptance of M3 remains pending.

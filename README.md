@@ -65,6 +65,8 @@ Mouse-look checks acquire real pointer lock, dispatch DOM mouse events with expl
 
 The turning and crushing-gate scenarios control browser time with Playwright's clock: keyboard input is held for a defined simulation duration, released, and the HUD is refreshed before assertions. `runFor` executes animation frames; it does not skip simulation steps or set game state. Other browser smoke tests still exercise normal wall-clock operation. The default test browser uses full Chromium's new headless mode in both local runs and CI, rather than a separate headless-shell backend.
 
+The Retry check advances a bounded number of controlled frames while one native click waits for visibility, stability and hit testing. This lets rendering settle after the diagnostic panel changes with the clock paused. The original test deadlines and all reset assertions are retained.
+
 ## Play through GitHub Pages
 
 The workflow in `.github/workflows/pages.yml` tests the app, builds `dist/`, and publishes that directory when `main` changes. Source documents and development dependencies are not part of the published website. Vite uses relative asset paths, so the build supports the repository's `/Maze_Runner/` URL path.

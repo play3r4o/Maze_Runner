@@ -23,7 +23,7 @@
 | M2 | Human accepted on 2026-11-11 |
 | M3 | Human accepted on 2026-11-11 |
 | M4 | Human accepted on 2026-11-11 |
-| M5 | Implemented; CI blocked by runner DNS failure, not deployed |
+| M5 | Deployed (run 43047512912); awaiting human acceptance |
 | M6–M7 | Not started |
 | M7b (added 2026-11-11) | Not started |
 | M9 (scheduled after M7b) | Not started |
@@ -117,7 +117,7 @@ The developer confirmed M1's original gates work and subsequently accepted the f
 
 ## Next action
 
-Confirm the M5 Pages workflow run, then wait for M5 manual acceptance. M6 remains unapproved. 
+Wait for M5 manual acceptance. M6 remains unapproved. 
 
 ### M1 crushing-gate revision — 2026-11-11
 
@@ -221,4 +221,6 @@ Confirm the M5 Pages workflow run, then wait for M5 manual acceptance. M6 remain
 - Commit `63e4167` pushed to main. GitHub Actions run 43038433908 failed twice (original and one re-run) at **Install test browser**: the runner could not resolve `azure.archive.ubuntu.com` while `playwright install --with-deps` fetched apt packages (exit 100). **Test simulation** (unit suite) passed in CI both times; the browser suite and deployment did not run. This is a runner network failure, not a code failure; nothing in the workflow was changed. The live site still serves M4 until a run succeeds.
 - A third attempt failed the same way. With the developer waiting on M5, the workflow's browser install step now falls back to `npx playwright install chromium` (no apt packages) if `--with-deps` fails. The browser suite still gates deployment.
 - Run 43044784834 installed the browser via the fallback but was cancelled at the 15-minute job limit (the failing apt attempt used about 10 minutes). The apt attempt is now capped with `timeout 240` and the build job limit raised to 25 minutes.
+- Run 43047512912 (`0f511cf`): browser installed via the fallback; 15 of 17 browser tests passed. The two long M2 scenarios failed on runner slowness (one timed out creating the browser context before the page loaded; the other stalled at the known Retry click). A re-run of the failed job passed the full suite and deployed. M5 is live at `https://play3r4o.github.io/Maze_Runner/?v=0f511cf`.
+- This note is committed locally for the next source checkpoint.
 - Human acceptance pending: use the [M5 checklist](milestones/M5.md#human-acceptance-checklist).

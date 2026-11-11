@@ -107,6 +107,15 @@ kbd { font: 11px ui-monospace, monospace; min-width: 23px; height: 23px; padding
 .debug-map svg * { pointer-events: none; }
 .debug-map svg [data-testid='debug-room'] { pointer-events: auto; cursor: pointer; }
 [data-state='error'] .debug-toggle, [data-state='error'] .maze-debug { display: none; }
+.run-actions { display: flex; gap: 8px; margin-top: 10px; }
+.run-actions button { padding: 8px 12px; border: 1px solid #c9d6ca40; border-radius: 4px; background: transparent; color: #dfe6d6; cursor: pointer; font-size: 12px; }
+.run-objective { font-size: 12px; line-height: 1.5; color: #eee5cc; margin: 6px 0; }
+.run-objective[data-carrying='true'] { color: #f2c76b; }
+.interact-prompt { position: fixed; left: 50%; top: 58%; transform: translateX(-50%); margin: 0; padding: 6px 12px; border-radius: 4px; background: #10201acc; color: #eee5cc; font-size: 13px; pointer-events: none; }
+.interact-prompt[hidden] { display: none; }
+[data-result='extracted'] .pause-overlay { background: #10261aa8; }
+[data-result='extracted'] .pause-panel { border-color: #b2d7ad66; }
+[data-result='extracted'] .status-dot { background: #b2d7ad; }
 [data-state='paused'] .shift-panel { visibility: hidden; }
 [data-state='dead'] .pause-overlay { background: #2e0c0ca8; }
 [data-state='dead'] .pause-panel { border-color: #d584694d; }

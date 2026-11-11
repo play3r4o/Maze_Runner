@@ -12,8 +12,8 @@ import { debugViewOfMazeRun } from './simulation/mazeDiagnostics';
 import type { DebugView } from './simulation/mazeDiagnostics';
 import type { SceneMode } from './rendering/scene';
 import { MAX_SEED, generateMaze, layoutFingerprint, parseSeed, serializeMaze } from './simulation/mazeGenerator';
-import { buildGeneratedWorld, createGeneratedRun, requestGeneratedRunShift, setGeneratedRunFrozen, stepGeneratedRun,
-  teleportGeneratedRun } from './game/generatedRun';
+import { AUTO_SHIFT_TICKS, abandonGeneratedRun, buildGeneratedWorld, createGeneratedRun, interactGeneratedRun, isRunOver, relicInReach,
+  requestGeneratedRunShift, setGeneratedRunFrozen, stepGeneratedRun, teleportGeneratedRun } from './game/generatedRun';
 import { createRunReport, parseRunReport, reproduceRun } from './game/runReport';
 import type { RunReport } from './game/runReport';
 import type { GeneratedRun } from './game/generatedRun';
@@ -26,7 +26,7 @@ const requestedScene = params.get('scene');
 // M0 room, M1 junction and M2/M3 hand-built maze stay reachable for regression checks.
 const mode: SceneMode = requestedScene === 'room' ? 'room' : requestedScene === 'junction' ? 'junction'
   : requestedScene === 'maze' ? 'maze' : 'generated';
-document.title = `Shifting Labyrinth · ${{ generated: 'M6', maze: 'M3', junction: 'M1', room: 'M0' }[mode]}`;
+document.title = `Shifting Labyrinth · ${{ generated: 'M7', maze: 'M3', junction: 'M1', room: 'M0' }[mode]}`;
 canvas.setAttribute('aria-label', { generated: 'First-person shifting seeded maze', maze: 'First-person hand-built maze',
   junction: 'First-person shifting junction', room: 'First-person gray room' }[mode]);
 
@@ -100,6 +100,9 @@ function startRoom() {
     revision: generatedRun.shift.revision, validation: generatedRun.shift.validation?.reason ?? null,
     log: generatedRun.shift.log.map(logLine),
     tools: { tick: generatedRun.tick, frozen: generatedRun.frozen, teleports: generatedRun.teleports, errors: pageErrors.length,
+      run: `Run ${generatedRun.status}${generatedRun.carrying ? ' · carrying relic' : ''} · relic ${world.relic.cell} · `
+        + (generatedRun.status === 'out' && generatedRun.shift.phase === 'idle'
+          ? `auto shift in ${((AUTO_SHIFT_TICKS - generatedRun.autoTicks) / 60).toFixed(1)}s` : 'auto shift waiting'),
       events: generatedRun.events.map((event) => `${(event.tick / 60).toFixed(1)}s ${event.kind}: ${event.detail}`) } } : debugViewOfMazeRun(mazeRun);
   let graphicsAvailable = true;
   const stepper = createFixedStepper((dt) => {
@@ -107,16 +110,18 @@ function startRoom() {
     const shiftRequested = input.consumeShiftRequest();
     if (world) {
       let next = generatedRun!;
-      const wasAlive = next.crushedBy === null;
+      const wasOver = isRunOver(next.status);
+      if (input.consumeInteractRequest()) next = interactGeneratedRun(world, next);
       if (shiftRequested) {
         next = requestGeneratedRunShift(world, next);
         const entry = next.shift.log.at(-1);
         if (entry && entry !== generatedRun!.shift.log.at(-1)) console.info('Maze shift', { seed, ...entry });
       }
       generatedRun = next = stepGeneratedRun(world, next, state.intent, state.yaw, dt);
-      if (wasAlive && next.crushedBy) {
+      if (!wasOver && isRunOver(next.status)) {
+        console.info('Run ended', { seed, status: next.status, seconds: next.runTicks / 60, shifts: next.shift.completedShifts });
         input.pause();
-        hud.showDeath(next.crushedBy);
+        hud.showResult(next);
       }
     } else if (mode === 'maze') {
       const wasAlive = mazeRun.crushedBy === null;
@@ -142,8 +147,29 @@ function startRoom() {
     stepper.reset();
     hud.setMode(running, message);
   }, debug ? (action) => { if (action === 'toggle') debug.toggle(); else debug.probe(debugView()); } : undefined);
+  // M7 results: the main button starts a new seed; Retry replays this seed; Abandon ends the run.
+  const resetGeneratedRun = () => {
+    generatedRun = createGeneratedRun(world!);
+    input.resetLook();
+    stepper.reset();
+    hud.resetAttempt();
+    debug?.resetAttempt();
+  };
+  const onRetrySeed = () => { resetGeneratedRun(); void input.start(); };
+  const onAbandon = () => {
+    if (!generatedRun || isRunOver(generatedRun.status)) return;
+    generatedRun = abandonGeneratedRun(generatedRun);
+    console.info('Run ended', { seed, status: 'abandoned', seconds: generatedRun.runTicks / 60 });
+    hud.showResult(generatedRun);
+  };
+  hud.retrySeed?.addEventListener('click', onRetrySeed);
+  hud.abandon?.addEventListener('click', onAbandon);
   const onStart = () => {
-    if (run.crushedBy || mazeRun.crushedBy || generatedRun?.crushedBy) {
+    if (generatedRun && isRunOver(generatedRun.status)) {
+      location.assign(seedUrl(randomSeed()));
+      return;
+    }
+    if (run.crushedBy || mazeRun.crushedBy) {
       run = createJunctionRun();
       mazeRun = createMazeRun();
       generatedRun = world ? createGeneratedRun(world) : null;
@@ -159,12 +185,13 @@ function startRoom() {
   // M6 debug tools (generated maze only). They act on the live run between simulation ticks.
   function applyReport(report: RunReport): string {
     if (!world || !generatedRun) return 'No generated maze loaded.';
-    const wasDead = generatedRun.crushedBy !== null;
+    const wasDead = generatedRun.crushedBy !== null || isRunOver(generatedRun.status);
     const result = reproduceRun(world, report);
     generatedRun = result.run;
     input.setLook(result.run.player.yaw);
     stepper.reset();
     if (wasDead) { hud.resetAttempt(); debug?.resetAttempt(); }
+    if (isRunOver(result.run.status)) hud.showResult(result.run);
     console.info('Reproduced bug report', { mismatches: result.mismatches, report });
     return `Reproduced report: seed ${report.seed}, ${report.requests} shift requests, tick ${report.tick}. `
       + (result.mismatches.length ? `Differences: ${result.mismatches.join(' ')}` : 'Gate state matches the report exactly.');
@@ -221,12 +248,12 @@ function startRoom() {
     if (graphicsAvailable) {
       const gates = generatedRun ? { ...generatedRun.shift, closing: generatedRun.shift.plan?.close ?? null }
         : mode === 'maze' ? { ...mazeRun.shift, closing: MAZE_GATE_IDS.find((id) => id !== mazeRun.shift.target)! } : undefined;
-      scene.render(player, state.yaw, state.pitch, run.junction, gates);
+      scene.render(player, state.yaw, state.pitch, run.junction, gates, generatedRun?.carrying ?? false);
     }
     hud.updatePosition(player, timestamp);
     if (mode === 'junction') hud.updateJunction(run.junction, timestamp, run.pushedBy);
     if (mode === 'maze') hud.updateMaze(mazeRun, timestamp);
-    if (generatedRun) hud.updateGenerated(generatedRun, timestamp);
+    if (generatedRun) hud.updateGenerated(generatedRun, timestamp, relicInReach(world!, generatedRun));
     debug?.update(debugView(), timestamp);
     frameId = requestAnimationFrame(frame);
   }
@@ -235,6 +262,8 @@ function startRoom() {
   function dispose() {
     cancelAnimationFrame(frameId);
     hud.button.removeEventListener('click', onStart);
+    hud.retrySeed?.removeEventListener('click', onRetrySeed);
+    hud.abandon?.removeEventListener('click', onAbandon);
     canvas.removeEventListener('webglcontextlost', onContextLost);
     input.dispose();
     debug?.dispose();

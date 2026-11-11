@@ -11,7 +11,7 @@
 - The developer then confirmed “all works perfect. Go next”: M1 push-before-crush is human accepted, and M2 is approved. M3 and later remain unapproved.
 - The next instruction “all works, go next” accepts M2 and authorizes M3 graph validation/diagnostics. M4 and later remain unapproved.
 - On 2026-11-11, after the M3 Retry fix deployed (run 43005063616, commit `97d3ad9`), the developer replied “accepted, go next”: M3 is human accepted and M4 seeded generation is approved. M5 and later remain unapproved.
-- On 2026-11-11 the developer replied “okay, all looks and works good” after testing the deployed M6: M6 is human accepted. M7 has not been approved yet.
+- On 2026-11-11 the developer replied “okay, all looks and works good” after testing the deployed M6: M6 is human accepted. At 20:21 they replied “go next”: M7 complete solo extraction is approved. M7b and later remain unapproved.
 - On 2026-11-11 the developer replied “all works, go next” after testing the deployed M5: M5 is human accepted and M6 reproduction/stability tools are approved. M7 and later remain unapproved.
 - On 2026-11-11 the developer replied “all works, go next” after testing the deployed M4: M4 is human accepted and M5 safe generated-maze shifts are approved. M6 and later remain unapproved.
 - Planning-only instruction on 2026-11-11: after a concept review the developer chose co-op PvE before PvP and asked for the tension/wayfinding ideas to be added to the plan. This authorizes editing `development_plan.md` only. It does not approve M4 or any later milestone, and no source code changed.
@@ -27,7 +27,7 @@
 | M4 | Human accepted on 2026-11-11 |
 | M5 | Human accepted on 2026-11-11 |
 | M6 | Human accepted on 2026-11-11 |
-| M7 | Not started |
+| M7 | Implemented; awaiting CI/deployment and the fun verdict |
 | M7b (added 2026-11-11) | Not started |
 | M9 (scheduled after M7b) | Not started |
 | M8 | Not started |
@@ -120,7 +120,7 @@ The developer confirmed M1's original gates work and subsequently accepted the f
 
 ## Next action
 
-Wait for explicit approval to start M7. M7 remains unapproved. M6 remains unapproved. 
+Confirm the M7 Pages workflow run, then stop for the M7 fun verdict. M7b remains unapproved. M7 remains unapproved. M6 remains unapproved. 
 
 ### M1 crushing-gate revision — 2026-11-11
 
@@ -239,3 +239,15 @@ Wait for explicit approval to start M7. M7 remains unapproved. M6 remains unappr
 - Browser (local Google Chrome, SwiftShader): three new M6 scenarios pass (freeze and teleport with events; mid-closing report copied on seed 41, loaded from seed 1, identical revision, G7 openness, position and phase; wrong-version refusal; ten Random seeds in a row with matching fingerprints and no page errors). Rerun after M6 UI changes: all three generated-maze scenarios, M3 debug map, M0 pointer-lock movement. The long M2 scenarios and the remaining M1/M0 tests are left to GitHub Actions as before.
 - Commit `36a53e4` pushed. GitHub Actions run 43060010059 passed the full suite (unit, all browser scenarios including the long M2 ones) and deployed in 12m 52s. Test at `https://play3r4o.github.io/Maze_Runner/?v=36a53e4`. This note is committed locally for the next checkpoint.
 - Human acceptance pending: use the [M6 checklist](milestones/M6.md#human-acceptance-checklist).
+
+### M7 first complete solo extraction loop — 2026-11-11
+
+- M6 accepted; M7 approved (“go next”). Contract: `milestones/M7.md`. M7b and later remain unapproved.
+- Rules in `game/generatedRun.ts`: seeded relic placement (outer ring, farther half by static route, not a landmark room), run status ready → out → one terminal state, run clock, automatic validated shifts every 45 s of idle maze time while out (paused by freeze, reset by any request), E pickup within 1.6 m with unique ownership, extraction on entering the plaza carrying the relic, failure on crush with relic lost, abandon from the pause menu. Terminal runs are immutable. Teleport refused after a run ends. The landmark-walk test from M4 now freezes shifts, because the walk outlasts the automatic interval.
+- Reports are format 2 (status, carrying, run clock, countdown); format 1 refused. Generated-shift notices no longer mention G.
+- Rendering: floating relic crystal, blue relic beam, gold Sanctuary beam (no colliders). A plinth was dropped because it would sit uncollided in the walkable room centre. After the visual check, both beams were widened and made more saturated: the first pale beam was hard to see against the sky from Sanctuary.
+- HUD: objective, run time, shifts, ring, phase; E prompt; Abandon in the pause panel after the first start; result screen with New run and Retry this seed. The M4–M6 landmark checklist was removed from the HUD (landmarks stay in the world and visits stay in events). Debug panel adds run status, relic room and auto-shift countdown.
+- Unit: 1170 tests in twelve files pass, including 200 relic placements, range/ownership, status and exactly-once endings, abandon, the automatic timer to the step, crushed-while-carrying, three end-to-end seeds (walk out, take, survive a real automatic shift, walk the new route home, extract) and report continuation.
+- Browser (local Google Chrome, SwiftShader): both M7 scenarios pass (countdown runs after leaving; E prompt and pickup; extraction result; Retry this seed; Abandon hidden before start then abandoned result; New run loads another seed); all three generated-maze and three M6 debug-tool scenarios pass after updating them for the new HUD; M0 room draw passes. Simulating a full 45 s in the browser would render about 2700 software frames, so the browser test checks the running countdown and the unit tests check the exact timing. Two test mistakes fixed on the way: waiting for pointer lock after a resume that extracts on its first step, and clicking the debug Events toggle while the mouse was captured.
+- Visual check (seed 41): blue beam visible from the plaza after the contrast fix; crystal visible down the corridor from the neighbouring room. No page errors.
+- Human verdict pending: see the [M7 checklist](milestones/M7.md#human-acceptance-checklist).

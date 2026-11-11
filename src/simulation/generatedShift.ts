@@ -25,7 +25,7 @@ export const SHIFT_LOG_LIMIT = 12;
 export function createGeneratedShift(maze: GeneratedMaze): GeneratedShift {
   return { phase: 'idle', phaseSeconds: 0, openness: { ...maze.initialOpenness }, plan: null, requests: 0, completedShifts: 0,
     revision: 0, validation: null, log: [],
-    notice: `G shifts the maze: one of ${maze.gates.length} gates opens, another closes. Every room keeps a route home.` };
+    notice: `${maze.gates.length} stone gates: each shift opens one and closes another. Every room keeps a route home.` };
 }
 
 // Validate a proposed swap against the graph before, during (both open) and after.
@@ -65,7 +65,7 @@ const addLog = (state: GeneratedShift, entry: ShiftLogEntry) => [...state.log, e
 
 export function requestGeneratedShift(state: GeneratedShift, maze: GeneratedMaze): GeneratedShift {
   if (state.phase !== 'idle') {
-    return { ...state, notice: 'Shift ignored: wait for this change and cooldown to finish.',
+    return { ...state, notice: 'Shift ignored: a change is already under way.',
       log: addLog(state, { request: state.requests, revision: state.revision, outcome: 'ignored', plan: null, rejectedCandidates: 0,
         reason: `Busy (${state.phase}).` }) };
   }
@@ -115,6 +115,6 @@ export function advanceGeneratedShift(state: GeneratedShift, dt: number, maze: G
   return { ...state, openness, revision: state.revision + Number(changed), phaseSeconds: finished ? 0 : elapsed,
     phase: finished ? state.phase === 'opening' ? 'closing' : 'cooldown' : state.phase,
     completedShifts: state.completedShifts + Number(committed),
-    notice: committed ? `${plan.close.toUpperCase()} is closed and ${plan.open.toUpperCase()} is open. Find a new way; G works after cooldown.` : state.notice,
+    notice: committed ? `${plan.close.toUpperCase()} is closed and ${plan.open.toUpperCase()} is open. The old way may be gone.` : state.notice,
   };
 }

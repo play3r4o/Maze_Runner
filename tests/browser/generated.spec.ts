@@ -22,8 +22,8 @@ async function walk(page: Page, key: string, ms: number) {
 test('a seed rebuilds the same maze; other seeds, reloads and the seed form behave', async ({ page }) => {
   const errors = watchErrors(page);
   await page.goto('/?seed=1');
-  await expect(page).toHaveTitle('Shifting Labyrinth · M6');
-  await expect(page.getByText('DEVELOPMENT BUILD / M6 · REPRO TOOLS')).toBeVisible();
+  await expect(page).toHaveTitle('Shifting Labyrinth · M7');
+  await expect(page.getByText('DEVELOPMENT BUILD / M7 · SOLO EXTRACTION')).toBeVisible();
   await expect(page.getByTestId('hud-seed')).toHaveText('seed 1');
   expect(await fingerprint(page)).toBe(layoutFingerprint(generateMaze(1)));
   await page.reload();
@@ -102,7 +102,7 @@ test('G runs a validated seeded shift: warning, opening, closing, revisions and 
   await page.getByRole('button', { name: 'Start exploring' }).click();
   await expect.poll(() => page.evaluate(() => document.pointerLockElement?.id)).toBe('scene');
   await freezeBrowserClock(page);
-  await expect(page.getByTestId('shift-phase')).toHaveText('Ready · press G');
+  await expect(page.getByTestId('shift-phase')).toHaveText('Maze still');
   await page.keyboard.press('KeyG'); await page.clock.runFor(200);
   await expect(page.getByTestId('shift-phase')).toHaveAttribute('data-phase', 'warning');
   await expect(page.getByTestId('debug-phase')).toHaveText('warning');
@@ -121,7 +121,7 @@ test('G runs a validated seeded shift: warning, opening, closing, revisions and 
   await expect(page.getByTestId(`debug-gate-${closing.toLowerCase()}`)).toHaveAttribute('data-status', 'closing');
   await page.clock.runFor(7000);
   await expect(page.getByTestId('shift-count')).toHaveText('1 shift');
-  await expect(page.getByTestId('shift-phase')).toHaveText('Ready · press G');
+  await expect(page.getByTestId('shift-phase')).toHaveText('Maze still');
   await expect(page.getByTestId(`debug-gate-${closing.toLowerCase()}`)).toHaveAttribute('data-status', 'closed');
   await expect(page.getByTestId('debug-revision')).toHaveText('2');
   expect(errors).toEqual([]);

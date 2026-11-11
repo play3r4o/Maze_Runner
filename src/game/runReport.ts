@@ -8,18 +8,20 @@ import { advanceGeneratedShift, createGeneratedShift, requestGeneratedShift } fr
 import type { GeneratedShift } from '../simulation/generatedShift';
 import type { ShiftPhase } from '../simulation/shift';
 import { RUN_EVENT_LIMIT, addRunEvent, createGeneratedRun, teleportTarget } from './generatedRun';
-import type { GeneratedRun, GeneratedWorld, RunEvent } from './generatedRun';
+import type { GeneratedRun, GeneratedWorld, RunEvent, RunStatus } from './generatedRun';
 
 // A bug report is plain JSON. With the same build it rebuilds the maze (seed + config),
 // replays the same shift requests to the same gate poses, and puts the player back.
 // Bump REPORT_FORMAT if fields change meaning.
-export const REPORT_FORMAT = 1;
+export const REPORT_FORMAT = 2;
 export type RunReport = {
   format: number; version: string; seed: number; config: GeneratorConfig; fingerprint: string;
   // Replay inputs.
   requests: number; shiftTicks: number; frozen: boolean; tick: number;
   player: { x: number; z: number; yaw: number }; cell: string | null; ring: Ring;
   visited: string[]; leftSanctuary: boolean; returned: boolean; teleports: number; crushedBy: string | null;
+  // M7 expedition state.
+  status: RunStatus; carrying: boolean; runTicks: number; autoTicks: number;
   // Recorded results, compared after replay.
   expect: { phase: ShiftPhase; revision: number; completedShifts: number; openness: MazeOpenness };
   // Context for a human reader; not used for replay.
@@ -33,6 +35,7 @@ export function createRunReport(world: GeneratedWorld, run: GeneratedRun, contex
     requests: run.shift.requests, shiftTicks: run.shiftTicks, frozen: run.frozen, tick: run.tick,
     player: { x: run.player.x, z: run.player.z, yaw: run.player.yaw }, cell: run.cell, ring: run.ring,
     visited: [...run.visited], leftSanctuary: run.leftSanctuary, returned: run.returned, teleports: run.teleports, crushedBy: run.crushedBy,
+    status: run.status, carrying: run.carrying, runTicks: run.runTicks, autoTicks: run.autoTicks,
     expect: { phase: run.shift.phase, revision: run.shift.revision, completedShifts: run.shift.completedShifts, openness: { ...run.shift.openness } },
     events: run.events.slice(-20), shiftLog: context.shiftLog ?? [], errors: (context.errors ?? []).slice(-10), note: context.note ?? '',
   };
@@ -65,6 +68,10 @@ export function parseRunReport(text: string): { ok: true; report: RunReport } | 
   if (!isObject(data.expect) || !isObject(data.expect.openness)) return { ok: false, error: 'Report is missing its expected gate state.' };
   const strings = (value: unknown) => Array.isArray(value) && value.every((item) => typeof item === 'string');
   if (!strings(data.visited)) return { ok: false, error: 'Report visited must be a list of landmark IDs.' };
+  if (!['ready', 'out', 'extracted', 'failed', 'abandoned'].includes(data.status as string) || typeof data.carrying !== 'boolean'
+    || !isInt(data.runTicks, 0, 1e9) || !isInt(data.autoTicks, 0, 1e9)) {
+    return { ok: false, error: 'Report run status, carrying, runTicks or autoTicks is missing or invalid.' };
+  }
   const report = {
     events: [], shiftLog: [], errors: [], note: '', frozen: false, cell: null, ring: 'sanctuary', leftSanctuary: false,
     returned: false, teleports: 0, crushedBy: null, fingerprint: '', ...data,
@@ -116,7 +123,9 @@ export function reproduceRun(world: GeneratedWorld, report: RunReport): { run: G
   }
   const run: GeneratedRun = { ...base, shift, player, tick: report.tick, shiftTicks: report.shiftTicks, frozen: report.frozen,
     cell: report.cell, ring: report.ring, visited: [...report.visited], leftSanctuary: report.leftSanctuary, returned: report.returned,
-    teleports: report.teleports, events: report.events.slice(-RUN_EVENT_LIMIT) };
+    teleports: report.teleports, events: report.events.slice(-RUN_EVENT_LIMIT),
+    // A failed run comes back alive and running, so the moment before death can be replayed.
+    status: report.status === 'failed' ? 'out' : report.status, carrying: report.carrying, runTicks: report.runTicks, autoTicks: report.autoTicks };
   return { mismatches, run: { ...run, events: addRunEvent(run, 'report',
     `reproduced seed ${report.seed}, ${report.requests} requests${mismatches.length ? `; ${mismatches.length} mismatch(es)` : ''}`) } };
 }

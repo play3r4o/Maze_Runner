@@ -49,7 +49,7 @@ export function createScene(canvas: HTMLCanvasElement, mode: SceneMode, generate
   });
 
   const mazeView = mode === 'maze' ? createMazeView(scene)
-    : mode === 'generated' && generated ? createMazeView(scene, generated.maze, generated.walls) : null;
+    : mode === 'generated' && generated ? createMazeView(scene, generated.maze, generated.walls, generated.relic) : null;
   const gates = mode !== 'junction' ? [] : GATE_IDS.map((id) => {
     const rect = gateRect(id, 0);
     const material = new MeshStandardMaterial({ color: '#ae965f', roughness: 1 });
@@ -112,8 +112,9 @@ export function createScene(canvas: HTMLCanvasElement, mode: SceneMode, generate
   resize();
 
   return {
-    render(player: PlayerState, yaw: number, pitch: number, junction: JunctionState, maze?: GateView) {
+    render(player: PlayerState, yaw: number, pitch: number, junction: JunctionState, maze?: GateView, relicCarried = false) {
       mazeView?.update(maze);
+      mazeView?.setRelic(relicCarried, performance.now() / 1000);
       for (const gate of gates) {
         const rect = gateRect(gate.id, junction.openness[gate.id]);
         gate.mesh.position.set((rect.minX + rect.maxX) / 2, rect.height / 2, (rect.minZ + rect.maxZ) / 2);

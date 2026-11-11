@@ -1,8 +1,8 @@
 # Shifting Labyrinth
 
-Working title. A browser game project starting with a small, first-person shifting-maze prototype. **M0–M5 are accepted. M6 adds reproduction tools: freeze, teleport, events and bug reports.** Automatic shifts and extraction are later milestones.
+Working title. A browser game project starting with a small, first-person shifting-maze prototype. **M0–M6 are accepted. M7 is the first complete solo extraction loop: find the relic, take it with E, and carry it home while the maze shifts by itself.**
 
-Read [the brief](project_brief.md), [development plan](docs/development_plan.md), [M6 specification](docs/milestones/M6.md), and [current progress](docs/progress.md).
+Read [the brief](project_brief.md), [development plan](docs/development_plan.md), [M7 specification](docs/milestones/M7.md), and [current progress](docs/progress.md).
 
 ## Run
 
@@ -16,6 +16,8 @@ npm run dev
 Open Vite's printed address in a current desktop browser. The development server binds to all interfaces for cloud access. Use your platform's supported browser/port access when working remotely; your own computer's localhost is not the cloud machine. No credentials or external services are required.
 
 Click **Start exploring** to capture the mouse. **WASD** moves, **mouse** looks, **G** requests a gate shift, and **Escape** pauses/releases the cursor. Click **Resume exploring** to continue. Switching tabs or losing focus pauses and clears movement and pending shift requests.
+
+**M7 expedition (default scene).** A relic waits in the outer ring under a tall **blue beam**. Leave Sanctuary, press **E** next to the relic, then carry it back into Sanctuary under the **gold beam**. Every 45 seconds the maze shifts by itself after a 2-second warning: one gate opens, another closes, so your way back may change. Crushing ends the run and loses the relic; **Abandon run** is in the pause menu. The result screen shows your time and shifts survived, with **New run** (fresh seed) and **Retry this seed**. G still forces a shift for debugging. See the [M7 specification](docs/milestones/M7.md).
 
 The default scene is a **seeded 11×11 maze** (M4). The address carries `?seed=N`; the same seed always rebuilds the same layout, and a page opened without a seed picks one and writes it into the address. A central open Sanctuary plaza has one entrance per side. Inner, middle and outer rings each hold one landmark (Amber Spire, Blue Beacon, Rose Pillar); the side panel shows your current ring and the navigation check. Eight stone gates (G1–G8) move when you press **G**: one closed gate opens, then one open gate closes, with the same warning, pushing and crushing rules as the hand-built maze. Each shift is validated first, and the static corridors alone always connect every room, so no shift can strand a region. The F2 panel shows gate states and a shift log with each decision and its reason. See the [M5 specification](docs/milestones/M5.md).
 
@@ -33,7 +35,7 @@ The topology revision starts at **0** and usually reaches **2** per complete swa
 
 With the view open, press **V** or click **Probe isolation** to propose blocking Sanctuary's connections in a **dry run**. Read the rejection and inspect the proposed edge IDs/unreachable cells. This cannot move walls, change the revision or alter the run. Escape releases the cursor so you can scroll/expand the connection and validation details. Retry resets revision/attempt history while keeping the panel's visibility for that page.
 
-Follow the [M6 manual checklist](docs/milestones/M6.md#human-acceptance-checklist) before approving M7. Accepted reference scenes remain available: `?scene=room` for M0, `?scene=junction` for M1 and `?scene=maze` for M2/M3. Teleport, automatic shifting, jumping and sprinting remain deferred.
+Follow the [M7 checklist](docs/milestones/M7.md#human-acceptance-checklist) and give a fun verdict before approving M7b. Accepted reference scenes remain available: `?scene=room` for M0, `?scene=junction` for M1 and `?scene=maze` for M2/M3. Teleport, automatic shifting, jumping and sprinting remain deferred.
 
 ## Check and build
 
@@ -84,7 +86,7 @@ One-time repository setup:
 
 For the current repository, the expected default URL is `https://play3r4o.github.io/Maze_Runner/`. It becomes usable only after GitHub reports a successful deployment; an expected URL alone is not proof of publication.
 
-Open the game in a desktop browser tab and click **Start exploring**. No local Node.js installation is required for the hosted version. After a new deployment, refresh and check the **M6 · REPRO TOOLS** header; remove any `scene=` parameter from the URL to play the current maze. Share a `?seed=N` address to reproduce a layout.
+Open the game in a desktop browser tab and click **Start exploring**. No local Node.js installation is required for the hosted version. After a new deployment, refresh and check the **M7 · SOLO EXTRACTION** header; remove any `scene=` parameter from the URL to play the current maze. Share a `?seed=N` address to reproduce a layout.
 
 If Pages is unavailable for the repository's visibility or account plan, keep those settings unchanged and report the limitation. Enabling Pages does not require adding credentials to the game or creating a separate server.
 
@@ -102,4 +104,4 @@ The local npm cache is ignored `.cache/npm` to work inside restricted cloud work
 
 Stop the development server before reinstalling dependencies and restart it afterward. If Vite reports an outdated optimized dependency after an install, restart the server rather than changing application code.
 
-Next milestone is M7 (first complete solo extraction loop), **after M6 human acceptance and explicit approval**. Approved GitHub pushes trigger the Pages workflow; a successful local build alone does not establish a successful hosted deployment.
+Next milestone is M7b (pressure and wayfinding), **after the M7 fun verdict and explicit approval**. Approved GitHub pushes trigger the Pages workflow; a successful local build alone does not establish a successful hosted deployment.

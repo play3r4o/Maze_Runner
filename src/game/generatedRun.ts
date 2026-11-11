@@ -6,18 +6,46 @@ import { resolveMovingWalls } from '../simulation/movingWalls';
 import type { WallRect } from '../simulation/player';
 import { stepPlayer } from '../simulation/player';
 import type { MoveIntent, PlayerState } from '../simulation/player';
+import { createRng } from '../simulation/mazeGenerator';
 import type { GeneratedMaze, Ring } from '../simulation/mazeGenerator';
+import { findMazeRoute } from '../simulation/mazeGraph';
+import { FIXED_DT } from '../loop';
+
+// M7 tuning (plan defaults): warned automatic shifts every 45 s of idle maze time; no deadline.
+export const AUTO_SHIFT_SECONDS = 45;
+export const AUTO_SHIFT_TICKS = Math.round(AUTO_SHIFT_SECONDS / FIXED_DT);
+// The relic can be taken from this far (body centre to relic centre, metres).
+export const RELIC_REACH = 1.6;
+
+// One relic per seed, at the centre of an outer-ring room in the farther half of outer rooms
+// by static route length (gates closed), never a landmark room. Seeded, so reports reproduce it.
+export type RelicSpot = { cell: string; x: number; z: number };
+export function placeRelic(maze: GeneratedMaze): RelicSpot {
+  const taken = new Set(maze.landmarks.map((landmark) => landmark.cell));
+  const outer = maze.cells.filter((cell) => maze.rings[cell.id] === 'outer' && !taken.has(cell.id))
+    .map((cell) => ({ cell, length: findMazeRoute(maze, {}, cell.id, maze.start)!.edges.length }));
+  const lengths = outer.map((item) => item.length).sort((a, b) => a - b);
+  const median = lengths[Math.floor(lengths.length / 2)];
+  const far = outer.filter((item) => item.length >= median).map((item) => item.cell);
+  const cell = createRng((maze.seed ^ 0x5bd1e995) >>> 0).pick(far);
+  return { cell: cell.id, ...cellPosition(cell, maze) };
+}
 
 // Everything physical derived once from a generated layout. Rendering, collision and the
 // debug map all read these same descriptors; nothing is hand-placed separately.
-export type GeneratedWorld = { maze: GeneratedMaze; walls: WallRect[]; solids: WallRect[]; plaza: WallRect };
+export type GeneratedWorld = { maze: GeneratedMaze; walls: WallRect[]; solids: WallRect[]; plaza: WallRect; relic: RelicSpot };
 export function buildGeneratedWorld(maze: GeneratedMaze): GeneratedWorld {
   const walls = deriveMazeWalls(maze);
-  return { maze, walls, solids: [...walls, ...maze.landmarks.map((landmark) => landmarkRect(landmark, maze))], plaza: plazaRect(maze)! };
+  return { maze, walls, solids: [...walls, ...maze.landmarks.map((landmark) => landmarkRect(landmark, maze))], plaza: plazaRect(maze)!,
+    relic: placeRelic(maze) };
 }
 
 // Bounded record of what happened in this attempt, for the debug panel and bug reports.
-export type RunEventKind = 'shift' | 'freeze' | 'teleport' | 'visit' | 'ring' | 'death' | 'return' | 'report';
+export type RunEventKind = 'shift' | 'freeze' | 'teleport' | 'visit' | 'ring' | 'death' | 'return' | 'report' | 'run' | 'relic';
+// ready: in Sanctuary, clock not started. out: the expedition is running. The other three are
+// terminal: each run reaches exactly one of them, once.
+export type RunStatus = 'ready' | 'out' | 'extracted' | 'failed' | 'abandoned';
+export const isRunOver = (status: RunStatus) => status === 'extracted' || status === 'failed' || status === 'abandoned';
 export type RunEvent = { tick: number; kind: RunEventKind; detail: string };
 export const RUN_EVENT_LIMIT = 50;
 
@@ -33,22 +61,41 @@ export type GeneratedRun = {
   shiftTicks: number;
   // Debug only: freeze stops gate motion and shift timers; walking continues.
   frozen: boolean; teleports: number; events: RunEvent[];
+  // M7 expedition: status, whether the relic is carried, run clock (ticks while out and alive),
+  // and idle ticks towards the next automatic shift.
+  status: RunStatus; carrying: boolean; runTicks: number; autoTicks: number;
 };
 export function createGeneratedRun(world: GeneratedWorld): GeneratedRun {
   return { player: { x: 0, z: 0, yaw: 0 }, visited: [], leftSanctuary: false, returned: false, cell: null, ring: 'sanctuary',
     shift: createGeneratedShift(world.maze), crushedBy: null, pushedBy: null,
-    tick: 0, shiftTicks: 0, frozen: false, teleports: 0, events: [] };
+    tick: 0, shiftTicks: 0, frozen: false, teleports: 0, events: [],
+    status: 'ready', carrying: false, runTicks: 0, autoTicks: 0 };
 }
 export function addRunEvent(run: GeneratedRun, kind: RunEventKind, detail: string): RunEvent[] {
   return [...run.events, { tick: run.tick, kind, detail }].slice(-RUN_EVENT_LIMIT);
 }
-export function requestGeneratedRunShift(world: GeneratedWorld, run: GeneratedRun): GeneratedRun {
-  if (run.crushedBy) return run;
+// G (debug force) or the automatic timer. Any request from idle restarts the automatic countdown.
+export function requestGeneratedRunShift(world: GeneratedWorld, run: GeneratedRun, source: 'debug' | 'auto' = 'debug'): GeneratedRun {
+  if (run.crushedBy || isRunOver(run.status)) return run;
   const shift = requestGeneratedShift(run.shift, world.maze);
   const entry = shift.log.at(-1);
   const accepted = run.shift.phase === 'idle' && shift.phase === 'warning';
-  const detail = entry ? `${entry.outcome}${entry.plan ? ` ${entry.plan.open} opens, ${entry.plan.close} closes` : ''} (request ${entry.request + 1})` : 'request';
-  return { ...run, shift, shiftTicks: accepted ? 0 : run.shiftTicks, events: addRunEvent(run, 'shift', detail) };
+  const detail = entry ? `${source} ${entry.outcome}${entry.plan ? ` ${entry.plan.open} opens, ${entry.plan.close} closes` : ''} (request ${entry.request + 1})` : 'request';
+  return { ...run, shift, shiftTicks: accepted ? 0 : run.shiftTicks, autoTicks: run.shift.phase === 'idle' ? 0 : run.autoTicks,
+    events: addRunEvent(run, 'shift', detail) };
+}
+
+export const relicInReach = (world: GeneratedWorld, run: GeneratedRun) => !run.carrying && !run.crushedBy && !isRunOver(run.status)
+  && Math.hypot(run.player.x - world.relic.x, run.player.z - world.relic.z) <= RELIC_REACH;
+// E: take the relic when in reach. Ownership is unique: once carried it cannot be taken again.
+export function interactGeneratedRun(world: GeneratedWorld, run: GeneratedRun): GeneratedRun {
+  if (!relicInReach(world, run)) return run;
+  return { ...run, carrying: true, events: addRunEvent(run, 'relic', `taken at ${world.relic.cell}`) };
+}
+// Abandon ends a started or unstarted run with nothing secured.
+export function abandonGeneratedRun(run: GeneratedRun): GeneratedRun {
+  if (isRunOver(run.status)) return run;
+  return { ...run, status: 'abandoned', events: addRunEvent(run, 'run', `abandoned${run.carrying ? ' carrying the relic (lost)' : ''}`) };
 }
 export function setGeneratedRunFrozen(run: GeneratedRun, frozen: boolean): GeneratedRun {
   if (run.frozen === frozen) return run;
@@ -59,7 +106,7 @@ export function setGeneratedRunFrozen(run: GeneratedRun, frozen: boolean): Gener
 export function teleportTarget(world: GeneratedWorld, run: GeneratedRun, cellId: string): { ok: true; x: number; z: number } | { ok: false; reason: string } {
   const cell = world.maze.cells.find((item) => item.id === cellId);
   if (!cell) return { ok: false, reason: `Unknown cell ${cellId}.` };
-  if (run.crushedBy) return { ok: false, reason: 'Retry before teleporting.' };
+  if (run.crushedBy || isRunOver(run.status)) return { ok: false, reason: 'Start a new run before teleporting.' };
   const { x, z } = cellPosition(cell, world.maze);
   const body = { x, z, yaw: run.player.yaw };
   const solids = [...world.solids, ...layoutGateColliders(world.maze, run.shift.openness)];
@@ -83,14 +130,27 @@ const insideRect = (player: PlayerState, rect: WallRect) =>
 // keep moving but the body does not.
 export function stepGeneratedRun(world: GeneratedWorld, previous: GeneratedRun, intent: MoveIntent, yaw: number, dt: number): GeneratedRun {
   const { maze } = world;
-  const moving = !previous.frozen && previous.shift.phase !== 'idle';
-  const run = { ...previous, tick: previous.tick + 1, shiftTicks: previous.shiftTicks + Number(moving) };
+  // A finished run is a fixed record.
+  if (previous.status === 'extracted' || previous.status === 'abandoned') return previous;
+  let start = previous;
+  // Automatic shifts: only during an expedition, alive, unfrozen, with the maze idle.
+  if (start.status === 'out' && !start.crushedBy && !start.frozen && start.shift.phase === 'idle') {
+    start = { ...start, autoTicks: start.autoTicks + 1 };
+    if (start.autoTicks >= AUTO_SHIFT_TICKS) start = requestGeneratedRunShift(world, start, 'auto');
+  }
+  const moving = !start.frozen && start.shift.phase !== 'idle';
+  const run = { ...start, tick: start.tick + 1, shiftTicks: start.shiftTicks + Number(moving),
+    runTicks: start.runTicks + Number(start.status === 'out' && !start.crushedBy) };
   const shift = previous.frozen ? run.shift : advanceGeneratedShift(run.shift, dt, maze);
   if (run.crushedBy) return { ...run, shift, pushedBy: null };
   const contact = resolveMovingWalls(run.player, gateEdges(maze).map((edge) => ({ id: edge.gate!,
     before: gateRect(maze, edge, run.shift.openness[edge.gate!]), after: gateRect(maze, edge, shift.openness[edge.gate!]),
     closing: shift.openness[edge.gate!] < run.shift.openness[edge.gate!] })), world.solids);
-  if (contact.crushedBy) return { ...run, shift, ...contact, events: addRunEvent(run, 'death', `crushed by ${contact.crushedBy}`) };
+  if (contact.crushedBy) {
+    const dead = { ...run, shift, ...contact, events: addRunEvent(run, 'death', `crushed by ${contact.crushedBy}`) };
+    return isRunOver(run.status) ? dead : { ...dead, status: 'failed' as const,
+      events: addRunEvent(dead, 'run', `failed after ${(run.runTicks * FIXED_DT).toFixed(1)}s${run.carrying ? ', relic lost' : ''}`) };
+  }
   const player = stepPlayer({ ...contact.player, yaw }, intent, [...world.solids, ...layoutGateColliders(maze, shift.openness)], dt);
   const atHome = insideRect(player, world.plaza);
   const room = atHome ? maze.start : maze.cells.find((cell) => inCellRoom(player, cell.id, maze))?.id ?? null;
@@ -104,8 +164,15 @@ export function stepGeneratedRun(world: GeneratedWorld, previous: GeneratedRun, 
   if (ring !== run.ring) note('ring', `${run.ring} → ${ring}${room ? ` at ${room}` : ''}`);
   const returned = run.returned || (run.leftSanctuary && atHome && visited.length === maze.landmarks.length);
   if (returned && !run.returned) note('return', `home after ${visited.length} landmarks${run.teleports ? `, ${run.teleports} teleports` : ''}`);
+  let status = run.status;
+  if (status === 'ready' && !atHome) { status = 'out'; note('run', 'started: left Sanctuary'); }
+  // Extraction: carrying the relic back into the Sanctuary plaza ends the run once.
+  if (status === 'out' && run.carrying && atHome) {
+    status = 'extracted';
+    note('run', `extracted in ${(run.runTicks * FIXED_DT).toFixed(1)}s, ${shift.completedShifts} shifts${run.teleports ? `, ${run.teleports} debug teleports` : ''}`);
+  }
   return {
-    ...run, ...contact, shift, player, visited, cell: room, ring, events, returned,
+    ...run, ...contact, shift, player, visited, cell: room, ring, events, returned, status,
     leftSanctuary: run.leftSanctuary || !atHome,
   };
 }

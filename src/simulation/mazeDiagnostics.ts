@@ -20,7 +20,7 @@ export type DebugView = {
   // Readable shift decisions, oldest first (generated mazes only).
   log?: readonly string[];
   // Generated mazes only: debug tool state for the panel.
-  tools?: { tick: number; frozen: boolean; teleports: number; errors: number; events: readonly string[] };
+  tools?: { tick: number; frozen: boolean; teleports: number; errors: number; events: readonly string[]; run: string };
 };
 export function debugViewOfMazeRun(run: MazeRun): DebugView {
   return { layout: HAND_BUILT_MAZE, player: run.player, openness: run.shift.openness, crushed: run.crushedBy !== null,

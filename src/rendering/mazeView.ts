@@ -1,5 +1,5 @@
 import { BoxGeometry, CanvasTexture, Group, InstancedMesh, Matrix4, Mesh, MeshBasicMaterial,
-  MeshStandardMaterial, PlaneGeometry, SRGBColorSpace } from 'three';
+  MeshStandardMaterial, OctahedronGeometry, PlaneGeometry, SRGBColorSpace } from 'three';
 import type { Scene } from 'three';
 import { HAND_BUILT_MAZE, MAZE_WALLS, cellPosition, findCell, gateEdges, gateRect, landmarkRect, plazaRect } from '../simulation/maze';
 import type { MazeLayout, MazeOpenness } from '../simulation/maze';
@@ -10,7 +10,9 @@ import type { ShiftPhase } from '../simulation/shift';
 export type GateView = { phase: ShiftPhase; phaseSeconds: number; openness: MazeOpenness; closing: string | null };
 
 // Hand-built M2/M3 maze by default; generated layouts pass their own derived walls.
-export function createMazeView(scene: Scene, layout: MazeLayout = HAND_BUILT_MAZE, mazeWalls: readonly WallRect[] = MAZE_WALLS) {
+// M7: an optional relic (crystal + light beam) and a gold beam over Sanctuary for wayfinding.
+export function createMazeView(scene: Scene, layout: MazeLayout = HAND_BUILT_MAZE, mazeWalls: readonly WallRect[] = MAZE_WALLS,
+  relic?: { x: number; z: number }) {
   const group = new Group();
   scene.add(group);
   const box = new BoxGeometry(1, 1, 1);
@@ -20,7 +22,7 @@ export function createMazeView(scene: Scene, layout: MazeLayout = HAND_BUILT_MAZ
   mazeWalls.forEach((wall, i) => walls.setMatrixAt(i, matrix.makeScale(wall.maxX - wall.minX, wall.height, wall.maxZ - wall.minZ)
     .setPosition((wall.minX + wall.maxX) / 2, wall.height / 2, (wall.minZ + wall.maxZ) / 2)));
   group.add(walls);
-  const geometries: (BoxGeometry | PlaneGeometry)[] = [box];
+  const geometries: (BoxGeometry | PlaneGeometry | OctahedronGeometry)[] = [box];
   const materials: (MeshBasicMaterial | MeshStandardMaterial)[] = [wallMaterial];
   const textures: CanvasTexture[] = [];
   function block(width: number, height: number, depth: number, x: number, y: number, z: number, color: string) {
@@ -44,6 +46,26 @@ export function createMazeView(scene: Scene, layout: MazeLayout = HAND_BUILT_MAZ
     const back = new Mesh(mesh.geometry, material);
     back.position.copy(mesh.position); back.rotation.y = rotation + Math.PI; group.add(back);
     geometries.push(mesh.geometry); materials.push(material); textures.push(texture);
+  }
+  // Tall, unlit, translucent column visible above the 3 m walls from anywhere in the maze.
+  function beam(x: number, z: number, color: string, opacity: number) {
+    const material = new MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false });
+    const mesh = new Mesh(new BoxGeometry(0.7, 60, 0.7), material);
+    mesh.position.set(x, 30, z); mesh.renderOrder = 2;
+    geometries.push(mesh.geometry); materials.push(material); group.add(mesh);
+    return mesh;
+  }
+  let relicParts: Mesh[] = [];
+  let crystal: Mesh | null = null;
+  if (relic) {
+    beam(0, 0, '#f0b53c', 0.55);
+    const material = new MeshBasicMaterial({ color: '#cfeffb' });
+    // A floating crystal with no collider: the room centre stays walkable. Crystal and beam vanish when taken.
+    const geometry = new OctahedronGeometry(0.32);
+    crystal = new Mesh(geometry, material);
+    crystal.position.set(relic.x, 1.25, relic.z);
+    geometries.push(geometry); materials.push(material); group.add(crystal);
+    relicParts = [crystal, beam(relic.x, relic.z, '#57d6f5', 0.6)];
   }
   const plaza = plazaRect(layout);
   if (plaza) block(plaza.maxX - plaza.minX - 0.2, 0.02, plaza.maxZ - plaza.minZ - 0.2, 0, 0.02, 0, '#bba36b');
@@ -78,6 +100,10 @@ export function createMazeView(scene: Scene, layout: MazeLayout = HAND_BUILT_MAZ
     return { id, edge, mesh, outlines };
   });
   return {
+    setRelic(carried: boolean, seconds: number) {
+      for (const part of relicParts) part.visible = !carried;
+      if (crystal) { crystal.rotation.y = seconds * 1.2; crystal.position.y = 1.25 + Math.sin(seconds * 2) * 0.08; }
+    },
     update(state?: GateView) {
       if (!state) return;
       for (const gate of gates) {

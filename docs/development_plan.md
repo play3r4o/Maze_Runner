@@ -220,6 +220,8 @@ M6 implementation contract: `milestones/M6.md`. Reports replay the seed's shift 
 - **Done:** Unaided complete loop with understandable changes and meaningful decisions. If dull/unfair, improve navigation/pacing here.
 - **Avoid:** Inventory, upgrades, combat, map expansion, art. Start with 2 s warning, 45 s interval, no hard deadline.
 
+M7 implementation contract: `milestones/M7.md`. Navigation aids chosen for the first test: a blue light beam over the relic and a gold beam over Sanctuary, visible above the walls. Extraction is entering the Sanctuary plaza with the relic; G stays as a debug force.
+
 ### M7b — Pressure and wayfinding (M)
 
 - **Build/why:** Give the accepted M7 loop reasons to hurry and one tool to navigate, each switchable, and test whether the return becomes tenser. Requires M7 acceptance. Rules T1, T2, T3, T4 and the M7b part of T8.

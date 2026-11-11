@@ -5,6 +5,7 @@ import type { JunctionState } from '../simulation/shift';
 import { WARNING_SECONDS } from '../simulation/shift';
 import { HAND_BUILT_MAZE, MAZE_GATE_IDS } from '../simulation/maze';
 import type { MazeRun } from '../game/mazeRun';
+import { isRunOver } from '../game/generatedRun';
 import type { GeneratedRun } from '../game/generatedRun';
 import type { GeneratedMaze } from '../simulation/mazeGenerator';
 import type { SceneMode } from '../rendering/scene';
@@ -17,10 +18,10 @@ export function createHud(root: HTMLElement, scene: SceneMode, generated?: Gener
   const hasNavigation = isMaze || isGenerated;
   const hasGates = isJunction || isMaze;
   const gateIds = isMaze ? MAZE_GATE_IDS : GATE_IDS;
-  const startTitle = isGenerated ? 'A new labyrinth.' : isMaze ? 'Find your way home.' : isJunction ? 'The walls can move.' : 'A place to begin.';
+  const startTitle = isGenerated ? 'Bring the relic home.' : isMaze ? 'Find your way home.' : isJunction ? 'The walls can move.' : 'A place to begin.';
   root.innerHTML = `
     <header class="prototype-header">
-      <span class="eyebrow">DEVELOPMENT BUILD / ${isGenerated ? 'M6 · REPRO TOOLS' : isMaze ? 'M3 · GRAPH DIAGNOSTICS' : isJunction ? 'M1 · PUSH &amp; CRUSH' : 'M0'}</span>
+      <span class="eyebrow">DEVELOPMENT BUILD / ${isGenerated ? 'M7 · SOLO EXTRACTION' : isMaze ? 'M3 · GRAPH DIAGNOSTICS' : isJunction ? 'M1 · PUSH &amp; CRUSH' : 'M0'}</span>
       <p class="wordmark">Shifting Labyrinth<span>Working title</span></p>
     </header>
     <div class="session-status" role="status" aria-live="polite">
@@ -29,17 +30,21 @@ export function createHud(root: HTMLElement, scene: SceneMode, generated?: Gener
     <div class="crosshair" aria-hidden="true"></div>
     <section class="pause-overlay" aria-labelledby="panel-title">
       <div class="pause-panel">
-        <p class="eyebrow">MILESTONE ${isGenerated ? '06 · REPRO TOOLS' : isMaze ? '03 · GRAPH DIAGNOSTICS' : isJunction ? '01 · SINGLE JUNCTION' : '00'}</p>
+        <p class="eyebrow">MILESTONE ${isGenerated ? '07 · SOLO EXTRACTION' : isMaze ? '03 · GRAPH DIAGNOSTICS' : isJunction ? '01 · SINGLE JUNCTION' : '00'}</p>
         <h1 id="panel-title">${startTitle}</h1>
-        <p class="panel-description">${isGenerated ? `Seed ${generated.seed} built this ${generated.columns}×${generated.rows} maze around the central Sanctuary. Rings grow more remote outward. Find one landmark in each ring, then return home. Press G to shift: one of ${generated.gates.length} stone gates opens, then another closes. Closing stone pushes you and crushes you if you no longer fit. Every room always keeps a route home.` : isMaze ? 'Leave the warm Sanctuary marker, find three colored landmarks, then return home. G swaps two gate shortcuts. The 8-meter stone passages push and crush; permanent corridors offer detours. Learn the routes as you explore.' : isJunction ? 'Moving stone pushes you toward the opposite wall. Escape the 8-meter passage before the gap becomes too narrow to fit, or take the outer loop. Press G to shift.' : 'One room. Four walls. The foundation for a changing maze.'}</p>
+        <p class="panel-description">${isGenerated ? `A relic waits in the outer ring of this ${generated.columns}×${generated.rows} maze (seed ${generated.seed}): follow the blue beam, take it with E, then carry it back to Sanctuary under the gold beam. Every 45 seconds a warned shift opens one stone gate and closes another, so the way you came may be gone. Closing stone pushes you and crushes you if you no longer fit. Every room always keeps some route home.` : isMaze ? 'Leave the warm Sanctuary marker, find three colored landmarks, then return home. G swaps two gate shortcuts. The 8-meter stone passages push and crush; permanent corridors offer detours. Learn the routes as you explore.' : isJunction ? 'Moving stone pushes you toward the opposite wall. Escape the 8-meter passage before the gap becomes too narrow to fit, or take the outer loop. Press G to shift.' : 'One room. Four walls. The foundation for a changing maze.'}</p>
         <div class="control-list" aria-label="Controls">
           <p><span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span><span>Move</span></p>
           <p><span class="control-name">Mouse</span><span>Look around</span></p>
           <p><span><kbd>Esc</kbd></span><span>Pause &amp; release cursor</span></p>
-          ${hasGates || isGenerated ? '<p><span><kbd>G</kbd></span><span>Request a shift</span></p>' : ''}
+          ${isGenerated ? '<p><span><kbd>E</kbd></span><span>Take the relic</span></p><p><span><kbd>G</kbd></span><span>Force a shift (debug)</span></p>'
+            : hasGates ? '<p><span><kbd>G</kbd></span><span>Request a shift</span></p>' : ''}
           ${hasNavigation ? '<p><span><kbd>F2</kbd></span><span>Developer debug map</span></p>' : ''}
         </div>
         <button type="button" class="start-button">Start exploring <span aria-hidden="true">&gt;</span></button>
+        ${isGenerated ? `<div class="run-actions">
+          <button type="button" data-action="retry-seed" hidden>Retry this seed</button>
+          <button type="button" data-action="abandon" hidden>Abandon run</button></div>` : ''}
         <p class="panel-hint" data-message>Click to capture your mouse. Press Escape to release it.</p>
       </div>
     </section>
@@ -56,21 +61,19 @@ export function createHud(root: HTMLElement, scene: SceneMode, generated?: Gener
           <p class="return-status" data-testid="return-status" role="status">Visit all three, then return.</p></div>` : ''}
       </aside>` : ''}
     ${isGenerated ? `
-      <aside class="shift-panel" aria-label="Maze status">
-        <p class="eyebrow">SEEDED MAZE <span data-testid="hud-seed">seed ${generated.seed}</span></p>
-        <p class="shift-phase" data-testid="hud-ring">Sanctuary</p>
-        <p class="shift-layout"><span data-testid="shift-phase">Ready · press G</span> · <span data-testid="shift-count">0 shifts</span></p>
+      <aside class="shift-panel" aria-label="Expedition status">
+        <p class="eyebrow">EXPEDITION <span data-testid="hud-seed">seed ${generated.seed}</span></p>
+        <p class="run-objective" data-testid="run-objective" role="status">Leave Sanctuary and find the relic under the blue beam.</p>
+        <p class="shift-layout"><span data-testid="run-time">0:00</span> · <span data-testid="shift-count">0 shifts</span> · <span data-testid="hud-ring">Sanctuary</span></p>
+        <p class="shift-phase" data-testid="shift-phase">Maze still</p>
         <p class="shift-notice" data-testid="shift-notice" role="status"></p>
-        <p class="shift-help"><kbd>G</kbd> SHIFT <span>Escape before the gap closes around you.</span></p>
-        <div class="navigation-check"><p class="eyebrow">NAVIGATION CHECK</p>
-          ${landmarks.map((landmark) => `<p><span class="landmark-dot" style="background:${landmark.color}"></span>${landmark.name} · ${generated.rings[landmark.cell]}<output data-testid="visit-${landmark.id}">—</output></p>`).join('')}
-          <p class="return-status" data-testid="return-status" role="status">Visit all three, then return.</p></div>
-      </aside>` : ''}
+      </aside>
+      <p class="interact-prompt" data-testid="interact-prompt" hidden><kbd>E</kbd> Take the relic</p>` : ''}
     <footer class="diagnostics">
       <span class="diagnostics-label">${hasNavigation ? 'MAZE' : isJunction ? 'JUNCTION' : 'ROOM'} TEST <span class="separator">/</span> POSITION</span>
       <span>X <output data-testid="position-x">0.00</output></span>
       <span>Z <output data-testid="position-z">${hasGates || isGenerated ? '0.00' : '8.00'}</output></span>
-      <span class="footer-controls">WASD · MOVE ${hasGates ? '<span class="separator">/</span> G · SHIFT' : ''} <span class="separator">/</span> ESC · PAUSE</span>
+      <span class="footer-controls">WASD · MOVE ${isGenerated ? '<span class="separator">/</span> E · TAKE' : hasGates ? '<span class="separator">/</span> G · SHIFT' : ''} <span class="separator">/</span> ESC · PAUSE</span>
     </footer>
   `;
 
@@ -97,20 +100,28 @@ export function createHud(root: HTMLElement, scene: SceneMode, generated?: Gener
   const count = hasGates ? element<HTMLElement>('[data-testid="shift-count"]') : null;
   const notice = hasGates ? element<HTMLElement>('[data-testid="shift-notice"]') : null;
   const gateLabels = hasGates ? gateIds.map((id) => ({ id, label: element<HTMLElement>(`[data-testid="gate-${id}"]`) })) : [];
-  const visits = hasNavigation ? landmarks.map((landmark) => ({ id: landmark.id,
+  const visits = isMaze ? landmarks.map((landmark) => ({ id: landmark.id,
     label: element<HTMLElement>(`[data-testid="visit-${landmark.id}"]`) })) : [];
   const ringLabel = isGenerated ? element<HTMLElement>('[data-testid="hud-ring"]') : null;
   const generatedPhase = isGenerated ? element<HTMLElement>('[data-testid="shift-phase"]') : null;
   const generatedCount = isGenerated ? element<HTMLElement>('[data-testid="shift-count"]') : null;
   const generatedNotice = isGenerated ? element<HTMLElement>('[data-testid="shift-notice"]') : null;
-  const returnStatus = hasNavigation ? element<HTMLElement>('[data-testid="return-status"]') : null;
+  const objective = isGenerated ? element<HTMLElement>('[data-testid="run-objective"]') : null;
+  const runTime = isGenerated ? element<HTMLElement>('[data-testid="run-time"]') : null;
+  const prompt = isGenerated ? element<HTMLElement>('[data-testid="interact-prompt"]') : null;
+  const retrySeed = isGenerated ? element<HTMLButtonElement>('[data-action="retry-seed"]') : null;
+  const abandon = isGenerated ? element<HTMLButtonElement>('[data-action="abandon"]') : null;
+  const clock = (ticks: number) => { const seconds = Math.floor(ticks / 60); return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`; };
+  const returnStatus = isMaze ? element<HTMLElement>('[data-testid="return-status"]') : null;
 
   root.dataset.state = 'paused';
 
   return {
-    button,
+    button, retrySeed, abandon,
     setMode(running: boolean, notice?: string) {
       if (root.dataset.state === 'error' || root.dataset.state === 'dead') return;
+      // Abandon is offered while paused mid-run; not before the first start.
+      if (abandon) abandon.hidden = running || !hasStarted;
       if (running) hasStarted = true;
       root.dataset.state = running ? 'running' : 'paused';
       overlay.hidden = running;
@@ -180,32 +191,56 @@ export function createHud(root: HTMLElement, scene: SceneMode, generated?: Gener
         returnStatus.dataset.complete = String(run.returned);
       }
     },
-    updateGenerated(run: GeneratedRun, timestamp: number) {
+    updateGenerated(run: GeneratedRun, timestamp: number, inReach: boolean) {
+      if (prompt && prompt.hidden === inReach) prompt.hidden = !inReach;
       if (!ringLabel || timestamp - lastJunctionUpdate < 100) return;
       lastJunctionUpdate = timestamp;
-      const ring = run.ring === 'sanctuary' ? 'Sanctuary' : `${run.ring[0].toUpperCase()}${run.ring.slice(1)} ring`;
-      ringLabel.textContent = ring; ringLabel.dataset.ring = run.ring;
+      ringLabel.textContent = run.ring === 'sanctuary' ? 'Sanctuary' : `${run.ring[0].toUpperCase()}${run.ring.slice(1)} ring`;
+      ringLabel.dataset.ring = run.ring;
+      runTime!.textContent = clock(run.runTicks);
+      const goal = run.status === 'ready' ? 'Leave Sanctuary and find the relic under the blue beam.'
+        : run.carrying ? 'Relic in hand · carry it back to Sanctuary under the gold beam.'
+        : 'Find the relic under the blue beam in the outer ring.';
+      if (objective!.textContent !== goal) { objective!.textContent = goal; objective!.dataset.carrying = String(run.carrying); }
       const state = run.shift;
       const plan = state.plan;
-      const labels = { idle: 'Ready · press G', warning: `Shift in ${(WARNING_SECONDS - state.phaseSeconds).toFixed(1)}s`,
+      const labels = { idle: 'Maze still', warning: `Shift in ${(WARNING_SECONDS - state.phaseSeconds).toFixed(1)}s`,
         opening: `${plan?.open.toUpperCase()} opening`, closing: run.pushedBy ? 'Being pushed · escape' : `${plan?.close.toUpperCase()} closing`,
-        cooldown: 'Cooling down' };
+        cooldown: 'Settling' };
       generatedPhase!.textContent = `${labels[state.phase]}${run.frozen ? ' · frozen (debug)' : ''}`; generatedPhase!.dataset.phase = state.phase;
       generatedCount!.textContent = `${state.completedShifts} shift${state.completedShifts === 1 ? '' : 's'}`;
-      const notice = run.pushedBy ? `${run.pushedBy.toUpperCase()} stone is pushing you. Escape along the passage!` : state.notice;
+      const notice = run.pushedBy ? `${run.pushedBy.toUpperCase()} stone is pushing you. Escape along the passage!`
+        : run.status === 'out' && state.phase === 'idle' && state.completedShifts === 0 ? 'The maze shifts by itself every 45 seconds, after a 2 second warning.'
+          : state.notice;
       if (generatedNotice!.textContent !== notice) generatedNotice!.textContent = notice;
-      for (const { id, label } of visits) {
-        label.textContent = run.visited.includes(id) ? 'FOUND' : '—';
-        label.dataset.visited = String(run.visited.includes(id));
-      }
-      if (returnStatus) {
-        returnStatus.textContent = run.returned ? `Returned to Sanctuary · route check complete${run.teleports ? ` (${run.teleports} debug teleports)` : ''}.`
-          : run.visited.length === 3 ? 'All landmarks found · return to Sanctuary.' : `${run.visited.length}/3 found · visit all three, then return.`;
-        returnStatus.dataset.complete = String(run.returned);
-      }
+    },
+    // Terminal result for the M7 expedition. Uses the 'dead' state so pausing cannot hide it.
+    showResult(run: GeneratedRun) {
+      if (!isRunOver(run.status)) return;
+      root.dataset.state = 'dead';
+      root.dataset.result = run.status;
+      overlay.hidden = false;
+      if (prompt) prompt.hidden = true;
+      const time = clock(run.runTicks);
+      const shifts = `${run.shift.completedShifts} shift${run.shift.completedShifts === 1 ? '' : 's'}`;
+      const debug = run.teleports ? ` Debug teleports used: ${run.teleports}.` : '';
+      const copy = {
+        extracted: ['Relic secured.', 'EXTRACTED', `You carried the relic home in ${time}, through ${shifts}.${debug}`],
+        failed: ['Crushed.', 'CRUSHED', `The ${run.crushedBy?.toUpperCase()} gate pinned you against the opposite wall after ${time} and ${shifts}.${run.carrying ? ' The relic is lost.' : ''}`],
+        abandoned: ['Run abandoned.', 'ABANDONED', `You gave up after ${time} and ${shifts}. Nothing was secured.${run.carrying ? ' The relic stays in the maze.' : ''}`],
+      }[run.status as 'extracted' | 'failed' | 'abandoned'];
+      title.textContent = copy[0]; mode.textContent = copy[1]; description.textContent = copy[2];
+      message.textContent = 'New run builds a fresh maze from a new seed. Retry replays this seed from the start.';
+      button.textContent = 'New run';
+      if (retrySeed) retrySeed.hidden = false;
+      if (abandon) abandon.hidden = true;
+      button.focus({ preventScroll: true });
     },
     resetAttempt() {
       root.dataset.state = 'paused';
+      delete root.dataset.result;
+      if (retrySeed) retrySeed.hidden = true;
+      if (abandon) abandon.hidden = true;
       hasStarted = false;
       lastPositionUpdate = -Infinity;
       lastJunctionUpdate = -Infinity;

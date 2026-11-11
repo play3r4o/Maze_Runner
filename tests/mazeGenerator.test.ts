@@ -4,7 +4,7 @@ import { mazeLayoutErrors, findMazeRoute, reachableMazeCells } from '../src/simu
 import { DEFAULT_GENERATOR_CONFIG, GENERATOR_VERSION, createRng, findBridgeToSanctuary, generateMaze, layoutFingerprint,
   parseSeed, ringFor, serializeMaze } from '../src/simulation/mazeGenerator';
 import type { GeneratedMaze } from '../src/simulation/mazeGenerator';
-import { buildGeneratedWorld, createGeneratedRun, stepGeneratedRun } from '../src/game/generatedRun';
+import { buildGeneratedWorld, createGeneratedRun, setGeneratedRunFrozen, stepGeneratedRun } from '../src/game/generatedRun';
 import type { GeneratedRun, GeneratedWorld } from '../src/game/generatedRun';
 import { overlapsBody } from '../src/simulation/movingWalls';
 import { stepPlayer } from '../src/simulation/player';
@@ -149,7 +149,8 @@ describe.each([1, 20261111, 4294967295])('seed %i physical walkability', (seed) 
     }
   });
   test('walking the graph route visits every landmark, then reports the return home', () => {
-    let run = createGeneratedRun(world);
+    // Walkability check: freeze automatic shifts (M7) so the static gate poses hold for the whole walk.
+    let run = setGeneratedRunFrozen(createGeneratedRun(world), true);
     let from = maze.start;
     for (const landmark of maze.landmarks) {
       run = walkRoute(world, run, findMazeRoute(maze, maze.initialOpenness, from, landmark.cell)!.cells);

@@ -101,7 +101,7 @@ describe('reports reproduce exact gate state and position', () => {
     expect(run.shift).toBe(shift);
     expect(run.shiftTicks).toBe(0);
     expect(run.player.z).toBeLessThan(-1);
-    expect(run.events.map((event) => event.kind)).toEqual(['shift', 'freeze']);
+    expect(run.events.map((event) => event.kind)).toEqual(['shift', 'freeze', 'run']);
     expect(replayShift(world, run.shift.requests, run.shiftTicks)).toEqual(run.shift);
   });
 });
@@ -160,7 +160,8 @@ describe('report parsing and teleport validation', () => {
   test('unknown cells and dead players cannot teleport; events stay bounded', () => {
     const run = createGeneratedRun(world);
     expect(teleportGeneratedRun(world, run, 'cell-99-99').error).toContain('Unknown cell');
-    expect(teleportGeneratedRun(world, { ...run, crushedBy: 'g1' }, 'cell-0-0').error).toContain('Retry');
+    expect(teleportGeneratedRun(world, { ...run, crushedBy: 'g1' }, 'cell-0-0').error).toContain('new run');
+    expect(teleportGeneratedRun(world, { ...run, status: 'extracted' }, 'cell-0-0').error).toContain('new run');
     let busy = run;
     for (let i = 0; i < RUN_EVENT_LIMIT + 20; i++) busy = teleportGeneratedRun(world, busy, world.maze.cells[i % 50].id).run;
     expect(busy.events).toHaveLength(RUN_EVENT_LIMIT);

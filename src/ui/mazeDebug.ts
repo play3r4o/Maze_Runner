@@ -50,6 +50,7 @@ export function createMazeDebug(root: HTMLElement,
     <p class="debug-route" data-testid="debug-route"></p>
     ${options.tools ? `<section class="debug-tools" aria-label="Debug tools">
       <p class="debug-caution">${options.tools.config} · tick <output data-testid="debug-tick">0</output> · page errors <output data-testid="debug-errors">0</output></p>
+      <p class="debug-caution" data-testid="debug-run"></p>
       <div class="debug-tool-row"><button type="button" data-action="freeze" data-testid="debug-freeze" aria-pressed="false">Freeze shifts</button>
         <button type="button" data-action="copy-report">Copy report</button></div>
       <div class="debug-tool-row" aria-label="Teleport">${options.tools.teleports.map((item) =>
@@ -197,6 +198,7 @@ export function createMazeDebug(root: HTMLElement,
       if (view.tools) {
         element('[data-testid="debug-tick"]').textContent = String(view.tools.tick);
         element('[data-testid="debug-errors"]').textContent = String(view.tools.errors);
+        element('[data-testid="debug-run"]').textContent = view.tools.run;
         const freeze = element('[data-testid="debug-freeze"]');
         freeze.setAttribute('aria-pressed', String(view.tools.frozen));
         freeze.textContent = view.tools.frozen ? 'Resume shifts' : 'Freeze shifts';

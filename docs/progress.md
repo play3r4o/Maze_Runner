@@ -10,6 +10,7 @@
 - Follow-up instruction on 2026-11-11: the wall must push the character toward the opposite wall first, and kill only when the remaining gap cannot fit the body. This supersedes immediate contact death. Existing passage length/timings remain; M2 is still unapproved.
 - The developer then confirmed “all works perfect. Go next”: M1 push-before-crush is human accepted, and M2 is approved. M3 and later remain unapproved.
 - The next instruction “all works, go next” accepts M2 and authorizes M3 graph validation/diagnostics. M4 and later remain unapproved.
+- Planning-only instruction on 2026-11-11: after a concept review the developer chose co-op PvE before PvP and asked for the tension/wayfinding ideas to be added to the plan. This authorizes editing `development_plan.md` only. It does not approve M4 or any later milestone, and no source code changed.
 
 ## Status
 
@@ -19,10 +20,13 @@
 | M1 | Human accepted on 2026-11-11 |
 | M2 | Human accepted on 2026-11-11 |
 | M3 | Retry correction locally verified; awaiting new CI/deployment |
-| M4–M8 | Not started |
-| M9 (scheduled after M7) | Not started |
+| M4–M7 | Not started |
+| M7b (added 2026-11-11) | Not started |
+| M9 (scheduled after M7b) | Not started |
+| M8 | Not started |
 | M10–M12 | Not started |
-| M13 | Conditional, not started |
+| M13 (co-op PvE) | Conditional, not started |
+| M13b (PvP, added 2026-11-11) | Conditional, not started |
 | M14 | Optional/deferred |
 | M15 | Not started |
 
@@ -176,3 +180,11 @@ Push the verified Retry synchronization fix and verify its new Pages workflow re
 - Added `clickWithBrowserFrames`: one ordinary native click stays pending while at most ten 100 ms controlled frame intervals run. Playwright retains its normal visibility/stability/hit checks; errors propagate. Use is limited to the stationary Retry transition after the probe. Game rules, input handlers, level data, production UI, test deadlines, retries and reset assertions are unchanged.
 - With that synchronization, the same 2×-throttled scenario passed all checks in 52.8 s, including the diagnostic five-second click limit. Temporary CPU hooks, stage logging and the diagnostic per-click timeout were removed; the committed path uses the original test deadline. No game state is set directly by the test.
 - Complete corrected local validation passed: 82 unit tests, strict TypeScript/build and all 14 production-browser checks in 6.0 minutes, one worker, no skips/retries. The previously failed scenario passed within its original 90-second budget, including every reset assertion. The production app bundle is unchanged; only test synchronization and documentation changed. Matching bundled-browser CI verification and deployment are still required. Human acceptance of M3 remains pending.
+
+### Plan additions: tension and wayfinding — 2026-11-11
+
+- Documentation only. Added rules T1–T10 to `development_plan.md` (unrest, dusk bell, directional sound, chalk, thread, gate jam, unkillable stalker, daily seed/own traces, co-op rules, PvP-only trap ability) with starting numbers, state shapes and checks.
+- Added M7b (pressure and wayfinding) after M7 and M13b (PvP option) after M13; M13 is now co-op PvE. Extended M8, M10, M11 and M12 entries. Updated order, outcome table, risks and defaults.
+- Differences from the brief are recorded in the plan as dated decisions: soft heard deadline instead of none, stalker removed only by crushing, co-op before PvP. The brief itself is unchanged.
+- The developer's player-triggered trap idea is recorded as PvP-only (T10, M13b). No player-operated crush lever exists in PvE; the co-op hold lever (T9) only delays a closing gate.
+- No code, tests, dependencies or deployment changed, so the test suite was not rerun. M3 status and its pending CI/acceptance are unchanged.

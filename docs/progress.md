@@ -21,7 +21,7 @@
 | M1 | Human accepted on 2026-11-11 |
 | M2 | Human accepted on 2026-11-11 |
 | M3 | Human accepted on 2026-11-11 |
-| M4 | Implemented; awaiting CI/deployment and human acceptance |
+| M4 | Deployed (run 43029562668); awaiting human acceptance |
 | M5–M7 | Not started |
 | M7b (added 2026-11-11) | Not started |
 | M9 (scheduled after M7b) | Not started |
@@ -115,7 +115,7 @@ The developer confirmed M1's original gates work and subsequently accepted the f
 
 ## Next action
 
-Confirm the M4 Pages workflow run, then wait for M4 manual acceptance. M5 remains unapproved.
+Wait for M4 manual acceptance. M5 remains unapproved.
 
 ### M1 crushing-gate revision — 2026-11-11
 
@@ -202,4 +202,6 @@ Confirm the M4 Pages workflow run, then wait for M4 manual acceptance. M5 remain
 - Unit: 697 tests in nine files pass, including 200 seeds × three layout-rule checks, pinned fingerprints, no `Math.random`, and three seeds walked physically through every landmark and home with the real movement rules. Typecheck and production build pass; main JS is about 586 kB / 150 kB gzip (existing non-failing size warning).
 - Browser (local, `CI=1`, Google Chrome via `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/google-chrome`, SwiftShader): 14 of 16 passed, including both new M4 scenarios (seed reproduction/URL/form/invalid seed; debug map, rings, rejected entrance probe, and keyboard walking out of the plaza into the inner ring) and all M0, M1 and M3 debug-map regressions. The two long M2 scenarios in `maze.spec.ts` hit their 6 min and 90 s budgets. The same 90 s scenario was rerun on the unmodified previous commit (`d64925b`) in this sandbox and failed the same way, so this is the sandbox's slower software rendering, not an M4 regression; both passed on GitHub Actions for `97d3ad9`. No timeouts or assertions were changed. GitHub Actions must confirm them for this commit.
 - Visual check of production build: start panel, plaza, corridor and debug panel inspected. Fixed unstyled seed controls and too-faint ring colours found in that review. No console or page errors.
+- Commit `a38ab7b` was pushed to main. GitHub Actions run 43029562668 completed successfully in 10m 39s (locked install, unit tests, full browser suite with bundled Chromium including both long M2 scenarios, Pages deployment). Test at `https://play3r4o.github.io/Maze_Runner/?v=a38ab7b`.
+- This deployment note is committed locally for the next source checkpoint, to avoid a documentation-only redeploy.
 - Human acceptance pending: use the [M4 checklist](milestones/M4.md#human-acceptance-checklist).

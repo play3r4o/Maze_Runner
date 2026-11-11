@@ -15,7 +15,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - name: Check out source
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
@@ -29,9 +29,9 @@ jobs:
       - name: Test simulation
         run: npm test
       - name: Install test browser
-        # Fall back to the browser alone if Ubuntu's package mirrors are unreachable; the
+        # Fall back to the browser alone if Ubuntu's package mirrors are unreachable (capped at 4 min); the
         # runner image already carries Chrome's system libraries. Browser tests still gate deploy.
-        run: npx playwright install --with-deps chromium || npx playwright install chromium
+        run: timeout 240 npx playwright install --with-deps chromium || npx playwright install chromium
       - name: Build and test production app
         run: npm run test:browser
       - name: Preserve browser failure diagnostics

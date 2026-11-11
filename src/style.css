@@ -55,12 +55,16 @@ kbd { font: 11px ui-monospace, monospace; min-width: 23px; height: 23px; padding
 .gate-statuses div > span { color: #aebdb1; }
 .gate-statuses [data-status='open'] { color: #b6d5ad; }
 .gate-statuses [data-status='closed'] { color: #bfc7c1; }
-.gate-statuses [data-status='moving'] { color: #e1c58c; }
-.gate-statuses [data-status='held'] { color: #f3a38b; }
+.gate-statuses [data-status='opening'] { color: #e1c58c; }
+.gate-statuses [data-status='closing'] { color: #f3a38b; }
 .shift-notice { font-size: 11px; line-height: 1.6; min-height: 52px; color: #d0d8cc; margin: 12px 0; }
 .shift-help { display: flex; align-items: center; gap: 7px; font: 9px ui-monospace, monospace; margin: 0; color: #e1c58c; }
 .shift-help span { font: 9px/1.5 system-ui, sans-serif; color: #aebdb1; }
 [data-state='paused'] .shift-panel { visibility: hidden; }
+[data-state='dead'] .pause-overlay { background: #2e0c0ca8; }
+[data-state='dead'] .pause-panel { border-color: #d584694d; }
+[data-state='dead'] .status-dot { background: #ef8f74; }
+[data-state='dead'] .control-list, [data-state='dead'] .footer-controls { display: none; }
 
 @media (max-width: 620px) {
   .prototype-header { top: 18px; left: 18px; }

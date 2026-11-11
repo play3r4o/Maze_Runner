@@ -6,13 +6,14 @@
 - M0 implementation approved by the instruction to implement the proposed plan, bounded by one-milestone-at-a-time development.
 - On 2026-11-10 the developer authorized GitHub hosting to make the prototype playable without a local installation. Approved pushes use the existing Pages workflow.
 - The developer confirmed M0 mouse/WASD/collision worked, then confirmed all remaining manual checks passed and explicitly approved the next step. M0 is accepted; M1 is approved. M2 and later are not approved to start.
+- On 2026-11-11 the developer confirmed the original gates work, then requested lethal contact instead of obstruction holds, slower closing, and longer crossings. This authorizes an M1 revision with death/Retry; M2 remains unapproved. Proposed tuning defaults are 8 m passages, 2 s warning and 4 s closing.
 
 ## Status
 
 | Milestone | Status |
 | --- | --- |
 | M0 | Human accepted on 2026-11-10 |
-| M1 | Implemented; automated checks passed; ready for manual testing; not human accepted |
+| M1 | Original gates confirmed working; lethal revision locally verified, awaiting deployment/manual acceptance |
 | M2–M8 | Not started |
 | M9 (scheduled after M7) | Not started |
 | M10–M12 | Not started |
@@ -73,7 +74,7 @@ At the end of the original M0 implementation, changes were local to this cloud c
 
 M0 accepted: the developer confirmed mouse movement, WASD, collision, then all remaining checks (pause/resume, switching tabs, movement edges, camera/resize and reload) passed. CPU/GPU/browser reference details are not yet supplied; performance targets are not yet verified.
 
-M1 acceptance is pending. Use the [M1 checklist](milestones/M1.md#human-checklist); no automatic acceptance is claimed.
+The developer confirmed M1's original gates work and requested the lethal revision. Acceptance of that revision is pending; use the [updated M1 checklist](milestones/M1.md#human-checklist).
 
 ### M1 implementation — 2026-11-10
 
@@ -97,8 +98,21 @@ M1 acceptance is pending. Use the [M1 checklist](milestones/M1.md#human-checklis
 - Those timed scenarios now use Playwright's clock, installed before navigation and paused after actual pointer lock. `runFor` fires all animation frames/fixed simulation steps: walk for a defined duration, release the real keyboard input, update the HUD, then assert while the clock is paused. No game state is set directly. The turning test reads X/Z in one DOM snapshot.
 - All existing left/right position thresholds, gate-held/cancelled/open states, no-displacement check and post-recovery walk remain. No product code, physics rules, retries, assertion thresholds or timeouts were relaxed. Other browser tests still run with normal time.
 - Tests select full Chromium/new headless in CI, matching the local installed browser mode rather than silently using the separate headless shell. Version 158 CI versus system 156 remains a limitation of local verification.
-- Local targeted checks passed for all three affected cases. Separate checks with 8× CPU throttling passed left movement (X=-1.30, Z=5.24) and gate occupancy/recovery (Z stayed -4.00 throughout). Final local validation passed: 46 unit tests, TypeScript/build and all ten production-browser tests in 48.8 seconds with one worker. Remote CI/deployment is pending the corrective push.
+- Local targeted checks passed for all three affected cases. Separate checks with 8× CPU throttling passed left movement (X=-1.30, Z=5.24) and gate occupancy/recovery (Z stayed -4.00 throughout). Final local validation passed: 46 unit tests, TypeScript/build and all ten production-browser tests in 48.8 seconds with one worker.
+- Corrective commit `c298a63` was pushed to main. GitHub Actions run [42888374451](https://github.com/play3r4o/Maze_Runner/actions/runs/42888374451) completed successfully: build 1m 14s, deploy 31s, overall 1m 56s. Public run summary confirms the deployment URL `https://play3r4o.github.io/Maze_Runner/`. M1 is now deployed; human acceptance remains pending. Use `?v=c298a63` for a fresh page request and ensure `scene=room` is absent when testing M1.
+- Deployment success was recorded locally after the tested commit; this evidence-only edit is intentionally left for the next source checkpoint rather than triggering a redundant deployment.
 
 ## Next action
 
-Complete verification, push the M1 CI correction and monitor its GitHub Actions result through the public workflow page. A failed deployment keeps serving M0. Confirm success before asking for M1 manual acceptance; do not start M2 without acceptance and explicit approval.
+Complete verification and deploy the approved lethal-gate revision, then stop for M1 manual results. Do not start M2 without acceptance and explicit approval.
+
+### M1 crushing-gate revision — 2026-11-11
+
+- The original no-crushing rule is superseded by the developer's explicit request. Added a dated brief amendment and updated the architecture/M1 plan rather than silently preserving contradictory safety instructions.
+- Expanded the test junction to 40×40 m to fit 8 m slabs inside wall pockets, with a physically clear outer loop. Slabs travel 4.5 m sideways; they still span the four-meter corridor. Marks outline the full eight-meter crossing and signs identify CRUSH ZONE entrances.
+- Retained the two-second warning and 1.25-second replacement opening; old routes now close over four seconds. Removed occupancy holds/cancellation. Swept old/new slab bounds detect positive body-footprint overlap only for closing movement, not warning-zone occupancy or opening.
+- Added pure junction-run state: crush is terminal for the player, input/cursor releases, mechanism finishes closing, and Retry resets player/look/gates/count. No inventory, health economy, enemies or M2 scope added. Living pause/tab behavior and the M0 reference scene remain.
+- Updated tests to the new requirements: crush contact in all four directions, late entry, body footprint, no premature death, retreat/outside safety, stationary-gate blocking, continued motion after death and clean Retry. Final validation passed: 53 unit tests across four files, TypeScript/build, and all 11 production-browser checks (four revised M1 scenarios plus seven M0 regressions). No skips or retries. Longer M1 scenarios use a 90 s test budget because they execute every frame of the longer walks/animations.
+- Warning assertions advance 200 ms of controlled time so they sample beyond the HUD's 100 ms diagnostic interval. Initial checks at exactly one interval could read the previous idle label; the two-second gameplay warning was not shortened or bypassed.
+- Production screenshots of instructions, eight-meter passage, closing marks, crush screen and Retry were visually inspected. The visual browser run observed no console/page errors. System Chromium 156/full headless/SwiftShader was used locally; GitHub's matching bundled-browser deployment run is still to be confirmed.
+- The source changes are ready for the approved Pages workflow. Human acceptance of this revised lethal behavior remains pending.

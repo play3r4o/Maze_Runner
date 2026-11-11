@@ -4,8 +4,7 @@ import { createFixedStepper } from './loop';
 import { createScene } from './rendering/scene';
 import { stepPlayer } from './simulation/player';
 import { PLAYER_SPAWN, ROOM_WALLS } from './simulation/room';
-import { gateColliders, JUNCTION_SPAWN, JUNCTION_WALLS } from './simulation/junction';
-import { advanceShift, createJunctionState, requestShift } from './simulation/shift';
+import { createJunctionRun, requestRunShift, stepJunctionRun } from './game/junctionRun';
 import { createHud } from './ui/hud';
 
 const canvas = document.querySelector<HTMLCanvasElement>('#scene')!;
@@ -21,31 +20,42 @@ function startRoom() {
     return;
   }
 
-  let player = { ...(mode === 'room' ? PLAYER_SPAWN : JUNCTION_SPAWN) };
-  let junction = createJunctionState();
+  let roomPlayer = { ...PLAYER_SPAWN };
+  let run = createJunctionRun();
+  let graphicsAvailable = true;
   const stepper = createFixedStepper((dt) => {
     const state = input.read();
     const shiftRequested = input.consumeShiftRequest();
     if (mode === 'junction') {
-      const previousNotice = junction.notice;
-      if (shiftRequested) junction = requestShift(junction);
-      junction = advanceShift(junction, player, dt);
-      if (junction.notice !== previousNotice && /held|cancelled|rejected/.test(junction.notice)) {
-        console.info(`[junction] ${junction.notice}`);
+      const wasAlive = run.crushedBy === null;
+      if (shiftRequested) run = requestRunShift(run);
+      run = stepJunctionRun(run, state.intent, state.yaw, dt);
+      if (wasAlive && run.crushedBy) {
+        input.pause();
+        hud.showDeath(run.crushedBy);
       }
+    } else {
+      roomPlayer = stepPlayer({ ...roomPlayer, yaw: state.yaw }, state.intent, ROOM_WALLS, dt);
     }
-    const walls = mode === 'room' ? ROOM_WALLS : [...JUNCTION_WALLS, ...gateColliders(junction.openness)];
-    player = stepPlayer({ ...player, yaw: state.yaw }, state.intent, walls, dt);
   });
   const input = new BrowserInput(canvas, (running, message) => {
     stepper.reset();
     hud.setMode(running, message);
   });
-  const onStart = () => { void input.start(); };
+  const onStart = () => {
+    if (run.crushedBy) {
+      run = createJunctionRun();
+      input.resetLook();
+      stepper.reset();
+      hud.resetAttempt();
+    }
+    void input.start();
+  };
   hud.button.addEventListener('click', onStart);
 
   const onContextLost = (event: Event) => {
     event.preventDefault();
+    graphicsAvailable = false;
     input.pause();
     hud.showError('The graphics connection was lost. Reload this page to restart the room.');
   };
@@ -54,12 +64,14 @@ function startRoom() {
   let frameId = 0;
   function frame(timestamp: number) {
     const state = input.read();
-    stepper.advance(timestamp, state.active);
-    if (document.querySelector('#hud')?.getAttribute('data-state') !== 'error') {
-      scene.render(player, state.yaw, state.pitch, junction);
+    const playerDead = mode === 'junction' && run.crushedBy !== null;
+    stepper.advance(timestamp, graphicsAvailable && !document.hidden && (state.active || playerDead));
+    const player = mode === 'room' ? roomPlayer : run.player;
+    if (graphicsAvailable) {
+      scene.render(player, state.yaw, state.pitch, run.junction);
     }
     hud.updatePosition(player, timestamp);
-    if (mode === 'junction') hud.updateJunction(junction, timestamp);
+    if (mode === 'junction') hud.updateJunction(run.junction, timestamp);
     frameId = requestAnimationFrame(frame);
   }
   frameId = requestAnimationFrame(frame);

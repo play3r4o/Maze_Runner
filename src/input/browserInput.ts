@@ -97,6 +97,11 @@ export class BrowserInput {
     return requested;
   }
 
+  resetLook() {
+    this.yaw = 0;
+    this.pitch = 0;
+  }
+
   dispose() {
     this.pause();
     this.events.abort();

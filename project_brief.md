@@ -4,6 +4,10 @@ Status: Pre-production / concept planning. No implemented gameplay has been conf
 Working title: Shifting Labyrinth (placeholder; do not assume this is the final game title).
 Purpose of this document: Give Codex enough context to turn the concept into an actionable, beginner-friendly engineering and production plan. This is a game-design and technical brief, not a request to implement the full game immediately.
 
+Design amendment — 2026-11-11
+
+The developer revised the early nonlethal gate rule after testing M1: closing stone should kill a player it physically catches, rather than hold or cancel. Prototype defaults are a two-second warning, four-second closing movement and eight-meter-long danger passages. Keep the longer outer detour, clear visual warnings, physical contact detection, and a death/Retry flow. This amendment supersedes conflicting no-crushing/occupied-gate-abort statements below. Other scope limits remain in force.
+
 1. Executive summary
 
 Build a browser-based, first-person, stylized 3D, extraction-survival game with an eventual small-scale multiplayer PvPvE mode. The game takes place in an immense ancient, physically shifting labyrinth, with a safe settlement (the Sanctuary) at its center.

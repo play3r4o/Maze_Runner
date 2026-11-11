@@ -1,26 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { FIXED_DT } from '../src/loop';
-import { GATE_IDS, gateColliders, gateRect, hasReturnRoutes, JUNCTION_WALLS, occupiesGateSweep } from '../src/simulation/junction';
-import { PLAYER_HALF_WIDTH, stepPlayer } from '../src/simulation/player';
-import type { PlayerState, WallRect } from '../src/simulation/player';
-import { advanceShift, COOLDOWN_SECONDS, createJunctionState, MOTION_SECONDS, OBSTRUCTION_SECONDS, requestShift, WARNING_SECONDS } from '../src/simulation/shift';
+import { GATE_IDS, gateColliders, gateRect, hasReturnRoutes, JUNCTION_WALLS } from '../src/simulation/junction';
+import { stepPlayer } from '../src/simulation/player';
+import type { PlayerState } from '../src/simulation/player';
+import { advanceShift, COOLDOWN_SECONDS, createJunctionState, OPENING_SECONDS, CLOSING_SECONDS, requestShift, WARNING_SECONDS } from '../src/simulation/shift';
 import type { JunctionState } from '../src/simulation/shift';
 
 const center: PlayerState = { x: 0, z: 0, yaw: 0 };
-const inNorthGate: PlayerState = { x: 0, z: -4, yaw: 0 };
 
-function advance(state: JunctionState, seconds: number, player = center): JunctionState {
-  for (let tick = 0; tick < Math.round(seconds / FIXED_DT); tick += 1) state = advanceShift(state, player, FIXED_DT);
+function advance(state: JunctionState, seconds: number): JunctionState {
+  for (let tick = 0; tick < Math.round(seconds / FIXED_DT); tick += 1) state = advanceShift(state, FIXED_DT);
   return state;
-}
-
-function startClosing(): JunctionState {
-  return advance(requestShift(createJunctionState()), WARNING_SECONDS + MOTION_SECONDS);
-}
-
-function overlaps(player: PlayerState, rect: WallRect): boolean {
-  return player.x + PLAYER_HALF_WIDTH > rect.minX + 1e-8 && player.x - PLAYER_HALF_WIDTH < rect.maxX - 1e-8
-    && player.z + PLAYER_HALF_WIDTH > rect.minZ + 1e-8 && player.z - PLAYER_HALF_WIDTH < rect.maxZ - 1e-8;
 }
 
 describe('junction geometry and routes', () => {
@@ -38,22 +28,15 @@ describe('junction geometry and routes', () => {
     expect(gateColliders({ north: 0.5, east: 0, south: 1, west: 0 })[0]).toEqual(rect);
   });
 
-  it.each(GATE_IDS)('detects occupied swept space for %s with a safety margin', (id) => {
-    const rect = gateRect(id, 0);
-    const player = { x: (rect.minX + rect.maxX) / 2, z: (rect.minZ + rect.maxZ) / 2, yaw: 0 };
-    expect(occupiesGateSweep(id, player)).toBe(true);
-    expect(occupiesGateSweep(id, center)).toBe(false);
-  });
-
   it('blocks a closed gate, allows an open gate, and has a physical return loop', () => {
     const walls = [...JUNCTION_WALLS, ...gateColliders(createJunctionState().openness)];
     let eastbound = { ...center };
-    for (let i = 0; i < 180; i += 1) eastbound = stepPlayer(eastbound, { forward: 0, strafe: 1 }, walls, FIXED_DT);
-    expect(eastbound.x).toBeCloseTo(3.45);
+    for (let i = 0; i < 340; i += 1) eastbound = stepPlayer(eastbound, { forward: 0, strafe: 1 }, walls, FIXED_DT);
+    expect(eastbound.x).toBeCloseTo(5.7);
     // From beyond the closed east gate, use the north perimeter to return.
-    let player = { x: 9, z: 0, yaw: 0 };
+    let player = { x: 17, z: 0, yaw: 0 };
     for (const intent of [{ forward: 1, strafe: 0 }, { forward: 0, strafe: -1 }, { forward: -1, strafe: 0 }]) {
-      for (let i = 0; i < 180; i += 1) player = stepPlayer(player, intent, walls, FIXED_DT);
+      for (let i = 0; i < 340; i += 1) player = stepPlayer(player, intent, walls, FIXED_DT);
     }
     expect(player.x).toBeCloseTo(0);
     expect(player.z).toBeCloseTo(0);
@@ -73,19 +56,19 @@ describe('shift phases', () => {
   it('opens replacement routes fully before starting to close old ones', () => {
     let state = advance(requestShift(createJunctionState()), WARNING_SECONDS);
     expect(state.phase).toBe('opening');
-    state = advance(state, MOTION_SECONDS / 5);
+    state = advance(state, OPENING_SECONDS / 5);
     expect(state.openness.east).toBeCloseTo(0.2);
     expect(state.openness.north).toBe(1);
-    state = advance(state, MOTION_SECONDS * 4 / 5);
+    state = advance(state, OPENING_SECONDS * 4 / 5);
     expect(state.phase).toBe('closing');
     expect(GATE_IDS.every((id) => state.openness[id] === 1)).toBe(true);
-    state = advance(state, MOTION_SECONDS / 5);
+    state = advance(state, CLOSING_SECONDS / 5);
     expect(state.openness.north).toBeCloseTo(0.8);
     expect(state.openness.east).toBe(1);
   });
 
-  it('completes the 2.5-second motion and alternates the next arrangement', () => {
-    const state = advance(requestShift(createJunctionState()), WARNING_SECONDS + 2 * MOTION_SECONDS);
+  it('completes the slower four-second closing motion and alternates the next arrangement', () => {
+    const state = advance(requestShift(createJunctionState()), WARNING_SECONDS + OPENING_SECONDS + CLOSING_SECONDS);
     expect(state.phase).toBe('cooldown');
     expect(state.settled).toBe('east-west');
     expect(state.target).toBe('north-south');
@@ -109,7 +92,7 @@ describe('shift phases', () => {
   });
 
   it('ends cooldown without starting an automatic or queued shift', () => {
-    let state = advance(requestShift(createJunctionState()), WARNING_SECONDS + 2 * MOTION_SECONDS);
+    let state = advance(requestShift(createJunctionState()), WARNING_SECONDS + OPENING_SECONDS + CLOSING_SECONDS);
     state = requestShift(state);
     state = advance(state, COOLDOWN_SECONDS + 5);
     expect(state.phase).toBe('idle');
@@ -118,58 +101,17 @@ describe('shift phases', () => {
 
   it('does not advance with zero elapsed simulation time', () => {
     const state = requestShift(createJunctionState());
-    expect(advanceShift(state, center, 0)).toBe(state);
+    expect(advanceShift(state, 0)).toBe(state);
   });
 });
 
-describe('occupied gate safety', () => {
-  it('holds both closing gates when one swept area is occupied', () => {
-    const original = startClosing();
-    const state = advance(original, 1, inNorthGate);
-    expect(state.phase).toBe('closing');
-    expect(state.openness).toEqual(original.openness);
-    expect(state.blockedSeconds).toBeCloseTo(1);
-    expect(state.notice).toMatch(/NORTH/);
-  });
-
-  it('resumes if the area clears before the obstruction timeout', () => {
-    let state = advance(startClosing(), 1, inNorthGate);
-    state = advance(state, FIXED_DT);
-    expect(state.phase).toBe('closing');
-    expect(state.openness.north).toBeLessThan(1);
-    expect(state.blockedSeconds).toBe(0);
-    expect(state.notice).toMatch(/resumed/);
-  });
-
-  it('also holds when a player enters after closing has started', () => {
-    const original = advance(startClosing(), 0.25);
-    expect(overlaps(inNorthGate, gateRect('north', original.openness.north))).toBe(false);
-    const held = advance(original, 0.5, inNorthGate);
-    expect(held.openness).toEqual(original.openness);
-    expect(overlaps(inNorthGate, gateRect('north', held.openness.north))).toBe(false);
-  });
-
-  it('cancels a long obstruction, reopens all gates, and allows a safe retry', () => {
-    let state = advance(startClosing(), OBSTRUCTION_SECONDS, inNorthGate);
-    expect(state.phase).toBe('recovering');
-    state = advance(state, MOTION_SECONDS, inNorthGate);
-    expect(state.phase).toBe('cooldown');
-    expect(state.settled).toBe('all-open');
-    expect(state.completedShifts).toBe(0);
-    expect(state.notice).toMatch(/cancelled/);
-    expect(GATE_IDS.every((id) => state.openness[id] === 1)).toBe(true);
-    state = advance(state, COOLDOWN_SECONDS);
-    state = advance(requestShift(state), WARNING_SECONDS + 2 * MOTION_SECONDS);
-    expect(state.settled).toBe('east-west');
-    expect(state.completedShifts).toBe(1);
-  });
-
-  it('keeps return routes at every tick through repeated arrangements', () => {
+describe('route invariants', () => {
+  it('keeps return routes through twelve complete arrangements', () => {
     let state = createJunctionState();
     for (let shift = 0; shift < 12; shift += 1) {
       state = requestShift(state);
-      for (let tick = 0; tick < 500; tick += 1) {
-        state = advanceShift(state, center, FIXED_DT);
+      for (let tick = 0; tick < 700; tick += 1) {
+        state = advanceShift(state, FIXED_DT);
         expect(hasReturnRoutes(state.openness)).toBe(true);
         for (const id of GATE_IDS) {
           expect(state.openness[id]).toBeGreaterThanOrEqual(0);
@@ -178,20 +120,5 @@ describe('occupied gate safety', () => {
       }
     }
     expect(state.completedShifts).toBe(12);
-  });
-
-  it('never embeds a moving player during a two-minute navigation/shift scenario', () => {
-    let state = createJunctionState();
-    let player = { ...center };
-    const intents = [{ forward: 0, strafe: 1 }, { forward: 1, strafe: 0 }, { forward: 0, strafe: -1 }, { forward: -1, strafe: 0 }];
-    for (let tick = 0; tick < 7200; tick += 1) {
-      if (tick % 500 === 0) state = requestShift(state);
-      state = advanceShift(state, player, FIXED_DT);
-      const walls = [...JUNCTION_WALLS, ...gateColliders(state.openness)];
-      player = stepPlayer(player, intents[Math.floor(tick / 180) % intents.length], walls, FIXED_DT);
-      expect(walls.some((wall) => overlaps(player, wall))).toBe(false);
-      expect(hasReturnRoutes(state.openness)).toBe(true);
-    }
-    expect(state.completedShifts).toBeGreaterThan(5);
   });
 });

@@ -12,3 +12,5 @@ Read `project_brief.md`, `docs/development_plan.md`, `docs/progress.md`, and the
 - At the milestone boundary, provide launch instructions and a manual checklist, then stop. Do not start the next milestone automatically.
 
 M1 intentionally excludes random/automatic shifting, procedural generation, interaction/loot, enemies, persistence, multiplayer, art assets, gravity, sprint, and jumping. Preserve the accepted M0 reference scene at `?scene=room`.
+
+M1 revision authorized 2026-11-11: eight-meter crushing passages, two-second warning, four-second closing. Physical swept contact kills; occupancy must not hold/cancel gates. Gates finish after death, and Retry resets the attempt. This supersedes the brief's original early no-crushing rule; see its dated amendment and the updated M1 specification. Do not add the later combat/economy death systems yet.

@@ -5,7 +5,7 @@ import {
 import { EYE_HEIGHT } from '../simulation/player';
 import type { PlayerState } from '../simulation/player';
 import { ROOM_SIZE, ROOM_WALLS } from '../simulation/room';
-import { GATE_IDS, gateRect, JUNCTION_WALLS, openGatesFor } from '../simulation/junction';
+import { GATE_IDS, gateRect, JUNCTION_SIZE, JUNCTION_WALLS, openGatesFor } from '../simulation/junction';
 import type { JunctionState } from '../simulation/shift';
 
 export function createScene(canvas: HTMLCanvasElement, mode: 'room' | 'junction') {
@@ -23,11 +23,12 @@ export function createScene(canvas: HTMLCanvasElement, mode: 'room' | 'junction'
   const floorMaterial = new MeshStandardMaterial({ color: '#68746e', roughness: 1 });
   const wallMaterial = new MeshStandardMaterial({ color: '#929c94', roughness: 1 });
   const blockMaterial = new MeshStandardMaterial({ color: '#69776f', roughness: 1 });
-  const floor = new Mesh(new PlaneGeometry(ROOM_SIZE, ROOM_SIZE), floorMaterial);
+  const floorSize = mode === 'room' ? ROOM_SIZE : JUNCTION_SIZE;
+  const floor = new Mesh(new PlaneGeometry(floorSize, floorSize), floorMaterial);
   floor.rotation.x = -Math.PI / 2;
   scene.add(floor);
 
-  const grid = new GridHelper(ROOM_SIZE, ROOM_SIZE, '#53635c', '#5f6e66');
+  const grid = new GridHelper(floorSize, floorSize, '#53635c', '#5f6e66');
   grid.position.y = 0.005;
   scene.add(grid);
 
@@ -49,31 +50,42 @@ export function createScene(canvas: HTMLCanvasElement, mode: 'room' | 'junction'
 
     const northSouth = id === 'north' || id === 'south';
     const safetyMaterial = new MeshBasicMaterial({ color: '#c4ad6e' });
-    const stripes = [-0.7, 0.7].map((offset) => {
+    const length = northSouth ? rect.maxZ - rect.minZ : rect.maxX - rect.minX;
+    const stripes = [-length / 2 - 0.45, length / 2 + 0.45].map((offset) => {
       const stripe = new Mesh(new BoxGeometry(northSouth ? 4 : 0.035, 0.012, northSouth ? 0.035 : 4), safetyMaterial);
       stripe.position.set((rect.minX + rect.maxX) / 2 + (northSouth ? 0 : offset), 0.015,
         (rect.minZ + rect.maxZ) / 2 + (northSouth ? offset : 0));
       scene.add(stripe);
       return stripe;
     });
+    for (const offset of [-1.95, 1.95]) {
+      const stripe = new Mesh(new BoxGeometry(northSouth ? 0.035 : length, 0.012, northSouth ? length : 0.035), safetyMaterial);
+      stripe.position.set((rect.minX + rect.maxX) / 2 + (northSouth ? offset : 0), 0.015,
+        (rect.minZ + rect.maxZ) / 2 + (northSouth ? 0 : offset));
+      scene.add(stripe);
+      stripes.push(stripe);
+    }
 
     // Geometric debug signs keep the junction readable without external assets.
     const label = document.createElement('canvas');
-    label.width = 256;
-    label.height = 64;
+    label.width = 512;
+    label.height = 128;
     const context = label.getContext('2d')!;
-    context.fillStyle = '#24352c';
-    context.fillRect(0, 0, 256, 64);
+    context.fillStyle = '#452b26';
+    context.fillRect(0, 0, 512, 128);
     context.fillStyle = '#eee5ca';
-    context.font = 'bold 26px monospace';
+    context.font = 'bold 40px monospace';
     context.textAlign = 'center';
     context.textBaseline = 'middle';
-    context.fillText(id.toUpperCase(), 128, 32);
+    context.fillText(id.toUpperCase(), 256, 45);
+    context.font = '24px monospace';
+    context.fillText('8m / CRUSH ZONE', 256, 96);
     const texture = new CanvasTexture(label);
     texture.colorSpace = SRGBColorSpace;
     const signMaterial = new MeshBasicMaterial({ map: texture, side: DoubleSide });
-    const sign = new Mesh(new PlaneGeometry(1.6, 0.4), signMaterial);
-    sign.position.set((rect.minX + rect.maxX) / 2, 3.3, (rect.minZ + rect.maxZ) / 2);
+    const sign = new Mesh(new PlaneGeometry(2, 0.6), signMaterial);
+    sign.position.set(northSouth ? 0 : id === 'east' ? rect.minX - 0.05 : rect.maxX + 0.05, 3.4,
+      northSouth ? id === 'north' ? rect.maxZ + 0.05 : rect.minZ - 0.05 : 0);
     sign.rotation.y = id === 'east' ? -Math.PI / 2 : id === 'west' ? Math.PI / 2 : id === 'south' ? Math.PI : 0;
     scene.add(sign);
     return { id, mesh, material, stripes, safetyMaterial, sign, signMaterial, texture };
@@ -97,11 +109,11 @@ export function createScene(canvas: HTMLCanvasElement, mode: 'room' | 'junction'
         const rect = gateRect(gate.id, junction.openness[gate.id]);
         gate.mesh.position.set((rect.minX + rect.maxX) / 2, rect.height / 2, (rect.minZ + rect.maxZ) / 2);
         const closing = !openGatesFor(junction.target).includes(gate.id);
-        const held = junction.blockedSeconds > 0 && closing && junction.phase === 'closing';
         const warning = junction.phase === 'warning';
-        const color = held ? '#dc785e' : warning ? '#e6bf62' : '#ae965f';
+        const lethal = closing && junction.phase === 'closing';
+        const color = lethal ? '#c17a59' : warning ? '#e6bf62' : '#ae965f';
         gate.material.color.set(color);
-        gate.safetyMaterial.color.set(held ? '#e67758' : '#c4ad6e');
+        gate.safetyMaterial.color.set(closing && (warning || lethal) ? '#e67758' : '#c4ad6e');
         gate.material.emissive.set(warning ? '#5b420b' : '#000000');
         gate.material.emissiveIntensity = warning ? 0.4 + 0.3 * Math.sin(junction.phaseSeconds * 10) : 0;
       }

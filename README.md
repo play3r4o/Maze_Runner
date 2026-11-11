@@ -17,7 +17,9 @@ Open Vite's printed address in a current desktop browser. The development server
 
 Click **Start exploring** to capture the mouse. **WASD** moves, **mouse** looks, **G** requests a gate shift, and **Escape** pauses/releases the cursor. Click **Resume exploring** to continue. Switching tabs or losing focus pauses and clears movement and pending shift requests.
 
-The default scene is a four-way junction. NORTH/SOUTH initially open; G warns for two seconds, opens the other pair, then closes the old pair. Gold lines mark gate travel areas. An occupied closing area holds the shift; after two seconds of obstruction, it cancels and safely reopens all gates. Wait through the three-second cooldown, move clear and press G to retry. The outside loop always provides a return route.
+The default scene is a four-way junction with **eight-meter-long crushing passages**. NORTH/SOUTH initially open. G gives a two-second warning, opens the other pair, then closes the old pair over four seconds. A closing slab kills when it reaches your body; it never waits or cancels because you are in the way. Markings and signs identify the full danger zone. At normal speed the passage takes about 2.7 seconds to cross. Use the longer outside loop when a crossing is too risky.
+
+If crushed, the cursor releases and a **Retry** button appears. Gates finish closing behind the death screen. Retry resets player position/look, gates and shift count, then reacquires the mouse. Pausing while alive still freezes the mechanism.
 
 Follow the [M1 manual checklist](docs/milestones/M1.md#human-checklist) before approving M2. The accepted M0 reference room is retained by adding `?scene=room` to the page URL. Neither prototype has an objective, jumping or sprinting yet.
 
@@ -53,7 +55,7 @@ That shell syntax is for Linux/macOS. On other systems use the default Playwrigh
 
 Mouse-look checks acquire real pointer lock, dispatch DOM mouse events with explicit relative deltas, and assert resulting movement using actual keyboard input. Absolute automated cursor coordinates do not reliably produce relative motion in every headless Chromium backend. Real mouse-device feel remains a manual check. CI uses one browser worker to reduce software-rendering contention.
 
-The turning and occupied-gate scenarios control browser time with Playwright's clock: keyboard input is held for a defined simulation duration, released, and the HUD is refreshed before assertions. `runFor` executes animation frames; it does not skip simulation steps or set game state. Other browser smoke tests still exercise normal wall-clock operation. The default test browser uses full Chromium's new headless mode in both local runs and CI, rather than a separate headless-shell backend.
+The turning and crushing-gate scenarios control browser time with Playwright's clock: keyboard input is held for a defined simulation duration, released, and the HUD is refreshed before assertions. `runFor` executes animation frames; it does not skip simulation steps or set game state. Other browser smoke tests still exercise normal wall-clock operation. The default test browser uses full Chromium's new headless mode in both local runs and CI, rather than a separate headless-shell backend.
 
 ## Play through GitHub Pages
 

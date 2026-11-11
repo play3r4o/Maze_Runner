@@ -27,7 +27,7 @@
 | M4 | Human accepted on 2026-11-11 |
 | M5 | Human accepted on 2026-11-11 |
 | M6 | Human accepted on 2026-11-11 |
-| M7 | Implemented; awaiting CI/deployment and the fun verdict |
+| M7 | Deployed (run 43084039917); awaiting the fun verdict |
 | M7b (added 2026-11-11) | Not started |
 | M9 (scheduled after M7b) | Not started |
 | M8 | Not started |
@@ -120,7 +120,7 @@ The developer confirmed M1's original gates work and subsequently accepted the f
 
 ## Next action
 
-Confirm the M7 Pages workflow run, then stop for the M7 fun verdict. M7b remains unapproved. M7 remains unapproved. M6 remains unapproved. 
+Stop for the M7 fun verdict. M7b remains unapproved. M7 remains unapproved. M6 remains unapproved. 
 
 ### M1 crushing-gate revision — 2026-11-11
 
@@ -251,4 +251,5 @@ Confirm the M7 Pages workflow run, then stop for the M7 fun verdict. M7b remains
 - Browser (local Google Chrome, SwiftShader): both M7 scenarios pass (countdown runs after leaving; E prompt and pickup; extraction result; Retry this seed; Abandon hidden before start then abandoned result; New run loads another seed); all three generated-maze and three M6 debug-tool scenarios pass after updating them for the new HUD; M0 room draw passes. Simulating a full 45 s in the browser would render about 2700 software frames, so the browser test checks the running countdown and the unit tests check the exact timing. Two test mistakes fixed on the way: waiting for pointer lock after a resume that extracts on its first step, and clicking the debug Events toggle while the mouse was captured.
 - Visual check (seed 41): blue beam visible from the plaza after the contrast fix; crystal visible down the corridor from the neighbouring room. No page errors.
 - CI run 43083709751 (`eb06530`) failed in **Test simulation**: the M6 scripted-session coverage test took 5.2 s on the runner (3.5 s locally) against the 5 s default timeout. It now has a 30 s limit. `AGENTS.md` scope wording corrected (the single relic is allowed loot).
+- Run 43084039917 (`8fa3ba1`): unit suite passed; 19 of 22 browser tests passed, including both M7 scenarios. The M1 junction crush/Retry test and both long M2 maze tests failed on runner slowness (context creation timeout, stalled clicks near the budget), the same pattern as M5. A re-run of the failed job passed everything and deployed. Test at `https://play3r4o.github.io/Maze_Runner/?v=8fa3ba1`. Risk: these three older long tests are now intermittently slow on runners without the apt browser dependencies; consider hardening them if it recurs. This note is committed locally for the next checkpoint.
 - Human verdict pending: see the [M7 checklist](milestones/M7.md#human-acceptance-checklist).

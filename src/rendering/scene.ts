@@ -7,10 +7,10 @@ import type { PlayerState } from '../simulation/player';
 import { ROOM_SIZE, ROOM_WALLS } from '../simulation/room';
 import { GATE_IDS, gateRect, JUNCTION_SIZE, JUNCTION_WALLS, openGatesFor } from '../simulation/junction';
 import type { JunctionState } from '../simulation/shift';
-import type { MazeShift } from '../simulation/mazeShift';
 import { MAZE_SIZE, mazeExtent } from '../simulation/maze';
 import type { GeneratedWorld } from '../game/generatedRun';
 import { createMazeView } from './mazeView';
+import type { GateView } from './mazeView';
 
 export type SceneMode = 'room' | 'junction' | 'maze' | 'generated';
 export function createScene(canvas: HTMLCanvasElement, mode: SceneMode, generated?: GeneratedWorld) {
@@ -112,7 +112,7 @@ export function createScene(canvas: HTMLCanvasElement, mode: SceneMode, generate
   resize();
 
   return {
-    render(player: PlayerState, yaw: number, pitch: number, junction: JunctionState, maze?: MazeShift) {
+    render(player: PlayerState, yaw: number, pitch: number, junction: JunctionState, maze?: GateView) {
       mazeView?.update(maze);
       for (const gate of gates) {
         const rect = gateRect(gate.id, junction.openness[gate.id]);

@@ -1,13 +1,14 @@
-import { cellId, edgeId } from './maze';
+import { cellId, edgeId, gatePocket } from './maze';
 import type { CellBlock, Landmark, MazeCell, MazeEdge, MazeLayout, MazeOpenness } from './maze';
 import { findMazeRoute, reachableMazeCells } from './mazeGraph';
 
 // Bump whenever the same seed could produce a different layout.
-export const GENERATOR_VERSION = 'm4.1';
+export const GENERATOR_VERSION = 'm5.1';
 
-export type GeneratorConfig = { size: number; loopChance: number };
+// gateCount must be even: half the gates start open, half closed.
+export type GeneratorConfig = { size: number; loopChance: number; gateCount: number };
 // 11×11 cells at 12 m spacing; see docs/milestones/M4.md for the walking-time measurement.
-export const DEFAULT_GENERATOR_CONFIG: Readonly<GeneratorConfig> = { size: 11, loopChance: 0.1 };
+export const DEFAULT_GENERATOR_CONFIG: Readonly<GeneratorConfig> = { size: 11, loopChance: 0.1, gateCount: 8 };
 
 export type Ring = 'sanctuary' | 'inner' | 'middle' | 'outer';
 export const RINGS: readonly Exclude<Ring, 'sanctuary'>[] = ['inner', 'middle', 'outer'];
@@ -17,6 +18,9 @@ export type GeneratedMaze = MazeLayout & {
   rings: Readonly<Record<string, Ring>>;
   // Sanctuary-to-outside connections, in canonical order: north, east, south, west.
   entrances: readonly string[];
+  // Gate IDs g1..gN in selection order, and each gate's starting openness (1 open, 0 closed).
+  gates: readonly string[];
+  initialOpenness: Readonly<Record<string, number>>;
 };
 
 const LANDMARKS = [
@@ -25,8 +29,10 @@ const LANDMARKS = [
   { id: 'rose', name: 'Rose Pillar', color: '#d984aa' },
 ] as const;
 
-// Generated layouts have no gates until M5, so every listed connection is open.
+// Used before any gates exist: every listed connection is an open corridor.
 const ALL_OPEN: MazeOpenness = { north: 1, east: 1 };
+// Gate IDs are absent here, so every gate edge counts as closed.
+const GATES_CLOSED: MazeOpenness = {};
 
 export const MAX_SEED = 0xffffffff;
 // Seeds are whole numbers 0..4294967295. Anything else is rejected, never coerced.
@@ -80,6 +86,9 @@ function configErrors(config: GeneratorConfig): string[] {
   const errors: string[] = [];
   if (!Number.isInteger(config.size) || config.size < 9 || config.size % 2 === 0) errors.push('Size must be an odd integer ≥ 9.');
   if (!(config.loopChance >= 0 && config.loopChance <= 1)) errors.push('Loop chance must be between 0 and 1.');
+  if (!Number.isInteger(config.gateCount) || config.gateCount < 0 || config.gateCount % 2 !== 0 || config.gateCount > 16) {
+    errors.push('Gate count must be an even integer from 0 to 16.');
+  }
   return errors;
 }
 
@@ -176,29 +185,77 @@ export function generateMaze(seed: number, config: GeneratorConfig = DEFAULT_GEN
     }
   }
 
+  // Gates (M5). A separate RNG stream keeps everything above independent of gate choices.
+  // Each open-gate candidate must be removable while every gate chosen so far is closed,
+  // so the static corridors alone connect every cell and keep every landmark's second route:
+  // no gate arrangement can isolate a region or leave a landmark one connection from cut off.
+  // Alternate picks: an existing loop corridor that can close without cutting anything off
+  // (starts open), then a new corridor between unconnected neighbours (starts closed).
+  // Never in or at the Sanctuary, and never two gates sharing one pillar-block pocket.
+  const gateRng = createRng((seed ^ 0x9e3779b9) >>> 0);
+  const grid: MazeLayout = { cells, edges: [], landmarks: [], start, columns: size, rows: size };
+  const usedBlocks = new Set<string>();
+  const blockOf = (edge: MazeEdge) => {
+    const { block } = gatePocket(grid, edge);
+    return `${block.column},${block.row}`;
+  };
+  const outsidePlaza = (edge: MazeEdge) => !inSanctuary(edge.a) && !inSanctuary(edge.b);
+  const sortById = (items: MazeEdge[]) => items.sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+  const openPool = gateRng.shuffle(sortById([...open.values()].filter(outsidePlaza)));
+  const closedPool = gateRng.shuffle(sortById(candidates.filter((edge) => outsidePlaza(edge) && !open.has(edge.id))));
+  const gates: string[] = [];
+  const initialOpenness: Record<string, number> = {};
+  for (let i = 0; i < config.gateCount; i++) {
+    const startsOpen = i % 2 === 0;
+    const pool = startsOpen ? openPool : closedPool;
+    const findCandidate = () => pool.findIndex((edge) => {
+      if (usedBlocks.has(blockOf(edge))) return false;
+      if (!startsOpen) return true;
+      // Test as if this edge were already a closed gate.
+      const trial = { ...layoutNow(), edges: layoutNow().edges.filter((other) => other.id !== edge.id) };
+      return reachableMazeCells(trial, GATES_CLOSED, start).size === cells.length
+        && landmarks.every((landmark) => findBridgeToSanctuary(trial, landmark.cell, GATES_CLOSED) === null);
+    });
+    let index = findCandidate();
+    // Too few redundant corridors for a safe open gate: add one permanent corridor
+    // (seeded choice) and look again. Bounded by the number of unused neighbour pairs.
+    while (index < 0 && startsOpen && closedPool.length) {
+      const [extra] = closedPool.splice(gateRng.int(closedPool.length), 1);
+      add(extra); openPool.push(extra);
+      index = findCandidate();
+    }
+    if (index < 0) throw new Error(`Seed ${seed}: not enough gate candidates.`);
+    const [edge] = pool.splice(index, 1);
+    const gate = `g${i + 1}`;
+    usedBlocks.add(blockOf(edge));
+    open.set(edge.id, { ...edge, gate });
+    gates.push(gate); initialOpenness[gate] = startsOpen ? 1 : 0;
+  }
+
   const edges = [...open.values()].sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
   return {
     seed, version: GENERATOR_VERSION, config: { ...config }, columns: size, rows: size,
     plaza: { minColumn: center - 1, maxColumn: center + 1, minRow: center - 1, maxRow: center + 1 },
-    cells, edges, landmarks, start, rings, entrances,
+    cells, edges, landmarks, start, rings, entrances, gates, initialOpenness,
   };
 }
 
 // Returns an open edge whose removal disconnects `from` from Sanctuary, or null if none.
 // Any such edge lies on every route home, so checking the shortest route's edges is enough.
-export function findBridgeToSanctuary(layout: MazeLayout, from: string): string | null {
-  const route = findMazeRoute(layout, ALL_OPEN, from, layout.start);
+// Gate edges count as open only if `openness` lists them as 1.
+export function findBridgeToSanctuary(layout: MazeLayout, from: string, openness: MazeOpenness = ALL_OPEN): string | null {
+  const route = findMazeRoute(layout, openness, from, layout.start);
   if (!route) return null;
   for (const edge of route.edges) {
-    if (!reachableMazeCells(layout, ALL_OPEN, from, [edge]).has(layout.start)) return edge;
+    if (!reachableMazeCells(layout, openness, from, [edge]).has(layout.start)) return edge;
   }
   return null;
 }
 
 // Stable text form for reproducibility checks and bug reports.
 export function serializeMaze(maze: GeneratedMaze): string {
-  return [`${maze.version}:${maze.seed}:${maze.config.size}:${maze.config.loopChance}`,
-    maze.edges.map((edge) => edge.id).join(','),
+  return [`${maze.version}:${maze.seed}:${maze.config.size}:${maze.config.loopChance}:${maze.config.gateCount}`,
+    maze.edges.map((edge) => edge.gate ? `${edge.id}#${edge.gate}=${maze.initialOpenness[edge.gate]}` : edge.id).join(','),
     maze.landmarks.map((landmark) => `${landmark.id}@${landmark.cell}`).join(','),
     maze.entrances.join(',')].join('|');
 }

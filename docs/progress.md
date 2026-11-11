@@ -11,6 +11,7 @@
 - The developer then confirmed “all works perfect. Go next”: M1 push-before-crush is human accepted, and M2 is approved. M3 and later remain unapproved.
 - The next instruction “all works, go next” accepts M2 and authorizes M3 graph validation/diagnostics. M4 and later remain unapproved.
 - On 2026-11-11, after the M3 Retry fix deployed (run 43005063616, commit `97d3ad9`), the developer replied “accepted, go next”: M3 is human accepted and M4 seeded generation is approved. M5 and later remain unapproved.
+- On 2026-11-11 the developer replied “all works, go next” after testing the deployed M4: M4 is human accepted and M5 safe generated-maze shifts are approved. M6 and later remain unapproved.
 - Planning-only instruction on 2026-11-11: after a concept review the developer chose co-op PvE before PvP and asked for the tension/wayfinding ideas to be added to the plan. This authorizes editing `development_plan.md` only. It does not approve M4 or any later milestone, and no source code changed.
 
 ## Status
@@ -21,8 +22,9 @@
 | M1 | Human accepted on 2026-11-11 |
 | M2 | Human accepted on 2026-11-11 |
 | M3 | Human accepted on 2026-11-11 |
-| M4 | Deployed (run 43029562668); awaiting human acceptance |
-| M5–M7 | Not started |
+| M4 | Human accepted on 2026-11-11 |
+| M5 | Implemented; awaiting CI/deployment and human acceptance |
+| M6–M7 | Not started |
 | M7b (added 2026-11-11) | Not started |
 | M9 (scheduled after M7b) | Not started |
 | M8 | Not started |
@@ -115,7 +117,7 @@ The developer confirmed M1's original gates work and subsequently accepted the f
 
 ## Next action
 
-Wait for M4 manual acceptance. M5 remains unapproved.
+Confirm the M5 Pages workflow run, then wait for M5 manual acceptance. M6 remains unapproved. 
 
 ### M1 crushing-gate revision — 2026-11-11
 
@@ -205,3 +207,15 @@ Wait for M4 manual acceptance. M5 remains unapproved.
 - Commit `a38ab7b` was pushed to main. GitHub Actions run 43029562668 completed successfully in 10m 39s (locked install, unit tests, full browser suite with bundled Chromium including both long M2 scenarios, Pages deployment). Test at `https://play3r4o.github.io/Maze_Runner/?v=a38ab7b`.
 - This deployment note is committed locally for the next source checkpoint, to avoid a documentation-only redeploy.
 - Human acceptance pending: use the [M4 checklist](milestones/M4.md#human-acceptance-checklist).
+
+### M5 safe shifts in generated mazes — 2026-11-11
+
+- M4 accepted by the developer; M5 approved. Contract: `milestones/M5.md`. M6 and later remain unapproved.
+- Gate IDs widened from the hand-built `north`/`east` to strings. New generic `gatePocket`/`gateRect` (slide 4.5 m into the adjacent pillar block, toward the maze interior on the last column/row) reproduce the hand-built gates exactly; all M2/M3 unit tests pass unchanged.
+- Generator `m5.1`: eight gates per maze from a separate seeded RNG stream, alternating existing open corridors and new closed ones, outside the plaza, one per pillar block. Open-gate candidates must leave every cell connected and every landmark free of single-connection cuts with all gates closed; a bounded seeded corridor repair handles the rare seed with too few candidates (first seen at seed 308854). Generation is now about 17 ms per maze.
+- `simulation/generatedShift.ts`: seeded candidate order per request, current/opening/target validation, accepted/rejected/ignored log (12 entries), phases with M1/M2 timings, revision on fully-open-set changes, defensive validation at those changes only (per-tick validation made the 100×100 test take 93 s; now 30 s).
+- `game/generatedRun.ts` uses the accepted push-before-crush routine with every gate; death keeps the mechanism running; Retry rebuilds the seed's starting state. HUD shift status, generic 3D gate slabs/outlines/signs, debug gate states and shift log, console log per decision. Title and header now M5.
+- Unit: 908 tests in ten files pass, including 200 seeds of gate rules, plan validation and isolation rejection with a fixture, determinism, bounded log, **100 seeds × 100 shifts** with connectivity checked at every 0.25 s step (10 000 accepted shifts, none rejected because static corridors guarantee connectivity), and physical push-then-crush, mechanism-after-death, Retry and escape-while-pushed on three seeds. A first version of the escape test started at the passage centre and was crushed: from the middle of an 8 m passage there is not enough time once pushing starts (intended danger). The test now starts 1.5 m from the end.
+- Browser (local Google Chrome, SwiftShader): all three generated-maze scenarios pass (seed reproduction and form; debug map with rings, eight gates, rejected entrance probe, walking out of the plaza; G shift with warning, named gates, revision 2, accepted and ignored log entries, completed shift). M3 debug map, all four M1 junction and all seven M0 room checks pass. The two long M2 `maze.spec.ts` scenarios were not rerun locally: they exceed their budgets in this sandbox on unmodified code too (see M4 entry); GitHub Actions is the check for them.
+- Visual check (seed 41, gate G7 straight north of the plaza): warning outline and `G7 / 8m CRUSH` sign, slab sliding in from its pocket during closing, debug map showing all gates, the closing gate and the updated route home. No console or page errors.
+- Human acceptance pending: use the [M5 checklist](milestones/M5.md#human-acceptance-checklist).

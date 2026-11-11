@@ -196,6 +196,8 @@ M4 implementation contract: `milestones/M4.md`. Sizing decision, 2026-11-11: cel
 - **Done:** No accepted plan isolates a region; reasons are observable; physical tests show no embedded player/impossible accepted passage.
 - **Avoid:** Concurrent plans, whole-maze movement, final run-duration guarantees. Graph tests do not prove physical safety.
 
+M5 implementation contract: `milestones/M5.md`. Decision, 2026-11-11: eight gates per maze (four start open), each with its own pillar-block pocket. Open-gate corridors are chosen so the static corridors alone connect every cell and keep each landmark's second route, so no gate arrangement can isolate a region; the validator still checks every plan and its rejection path is tested with a fixture. Shifts stay player-triggered (G) until M7.
+
 ### M6 — Reproduction/stability gate (M)
 
 - **Build/why:** Make bugs cheap to reproduce.

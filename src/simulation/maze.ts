@@ -4,8 +4,10 @@ import { reachableMazeCells } from './mazeGraph';
 export type MazeCell = { id: string; column: number; row: number };
 export const MAZE_GATE_IDS = ['north', 'east'] as const;
 export type MazeGateId = typeof MAZE_GATE_IDS[number];
-export type MazeOpenness = Record<MazeGateId, number>;
-export type MazeEdge = { id: string; a: string; b: string; gate?: MazeGateId };
+// Openness per gate ID: 1 fully open (slab in its pocket), 0 closed (slab fills the corridor).
+export type MazeOpenness = Record<string, number>;
+// Gate IDs are free-form strings: 'north'/'east' in the hand-built maze, 'g1'.. in generated mazes.
+export type MazeEdge = { id: string; a: string; b: string; gate?: string };
 export type Landmark = { id: string; name: string; color: string; cell: string };
 // A rectangular block of cells carved as one open floor (the generated Sanctuary plaza).
 export type CellBlock = { minColumn: number; maxColumn: number; minRow: number; maxRow: number };
@@ -84,14 +86,36 @@ export function corridorRect(layout: MazeLayout, edge: MazeEdge): WallRect {
   };
 }
 
-export function mazeGateRect(id: MazeGateId, openness: number): WallRect {
-  const edge = HAND_BUILT_MAZE.edges.find((edge) => edge.gate === id)!;
-  const rect = corridorRect(HAND_BUILT_MAZE, edge);
-  const offset = Math.max(0, Math.min(1, openness)) * 4.5;
-  const dx = rect.maxZ - rect.minZ > rect.maxX - rect.minX ? offset : 0;
-  const dz = dx === 0 ? offset : 0;
-  return { ...rect, id: `gate-${id}`, minX: rect.minX + dx, maxX: rect.maxX + dx,
+export const GATE_TRAVEL = 4.5;
+// A gate slab slides sideways out of its corridor into the solid pillar block beside it:
+// +X for north–south corridors, +Z for east–west ones, or the negative side on the last
+// column/row so the pocket stays inside the maze. Returns the slide direction and the
+// pillar block (named by its top-left cell) that holds the open slab.
+export function gatePocket(layout: MazeLayout, edge: MazeEdge) {
+  const a = findCell(layout, edge.a), b = findCell(layout, edge.b);
+  const alongZ = a.column === b.column;
+  const column = Math.min(a.column, b.column), row = Math.min(a.row, b.row);
+  if (alongZ) {
+    const sign = column === (layout.columns ?? 5) - 1 ? -1 : 1;
+    return { axis: 'x' as const, sign, block: { column: sign > 0 ? column : column - 1, row } };
+  }
+  const sign = row === (layout.rows ?? 5) - 1 ? -1 : 1;
+  return { axis: 'z' as const, sign, block: { column, row: sign > 0 ? row : row - 1 } };
+}
+export function gateRect(layout: MazeLayout, edge: MazeEdge, openness: number): WallRect {
+  const rect = corridorRect(layout, edge);
+  const { axis, sign } = gatePocket(layout, edge);
+  const offset = sign * Math.max(0, Math.min(1, openness)) * GATE_TRAVEL;
+  const dx = axis === 'x' ? offset : 0, dz = axis === 'z' ? offset : 0;
+  return { ...rect, id: `gate-${edge.gate}`, minX: rect.minX + dx, maxX: rect.maxX + dx,
     minZ: rect.minZ + dz, maxZ: rect.maxZ + dz };
+}
+export const gateEdges = (layout: MazeLayout) => layout.edges.filter((edge) => edge.gate !== undefined);
+export const layoutGateColliders = (layout: MazeLayout, openness: MazeOpenness) =>
+  gateEdges(layout).map((edge) => gateRect(layout, edge, openness[edge.gate!]));
+
+export function mazeGateRect(id: string, openness: number, layout: MazeLayout = HAND_BUILT_MAZE): WallRect {
+  return gateRect(layout, layout.edges.find((edge) => edge.gate === id)!, openness);
 }
 export const mazeGateColliders = (openness: MazeOpenness) => MAZE_GATE_IDS.map((id) => mazeGateRect(id, openness[id]));
 

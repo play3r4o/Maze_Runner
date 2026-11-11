@@ -1,10 +1,13 @@
 import { BoxGeometry, CanvasTexture, Group, InstancedMesh, Matrix4, Mesh, MeshBasicMaterial,
   MeshStandardMaterial, PlaneGeometry, SRGBColorSpace } from 'three';
 import type { Scene } from 'three';
-import { HAND_BUILT_MAZE, MAZE_GATE_IDS, MAZE_WALLS, cellPosition, findCell, landmarkRect, mazeGateRect, plazaRect } from '../simulation/maze';
-import type { MazeLayout } from '../simulation/maze';
+import { HAND_BUILT_MAZE, MAZE_WALLS, cellPosition, findCell, gateEdges, gateRect, landmarkRect, plazaRect } from '../simulation/maze';
+import type { MazeLayout, MazeOpenness } from '../simulation/maze';
 import type { WallRect } from '../simulation/player';
-import type { MazeShift } from '../simulation/mazeShift';
+import type { ShiftPhase } from '../simulation/shift';
+
+// What the view needs to draw gates: poses plus which gate is warning/closing.
+export type GateView = { phase: ShiftPhase; phaseSeconds: number; openness: MazeOpenness; closing: string | null };
 
 // Hand-built M2/M3 maze by default; generated layouts pass their own derived walls.
 export function createMazeView(scene: Scene, layout: MazeLayout = HAND_BUILT_MAZE, mazeWalls: readonly WallRect[] = MAZE_WALLS) {
@@ -53,8 +56,10 @@ export function createMazeView(scene: Scene, layout: MazeLayout = HAND_BUILT_MAZ
     const { x, z } = cellPosition(findCell(layout, landmark.cell), layout);
     sign(landmark.name.toUpperCase(), x, 4.5, z, Math.atan2(-x, -z), landmark.color);
   }
-  const gates = MAZE_GATE_IDS.filter((id) => layout.edges.some((edge) => edge.gate === id)).map((id) => {
-    const rect = mazeGateRect(id, 0);
+  const gates = gateEdges(layout).map((edge) => {
+    const id = edge.gate!;
+    const rect = gateRect(layout, edge, 0);
+    const centerX = (rect.minX + rect.maxX) / 2, centerZ = (rect.minZ + rect.maxZ) / 2;
     const mesh = block(rect.maxX - rect.minX, rect.height, rect.maxZ - rect.minZ, 0, rect.height / 2, 0, '#ae965f');
     const vertical = rect.maxZ - rect.minZ > rect.maxX - rect.minX;
     const outlines = [
@@ -64,22 +69,22 @@ export function createMazeView(scene: Scene, layout: MazeLayout = HAND_BUILT_MAZ
       block(0.035, 0.015, rect.maxZ - rect.minZ, rect.maxX, 0.025, (rect.minZ + rect.maxZ) / 2, '#c4ad6e'),
     ];
     if (vertical) {
-      sign(`${id.toUpperCase()} / 8m CRUSH`, 0, 3.5, rect.maxZ + 0.05);
-      sign(`${id.toUpperCase()} / 8m CRUSH`, 0, 3.5, rect.minZ - 0.05, Math.PI);
+      sign(`${id.toUpperCase()} / 8m CRUSH`, centerX, 3.5, rect.maxZ + 0.05);
+      sign(`${id.toUpperCase()} / 8m CRUSH`, centerX, 3.5, rect.minZ - 0.05, Math.PI);
     } else {
-      sign(`${id.toUpperCase()} / 8m CRUSH`, rect.minX - 0.05, 3.5, 0, -Math.PI / 2);
-      sign(`${id.toUpperCase()} / 8m CRUSH`, rect.maxX + 0.05, 3.5, 0, Math.PI / 2);
+      sign(`${id.toUpperCase()} / 8m CRUSH`, rect.minX - 0.05, 3.5, centerZ, -Math.PI / 2);
+      sign(`${id.toUpperCase()} / 8m CRUSH`, rect.maxX + 0.05, 3.5, centerZ, Math.PI / 2);
     }
-    return { id, mesh, outlines };
+    return { id, edge, mesh, outlines };
   });
   return {
-    update(state?: MazeShift) {
+    update(state?: GateView) {
       if (!state) return;
       for (const gate of gates) {
-        const rect = mazeGateRect(gate.id, state.openness[gate.id]);
+        const rect = gateRect(layout, gate.edge, state.openness[gate.id]);
         gate.mesh.position.set((rect.minX + rect.maxX) / 2, rect.height / 2, (rect.minZ + rect.maxZ) / 2);
-        const closing = state.phase === 'closing' && gate.id !== state.target;
-        const warning = state.phase === 'warning' && gate.id !== state.target;
+        const closing = state.phase === 'closing' && gate.id === state.closing;
+        const warning = state.phase === 'warning' && gate.id === state.closing;
         gate.mesh.material.color.set(closing ? '#c17a59' : warning ? '#e6bf62' : '#ae965f');
         gate.mesh.material.emissive.set(warning ? '#5b420b' : '#000000');
         gate.mesh.material.emissiveIntensity = warning ? 0.4 + 0.3 * Math.sin(state.phaseSeconds * 10) : 0;

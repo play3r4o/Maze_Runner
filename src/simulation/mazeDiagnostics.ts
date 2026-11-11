@@ -1,4 +1,4 @@
-import { HAND_BUILT_MAZE, MAZE_GATE_IDS, cellPosition, corridorRect, findCell, mazeGateRect, plazaRect } from './maze';
+import { HAND_BUILT_MAZE, MAZE_GATE_IDS, cellPosition, corridorRect, findCell, gateEdges, gateRect, plazaRect } from './maze';
 import type { MazeLayout, MazeOpenness } from './maze';
 import type { MazeRun } from '../game/mazeRun';
 import type { PlayerState } from './player';
@@ -15,11 +15,16 @@ export function probeSanctuaryIsolation(layout: MazeLayout, openness: MazeOpenne
 // Read-only snapshot of live state the debug map needs. Works for hand-built and generated layouts.
 export type DebugView = {
   layout: MazeLayout; player: PlayerState; openness: MazeOpenness; crushed: boolean;
-  phase: ShiftPhase; target: string; revision: number; validation: string | null;
+  // Gate opening / closing in the current plan (null when idle).
+  phase: ShiftPhase; opening: string | null; closing: string | null; revision: number; validation: string | null;
+  // Readable shift decisions, oldest first (generated mazes only).
+  log?: readonly string[];
 };
 export function debugViewOfMazeRun(run: MazeRun): DebugView {
   return { layout: HAND_BUILT_MAZE, player: run.player, openness: run.shift.openness, crushed: run.crushedBy !== null,
-    phase: run.shift.phase, target: run.shift.target, revision: run.shift.revision, validation: run.shift.validation?.reason ?? null };
+    phase: run.shift.phase, opening: run.shift.phase === 'idle' ? null : run.shift.target,
+    closing: run.shift.phase === 'idle' ? null : MAZE_GATE_IDS.find((id) => id !== run.shift.target)!,
+    revision: run.shift.revision, validation: run.shift.validation?.reason ?? null };
 }
 
 export function buildLayoutDiagnostics(view: DebugView) {
@@ -44,17 +49,17 @@ export function buildLayoutDiagnostics(view: DebugView) {
     origin = distance(passage.a) <= distance(passage.b) ? passage.a : passage.b;
   }
   const route = !view.crushed && origin ? findMazeRoute(layout, openness, origin, layout.start) : null;
-  const gateIds = MAZE_GATE_IDS.filter((id) => layout.edges.some((edge) => edge.gate === id));
+
   return {
     player: { ...player }, location: inPlaza ? 'Sanctuary plaza' : room?.id ?? passage?.id ?? 'Outside walkable maze',
     cell: room?.id ?? null, origin, route,
     routeNote: view.crushed ? 'Attempt ended. Retry to inspect a new route.'
       : blockedPassage ? 'Moving/closed gate passage: escape along it. No graph route preview.'
       : origin ? `Graph route from ${origin} to Sanctuary. Fully open gates only.` : 'No route origin in walkable geometry.',
-    gates: gateIds.map((id) => ({ id, rect: mazeGateRect(id, openness[id]), openness: openness[id],
-      status: view.phase === 'warning' && id !== view.target ? 'warning'
+    gates: gateEdges(layout).map((edge) => { const id = edge.gate!; return { id, rect: gateRect(layout, edge, openness[id]), openness: openness[id],
+      status: view.phase === 'warning' && id === view.closing ? 'warning'
         : openness[id] === 1 ? 'open' : openness[id] === 0 ? 'closed'
-          : view.phase === 'closing' && id !== view.target ? 'closing' : 'opening' })),
+          : view.phase === 'closing' && id === view.closing ? 'closing' : 'opening' }; }),
   };
 }
 

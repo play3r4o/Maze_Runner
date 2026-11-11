@@ -49,6 +49,7 @@ export function createMazeDebug(root: HTMLElement,
     <details><summary>Shift validation / graph caveats</summary>
       <p class="debug-validation" data-testid="debug-plan">No shift checked yet.</p>
       <p class="debug-caution">Fully open gates only. In corridors the route starts at the nearest junction. It does not guarantee time to escape a closing gate.</p></details>
+    <details class="debug-shift-log" open hidden><summary>Shift log</summary><ol data-testid="debug-shift-log"></ol></details>
     <details class="debug-connections"><summary>${layout.edges.length} connection IDs / states</summary><ol></ol></details>
     <p class="debug-caution">Escape releases the cursor to inspect this panel. This is a prototype diagnostic, not a player map design.</p>`;
   root.append(toggle, panel);
@@ -93,7 +94,7 @@ export function createMazeDebug(root: HTMLElement,
     const rect = svg('rect', { class: 'debug-stone', 'data-testid': `debug-gate-${edge.gate}` });
     const closed = corridorRect(layout, edge);
     map.append(rect, svg('text', { x: (closed.minX + closed.maxX) / 2, y: (closed.minZ + closed.maxZ) / 2 + 0.5,
-      class: 'debug-gate-label' }, edge.gate === 'north' ? 'N' : 'E'));
+      class: 'debug-gate-label' }, edge.gate === 'north' ? 'N' : edge.gate === 'east' ? 'E' : edge.gate!.toUpperCase()));
     return { id: edge.gate!, rect };
   });
   const pointer = svg('g', { class: 'debug-player', 'data-testid': 'debug-player' });
@@ -152,6 +153,15 @@ export function createMazeDebug(root: HTMLElement,
       element('[data-testid="debug-location"]').textContent = `${data.location}${ring} · X ${data.player.x.toFixed(2)} / Z ${data.player.z.toFixed(2)}`;
       element('[data-testid="debug-route"]').textContent = data.route ? `${data.route.edges.length} connections home from ${data.origin}.` : data.routeNote;
       element('[data-testid="debug-plan"]').textContent = view.validation ?? (hasGates ? 'No shift checked yet.' : 'This layout has no gates yet.');
+      if (view.log) {
+        element<HTMLDetailsElement>('.debug-shift-log').hidden = false;
+        const list = element('[data-testid="debug-shift-log"]');
+        const text = view.log.length ? view.log : ['No shift requested yet.'];
+        if (list.dataset.text !== text.join('\n')) {
+          list.dataset.text = text.join('\n');
+          list.replaceChildren(...[...text].reverse().map((line) => { const item = document.createElement('li'); item.textContent = line; return item; }));
+        }
+      }
       pointer.setAttribute('transform', `translate(${data.player.x} ${data.player.z}) rotate(${-data.player.yaw * 180 / Math.PI})`);
       pointer.dataset.x = String(data.player.x); pointer.dataset.z = String(data.player.z); pointer.dataset.yaw = String(data.player.yaw);
       for (const { edge, line, status } of edges) {

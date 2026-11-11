@@ -42,7 +42,7 @@ describe('hand-built maze contract', () => {
         && rect.minZ <= open.minZ && rect.maxZ >= open.maxZ)).toBe(true);
     }
   });
-  test.each([{ north: 1, east: 0 }, { north: 0, east: 1 }])(
+  test.each<Record<string, number>>([{ north: 1, east: 0 }, { north: 0, east: 1 }])(
     'physical centerline traversal agrees with every adjacent graph pair in %j', (openness) => {
       const solids = [...MAZE_SOLIDS, ...mazeGateColliders(openness)];
       for (const a of maze.cells) for (const b of maze.cells) {

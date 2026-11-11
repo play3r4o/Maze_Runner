@@ -1,8 +1,8 @@
 # Shifting Labyrinth
 
-Working title. A browser game project starting with a small, first-person shifting-maze prototype. **M0–M2 are accepted. M3 adds graph validation and an opt-in developer debug view to the hand-built maze.** Extraction and procedural generation are later milestones.
+Working title. A browser game project starting with a small, first-person shifting-maze prototype. **M0–M3 are accepted. M4 adds seeded procedural maze generation.** Shifting in generated mazes and extraction are later milestones.
 
-Read [the brief](project_brief.md), [development plan](docs/development_plan.md), [M3 specification](docs/milestones/M3.md), and [current progress](docs/progress.md).
+Read [the brief](project_brief.md), [development plan](docs/development_plan.md), [M4 specification](docs/milestones/M4.md), and [current progress](docs/progress.md).
 
 ## Run
 
@@ -17,7 +17,9 @@ Open Vite's printed address in a current desktop browser. The development server
 
 Click **Start exploring** to capture the mouse. **WASD** moves, **mouse** looks, **G** requests a gate shift, and **Escape** pauses/releases the cursor. Click **Resume exploring** to continue. Switching tabs or losing focus pauses and clears movement and pending shift requests.
 
-The default scene is a **fixed 5×5 maze**. Start at the warm Sanctuary floor marker. Find the **Amber Spire**, **Blue Beacon** and **Rose Pillar**, then return to Sanctuary; the navigation checklist records physical visits and your return. The colored pillars and signs are geometric placeholders. This is a route-finding exercise, with no rewards, collectibles or saved progress.
+The default scene is a **seeded 11×11 maze** (M4). The address carries `?seed=N`; the same seed always rebuilds the same layout, and a page opened without a seed picks one and writes it into the address. A central open Sanctuary plaza has one entrance per side. Inner, middle and outer rings each hold one landmark (Amber Spire, Blue Beacon, Rose Pillar); the side panel shows your current ring and the navigation check. Walls do not move in generated mazes yet (M5). In the F2 debug panel, rooms are coloured by ring, and a seed field with **Load seed** and **Random** reloads the page with another seed. The panel also shows the generator version and a layout fingerprint for bug reports. See the [M4 specification](docs/milestones/M4.md).
+
+The accepted hand-built maze from M2/M3 is at `?scene=maze`. The rest of this section describes it. It is a **fixed 5×5 maze**. Start at the warm Sanctuary floor marker. Find the **Amber Spire**, **Blue Beacon** and **Rose Pillar**, then return to Sanctuary; the navigation checklist records physical visits and your return. The colored pillars and signs are geometric placeholders. This is a route-finding exercise, with no rewards, collectibles or saved progress.
 
 Two **eight-meter-long crushing shortcuts** alternate: NORTH initially opens and EAST starts closed. G gives a two-second warning, opens the replacement, then closes the old shortcut over four seconds. A closing slab pushes you toward the opposite wall. It kills only when the remaining space cannot fit your whole body, and never waits or cancels for occupancy. You can walk along the passage and escape while being pushed. Markings and signs identify the full danger zone. At normal speed the passage takes about 2.7 seconds to cross. Permanent corridors provide longer detours; every room remains reachable even with both shortcuts closed.
 
@@ -29,7 +31,7 @@ The topology revision starts at **0** and usually reaches **2** per complete swa
 
 With the view open, press **V** or click **Probe isolation** to propose blocking Sanctuary's connections in a **dry run**. Read the rejection and inspect the proposed edge IDs/unreachable cells. This cannot move walls, change the revision or alter the run. Escape releases the cursor so you can scroll/expand the connection and validation details. Retry resets revision/attempt history while keeping the panel's visibility for that page.
 
-Follow the [M3 manual checklist](docs/milestones/M3.md#human-acceptance-checklist) before approving M4. Accepted reference scenes remain available: `?scene=room` for M0 and `?scene=junction` for M1. Teleport, automatic shifting, jumping and sprinting remain deferred.
+Follow the [M4 manual checklist](docs/milestones/M4.md#human-acceptance-checklist) before approving M5. Accepted reference scenes remain available: `?scene=room` for M0, `?scene=junction` for M1 and `?scene=maze` for M2/M3. Teleport, automatic shifting, jumping and sprinting remain deferred.
 
 ## Check and build
 
@@ -80,7 +82,7 @@ One-time repository setup:
 
 For the current repository, the expected default URL is `https://play3r4o.github.io/Maze_Runner/`. It becomes usable only after GitHub reports a successful deployment; an expected URL alone is not proof of publication.
 
-Open the game in a desktop browser tab and click **Start exploring**. No local Node.js installation is required for the hosted version. After a new deployment, refresh and check the **M3 · GRAPH DIAGNOSTICS** header; remove `scene=room` or `scene=junction` from the URL to play the current maze.
+Open the game in a desktop browser tab and click **Start exploring**. No local Node.js installation is required for the hosted version. After a new deployment, refresh and check the **M4 · SEEDED MAZE** header; remove any `scene=` parameter from the URL to play the current maze. Share a `?seed=N` address to reproduce a layout.
 
 If Pages is unavailable for the repository's visibility or account plan, keep those settings unchanged and report the limitation. Enabling Pages does not require adding credentials to the game or creating a separate server.
 
@@ -98,4 +100,4 @@ The local npm cache is ignored `.cache/npm` to work inside restricted cloud work
 
 Stop the development server before reinstalling dependencies and restart it afterward. If Vite reports an outdated optimized dependency after an install, restart the server rather than changing application code.
 
-Next milestone is M4 (seeded layouts), **after M3 human acceptance and explicit approval**. Approved GitHub pushes trigger the Pages workflow; a successful local build alone does not establish a successful hosted deployment.
+Next milestone is M5 (shifts in generated mazes), **after M4 human acceptance and explicit approval**. Approved GitHub pushes trigger the Pages workflow; a successful local build alone does not establish a successful hosted deployment.

@@ -5,16 +5,22 @@ import type { JunctionState } from '../simulation/shift';
 import { WARNING_SECONDS } from '../simulation/shift';
 import { HAND_BUILT_MAZE, MAZE_GATE_IDS } from '../simulation/maze';
 import type { MazeRun } from '../game/mazeRun';
+import type { GeneratedRun } from '../game/generatedRun';
+import type { GeneratedMaze } from '../simulation/mazeGenerator';
+import type { SceneMode } from '../rendering/scene';
 
-export function createHud(root: HTMLElement, scene: 'room' | 'junction' | 'maze') {
+export function createHud(root: HTMLElement, scene: SceneMode, generated?: GeneratedMaze) {
   const isJunction = scene === 'junction';
   const isMaze = scene === 'maze';
+  const isGenerated = scene === 'generated' && generated !== undefined;
+  const landmarks = isGenerated ? generated.landmarks : HAND_BUILT_MAZE.landmarks;
+  const hasNavigation = isMaze || isGenerated;
   const hasGates = isJunction || isMaze;
   const gateIds = isMaze ? MAZE_GATE_IDS : GATE_IDS;
-  const startTitle = isMaze ? 'Find your way home.' : isJunction ? 'The walls can move.' : 'A place to begin.';
+  const startTitle = isGenerated ? 'A new labyrinth.' : isMaze ? 'Find your way home.' : isJunction ? 'The walls can move.' : 'A place to begin.';
   root.innerHTML = `
     <header class="prototype-header">
-      <span class="eyebrow">DEVELOPMENT BUILD / ${isMaze ? 'M3 · GRAPH DIAGNOSTICS' : isJunction ? 'M1 · PUSH &amp; CRUSH' : 'M0'}</span>
+      <span class="eyebrow">DEVELOPMENT BUILD / ${isGenerated ? 'M4 · SEEDED MAZE' : isMaze ? 'M3 · GRAPH DIAGNOSTICS' : isJunction ? 'M1 · PUSH &amp; CRUSH' : 'M0'}</span>
       <p class="wordmark">Shifting Labyrinth<span>Working title</span></p>
     </header>
     <div class="session-status" role="status" aria-live="polite">
@@ -23,15 +29,15 @@ export function createHud(root: HTMLElement, scene: 'room' | 'junction' | 'maze'
     <div class="crosshair" aria-hidden="true"></div>
     <section class="pause-overlay" aria-labelledby="panel-title">
       <div class="pause-panel">
-        <p class="eyebrow">MILESTONE ${isMaze ? '03 · GRAPH DIAGNOSTICS' : isJunction ? '01 · SINGLE JUNCTION' : '00'}</p>
+        <p class="eyebrow">MILESTONE ${isGenerated ? '04 · SEEDED MAZE' : isMaze ? '03 · GRAPH DIAGNOSTICS' : isJunction ? '01 · SINGLE JUNCTION' : '00'}</p>
         <h1 id="panel-title">${startTitle}</h1>
-        <p class="panel-description">${isMaze ? 'Leave the warm Sanctuary marker, find three colored landmarks, then return home. G swaps two gate shortcuts. The 8-meter stone passages push and crush; permanent corridors offer detours. Learn the routes as you explore.' : isJunction ? 'Moving stone pushes you toward the opposite wall. Escape the 8-meter passage before the gap becomes too narrow to fit, or take the outer loop. Press G to shift.' : 'One room. Four walls. The foundation for a changing maze.'}</p>
+        <p class="panel-description">${isGenerated ? `Seed ${generated.seed} built this ${generated.columns}×${generated.rows} maze around the central Sanctuary. Rings grow more remote outward. Find one landmark in each ring, then return home. The same seed always rebuilds the same maze; walls do not move yet.` : isMaze ? 'Leave the warm Sanctuary marker, find three colored landmarks, then return home. G swaps two gate shortcuts. The 8-meter stone passages push and crush; permanent corridors offer detours. Learn the routes as you explore.' : isJunction ? 'Moving stone pushes you toward the opposite wall. Escape the 8-meter passage before the gap becomes too narrow to fit, or take the outer loop. Press G to shift.' : 'One room. Four walls. The foundation for a changing maze.'}</p>
         <div class="control-list" aria-label="Controls">
           <p><span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span><span>Move</span></p>
           <p><span class="control-name">Mouse</span><span>Look around</span></p>
           <p><span><kbd>Esc</kbd></span><span>Pause &amp; release cursor</span></p>
           ${hasGates ? '<p><span><kbd>G</kbd></span><span>Request a shift</span></p>' : ''}
-          ${isMaze ? '<p><span><kbd>F2</kbd></span><span>Developer debug map</span></p>' : ''}
+          ${hasNavigation ? '<p><span><kbd>F2</kbd></span><span>Developer debug map</span></p>' : ''}
         </div>
         <button type="button" class="start-button">Start exploring <span aria-hidden="true">&gt;</span></button>
         <p class="panel-hint" data-message>Click to capture your mouse. Press Escape to release it.</p>
@@ -49,10 +55,19 @@ export function createHud(root: HTMLElement, scene: 'room' | 'junction' | 'maze'
           ${HAND_BUILT_MAZE.landmarks.map((landmark) => `<p><span class="landmark-dot" style="background:${landmark.color}"></span>${landmark.name}<output data-testid="visit-${landmark.id}">—</output></p>`).join('')}
           <p class="return-status" data-testid="return-status" role="status">Visit all three, then return.</p></div>` : ''}
       </aside>` : ''}
+    ${isGenerated ? `
+      <aside class="shift-panel" aria-label="Maze status">
+        <p class="eyebrow">SEEDED MAZE <span data-testid="hud-seed">seed ${generated.seed}</span></p>
+        <p class="shift-phase" data-testid="hud-ring">Sanctuary</p>
+        <p class="shift-notice">Inner, middle and outer rings. One landmark waits in each.</p>
+        <div class="navigation-check"><p class="eyebrow">NAVIGATION CHECK</p>
+          ${landmarks.map((landmark) => `<p><span class="landmark-dot" style="background:${landmark.color}"></span>${landmark.name} · ${generated.rings[landmark.cell]}<output data-testid="visit-${landmark.id}">—</output></p>`).join('')}
+          <p class="return-status" data-testid="return-status" role="status">Visit all three, then return.</p></div>
+      </aside>` : ''}
     <footer class="diagnostics">
-      <span class="diagnostics-label">${isMaze ? 'MAZE' : isJunction ? 'JUNCTION' : 'ROOM'} TEST <span class="separator">/</span> POSITION</span>
+      <span class="diagnostics-label">${hasNavigation ? 'MAZE' : isJunction ? 'JUNCTION' : 'ROOM'} TEST <span class="separator">/</span> POSITION</span>
       <span>X <output data-testid="position-x">0.00</output></span>
-      <span>Z <output data-testid="position-z">${hasGates ? '0.00' : '8.00'}</output></span>
+      <span>Z <output data-testid="position-z">${hasGates || isGenerated ? '0.00' : '8.00'}</output></span>
       <span class="footer-controls">WASD · MOVE ${hasGates ? '<span class="separator">/</span> G · SHIFT' : ''} <span class="separator">/</span> ESC · PAUSE</span>
     </footer>
   `;
@@ -80,9 +95,10 @@ export function createHud(root: HTMLElement, scene: 'room' | 'junction' | 'maze'
   const count = hasGates ? element<HTMLElement>('[data-testid="shift-count"]') : null;
   const notice = hasGates ? element<HTMLElement>('[data-testid="shift-notice"]') : null;
   const gateLabels = hasGates ? gateIds.map((id) => ({ id, label: element<HTMLElement>(`[data-testid="gate-${id}"]`) })) : [];
-  const visits = isMaze ? HAND_BUILT_MAZE.landmarks.map((landmark) => ({ id: landmark.id,
+  const visits = hasNavigation ? landmarks.map((landmark) => ({ id: landmark.id,
     label: element<HTMLElement>(`[data-testid="visit-${landmark.id}"]`) })) : [];
-  const returnStatus = isMaze ? element<HTMLElement>('[data-testid="return-status"]') : null;
+  const ringLabel = isGenerated ? element<HTMLElement>('[data-testid="hud-ring"]') : null;
+  const returnStatus = hasNavigation ? element<HTMLElement>('[data-testid="return-status"]') : null;
 
   root.dataset.state = 'paused';
 
@@ -149,6 +165,21 @@ export function createHud(root: HTMLElement, scene: 'room' | 'junction' | 'maze'
         const text = value === 1 ? 'OPEN' : value === 0 ? 'CLOSED' : state.phase === 'closing' && id !== state.target ? 'CLOSING' : 'OPENING';
         label.textContent = text; label.dataset.status = text.toLowerCase();
       }
+      for (const { id, label } of visits) {
+        label.textContent = run.visited.includes(id) ? 'FOUND' : '—';
+        label.dataset.visited = String(run.visited.includes(id));
+      }
+      if (returnStatus) {
+        returnStatus.textContent = run.returned ? 'Returned to Sanctuary · route check complete.'
+          : run.visited.length === 3 ? 'All landmarks found · return to Sanctuary.' : `${run.visited.length}/3 found · visit all three, then return.`;
+        returnStatus.dataset.complete = String(run.returned);
+      }
+    },
+    updateGenerated(run: GeneratedRun, timestamp: number) {
+      if (!ringLabel || timestamp - lastJunctionUpdate < 100) return;
+      lastJunctionUpdate = timestamp;
+      const ring = run.ring === 'sanctuary' ? 'Sanctuary' : `${run.ring[0].toUpperCase()}${run.ring.slice(1)} ring`;
+      ringLabel.textContent = ring; ringLabel.dataset.ring = run.ring;
       for (const { id, label } of visits) {
         label.textContent = run.visited.includes(id) ? 'FOUND' : '—';
         label.dataset.visited = String(run.visited.includes(id));

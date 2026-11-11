@@ -184,6 +184,8 @@ M3 implementation contract: `milestones/M3.md`. F2 enables a developer-only diag
 - **Done:** Tested layouts validate and are physically walkable; seed/config reproduces placements.
 - **Avoid:** Bigger worlds, streaming, floors, runtime whole-map replacement, content variety.
 
+M4 implementation contract: `milestones/M4.md`. Sizing decision, 2026-11-11: cells keep M2's 12 m spacing so M5 can reuse the accepted 8 m gates; the grid is 11×11 (not 13×13) because measured median walking time from Sanctuary to an outer cell is 40 s at 3 m/s, fitting the 3–5 minute target. Rings are Sanctuary 3×3, inner, middle, outer by square distance; one entrance per plaza side; one landmark per ring.
+
 ### M5 — Safe generated-maze shifts (L)
 
 - **Build/why:** Combine generation/shifting while preserving routes home.

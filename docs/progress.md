@@ -10,6 +10,7 @@
 - Follow-up instruction on 2026-11-11: the wall must push the character toward the opposite wall first, and kill only when the remaining gap cannot fit the body. This supersedes immediate contact death. Existing passage length/timings remain; M2 is still unapproved.
 - The developer then confirmed “all works perfect. Go next”: M1 push-before-crush is human accepted, and M2 is approved. M3 and later remain unapproved.
 - The next instruction “all works, go next” accepts M2 and authorizes M3 graph validation/diagnostics. M4 and later remain unapproved.
+- On 2026-11-11, after the M3 Retry fix deployed (run 43005063616, commit `97d3ad9`), the developer replied “accepted, go next”: M3 is human accepted and M4 seeded generation is approved. M5 and later remain unapproved.
 - Planning-only instruction on 2026-11-11: after a concept review the developer chose co-op PvE before PvP and asked for the tension/wayfinding ideas to be added to the plan. This authorizes editing `development_plan.md` only. It does not approve M4 or any later milestone, and no source code changed.
 
 ## Status
@@ -19,8 +20,9 @@
 | M0 | Human accepted on 2026-11-10 |
 | M1 | Human accepted on 2026-11-11 |
 | M2 | Human accepted on 2026-11-11 |
-| M3 | Retry correction locally verified; awaiting new CI/deployment |
-| M4–M7 | Not started |
+| M3 | Human accepted on 2026-11-11 |
+| M4 | Implemented; awaiting CI/deployment and human acceptance |
+| M5–M7 | Not started |
 | M7b (added 2026-11-11) | Not started |
 | M9 (scheduled after M7b) | Not started |
 | M8 | Not started |
@@ -113,7 +115,7 @@ The developer confirmed M1's original gates work and subsequently accepted the f
 
 ## Next action
 
-Push the verified Retry synchronization fix and verify its new Pages workflow result. Then wait for M3 manual acceptance. M4 remains unapproved.
+Confirm the M4 Pages workflow run, then wait for M4 manual acceptance. M5 remains unapproved.
 
 ### M1 crushing-gate revision — 2026-11-11
 
@@ -188,3 +190,16 @@ Push the verified Retry synchronization fix and verify its new Pages workflow re
 - Differences from the brief are recorded in the plan as dated decisions: soft heard deadline instead of none, stalker removed only by crushing, co-op before PvP. The brief itself is unchanged.
 - The developer's player-triggered trap idea is recorded as PvP-only (T10, M13b). No player-operated crush lever exists in PvE; the co-op hold lever (T9) only delays a closing gate.
 - No code, tests, dependencies or deployment changed, so the test suite was not rerun. M3 status and its pending CI/acceptance are unchanged.
+
+### M4 seeded procedural generation — 2026-11-11
+
+- M3 accepted by the developer; M4 approved. Contract: `milestones/M4.md`. M5 and later remain unapproved.
+- Sizing decision recorded in the spec and plan: cells keep M2's 12 m spacing so M5 can reuse the accepted 8 m gates. Measured over 200 seeds at 3 m/s, median shortest walk Sanctuary → outer cell is 32 s (9×9), 40 s (11×11), 48 s (13×13; worst 112 s). Chose 11×11, loop chance 0.10, a 132 m footprint.
+- Added pure `simulation/mazeGenerator.ts`: mulberry32 RNG, strict seed parsing, rings by square distance, open 3×3 Sanctuary plaza, one seeded entrance per side, Kruskal spanning tree over shuffled canonical pairs, 10 % loop edges, one landmark per ring in distinct quadrants, and bounded bridge repair so no landmark can be cut off by one connection. `GENERATOR_VERSION` `m4.1`, `serializeMaze`, 8-digit `layoutFingerprint`. About 3 ms per maze.
+- Generalised maze geometry, diagnostics, 3D view and debug map to any layout (positions centre on the grid; optional plaza carving). The hand-built maze's geometry is unchanged: all M2/M3 unit tests pass unmodified.
+- Added `game/generatedRun.ts` (movement, ring tracking, landmark visits, return) and the default M4 scene. The accepted maze moved to `?scene=maze`; `?scene=room` and `?scene=junction` are unchanged. M2/M3 browser tests now open `?scene=maze`.
+- Seed handling: `?seed=N` reproduces a layout; a missing seed is chosen and written into the address; an invalid seed is reported and replaced. Debug panel shows seed/version/fingerprint, ring colours, and a seed form with Load/Random (both reload). The dry-run probe blocks the four entrances. No gates or shifting in generated mazes (M5).
+- Unit: 697 tests in nine files pass, including 200 seeds × three layout-rule checks, pinned fingerprints, no `Math.random`, and three seeds walked physically through every landmark and home with the real movement rules. Typecheck and production build pass; main JS is about 586 kB / 150 kB gzip (existing non-failing size warning).
+- Browser (local, `CI=1`, Google Chrome via `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/google-chrome`, SwiftShader): 14 of 16 passed, including both new M4 scenarios (seed reproduction/URL/form/invalid seed; debug map, rings, rejected entrance probe, and keyboard walking out of the plaza into the inner ring) and all M0, M1 and M3 debug-map regressions. The two long M2 scenarios in `maze.spec.ts` hit their 6 min and 90 s budgets. The same 90 s scenario was rerun on the unmodified previous commit (`d64925b`) in this sandbox and failed the same way, so this is the sandbox's slower software rendering, not an M4 regression; both passed on GitHub Actions for `97d3ad9`. No timeouts or assertions were changed. GitHub Actions must confirm them for this commit.
+- Visual check of production build: start panel, plaza, corridor and debug panel inspected. Fixed unstyled seed controls and too-faint ring colours found in that review. No console or page errors.
+- Human acceptance pending: use the [M4 checklist](milestones/M4.md#human-acceptance-checklist).

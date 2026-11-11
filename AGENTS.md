@@ -2,7 +2,7 @@
 
 Read `project_brief.md`, `docs/development_plan.md`, `docs/progress.md`, and the current milestone specification before editing.
 
-- Implement only the currently approved milestone. M0–M2 are human accepted. M3 is approved; M4 and later require a new instruction after human testing.
+- Implement only the currently approved milestone. M0–M3 are human accepted. M4 is approved; M5 and later require a new instruction after human testing.
 - Each cloud task already has an isolated checkout. Use it; do not create worktrees unless requested.
 - Keep simulation and game rules independent of Three.js, DOM, storage, and networking. Rendering consumes state.
 - Prefer small explicit modules, plain types, primitive geometry, and minimal dependencies.
@@ -11,6 +11,6 @@ Read `project_brief.md`, `docs/development_plan.md`, `docs/progress.md`, and the
 - Record test evidence and limitations in `docs/progress.md`. Automated tests do not constitute human acceptance.
 - At the milestone boundary, provide launch instructions and a manual checklist, then stop. Do not start the next milestone automatically.
 
-M3 intentionally excludes random/automatic shifting, procedural generation, interaction/loot, enemies, persistence, multiplayer, art assets, gravity, sprint, jumping and map editing/teleport. The overhead view is an opt-in developer diagnostic, not a settled player navigation mechanic. Preserve M0 at `?scene=room` and M1 at `?scene=junction`. The default scene is M3 using the accepted M2 maze.
+M4 intentionally excludes gates/shifting in generated mazes, automatic shifting, interaction/loot, enemies, persistence, multiplayer, art assets, gravity, sprint, jumping and map editing/teleport. The overhead view is an opt-in developer diagnostic, not a settled player navigation mechanic. Preserve M0 at `?scene=room`, M1 at `?scene=junction` and the accepted M2/M3 maze at `?scene=maze`. The default scene is the M4 seeded maze.
 
 M1 revision authorized 2026-11-11: eight-meter crushing passages, two-second warning, four-second closing. Closing contact pushes the body ahead of the stone with swept solid collision. Crush only when the full body cannot fit against the opposing wall; contact alone is not lethal. Occupancy must not hold/cancel gates. Gates finish after death, and Retry resets the attempt. This supersedes the brief's original early no-crushing rule; see its dated amendment and the updated M1 specification. Do not add the later combat/economy death systems yet.

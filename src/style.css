@@ -92,6 +92,11 @@ kbd { font: 11px ui-monospace, monospace; min-width: 23px; height: 23px; padding
 .maze-debug li { padding: 5px 0; border-top: 1px solid #c9d6ca15; font-size: 8px; display: flex; justify-content: space-between; gap: 4px; }
 .maze-debug li output { color: #dfcb96; white-space: nowrap; }
 .debug-probe-details code { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 9px; }
+.debug-seed { margin: 0 0 10px; }
+.debug-seed label { display: flex; align-items: center; gap: 8px; font: 10px ui-monospace, monospace; color: #c5d2c3; }
+.debug-seed input { flex: 1; min-width: 0; padding: 6px 8px; border: 1px solid #c9d6ca40; border-radius: 3px; background: #10201a; color: #eee5cc; font: 11px ui-monospace, monospace; }
+.debug-seed button { margin: 8px 6px 0 0; padding: 6px 10px; border: 1px solid #c9d6ca40; border-radius: 3px; background: #334b3d; color: #eee5cc; cursor: pointer; font-size: 11px; }
+.debug-seed .debug-validation:empty { display: none; }
 [data-state='error'] .debug-toggle, [data-state='error'] .maze-debug { display: none; }
 [data-state='paused'] .shift-panel { visibility: hidden; }
 [data-state='dead'] .pause-overlay { background: #2e0c0ca8; }

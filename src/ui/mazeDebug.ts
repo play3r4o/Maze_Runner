@@ -1,6 +1,17 @@
-import { HAND_BUILT_MAZE, MAZE_WALLS, cellPosition, corridorRect, landmarkRect } from '../simulation/maze';
-import { buildMazeDiagnostics, probeSanctuaryIsolation } from '../simulation/mazeDiagnostics';
-import type { MazeRun } from '../game/mazeRun';
+import { HAND_BUILT_MAZE, MAZE_WALLS, cellPosition, corridorRect, findCell, landmarkRect, mazeExtent, plazaRect } from '../simulation/maze';
+import type { MazeLayout } from '../simulation/maze';
+import type { WallRect } from '../simulation/player';
+import type { Ring } from '../simulation/mazeGenerator';
+import { buildLayoutDiagnostics, probeSanctuaryIsolation } from '../simulation/mazeDiagnostics';
+import type { DebugView } from '../simulation/mazeDiagnostics';
+
+export type MazeDebugOptions = {
+  layout: MazeLayout; walls: readonly WallRect[];
+  // Generated mazes only: ring colouring, the entrances used by the dry-run probe, and seed controls.
+  rings?: Readonly<Record<string, Ring>>; entrances?: readonly string[];
+  seed?: { seed: number; version: string; fingerprint: string; onLoad(seed: number): void; onRandom(): void };
+};
+export const RING_COLORS: Record<Ring, string> = { sanctuary: '#bba36b', inner: '#3f8a5c', middle: '#a08a3a', outer: '#a44b5a' };
 
 function svg<K extends keyof SVGElementTagNameMap>(tag: K, attributes: Record<string, string | number>, text?: string) {
   const element = document.createElementNS('http://www.w3.org/2000/svg', tag);
@@ -9,8 +20,10 @@ function svg<K extends keyof SVGElementTagNameMap>(tag: K, attributes: Record<st
   return element;
 }
 
-export function createMazeDebug(root: HTMLElement) {
-  const layout = HAND_BUILT_MAZE;
+export function createMazeDebug(root: HTMLElement,
+  options: MazeDebugOptions = { layout: HAND_BUILT_MAZE, walls: MAZE_WALLS }) {
+  const { layout, rings, seed } = options;
+  const hasGates = layout.edges.some((edge) => edge.gate);
   const events = new AbortController();
   const toggle = document.createElement('button');
   toggle.type = 'button'; toggle.className = 'debug-toggle'; toggle.textContent = 'F2 · Debug map';
@@ -20,9 +33,14 @@ export function createMazeDebug(root: HTMLElement) {
   panel.setAttribute('aria-label', 'Developer maze diagnostics'); panel.dataset.testid = 'maze-debug';
   panel.innerHTML = `
     <p class="eyebrow">DEVELOPER GRAPH <span>F2 · hide</span></p>
+    ${seed ? `<form class="debug-seed" data-testid="debug-seed-form">
+      <p class="debug-summary">Seed <output data-testid="debug-seed">${seed.seed}</output> · ${seed.version} · layout <output data-testid="debug-fingerprint">${seed.fingerprint}</output></p>
+      <label>Seed <input data-testid="seed-input" inputmode="numeric" maxlength="10" value="${seed.seed}" aria-label="Maze seed"></label>
+      <button type="submit">Load seed</button><button type="button" data-action="random">Random</button>
+      <p class="debug-validation" data-testid="seed-error" role="alert"></p></form>` : ''}
     <p class="debug-summary">Topology <output data-testid="debug-revision">0</output> · <output data-testid="debug-phase">idle</output></p>
     <div class="debug-map"></div>
-    <p class="debug-legend">N ↑ · pale line: route · red: closed stone · amber: warning / motion</p>
+    <p class="debug-legend">${rings ? 'N ↑ · pale line: route home · rooms: gold Sanctuary, green inner, ochre middle, red outer' : 'N ↑ · pale line: route · red: closed stone · amber: warning / motion'}</p>
     <p class="debug-location" data-testid="debug-location"></p>
     <p class="debug-route" data-testid="debug-route"></p>
     <button type="button" class="debug-probe">Probe isolation <span>V · dry run</span></button>
@@ -35,20 +53,26 @@ export function createMazeDebug(root: HTMLElement) {
     <p class="debug-caution">Escape releases the cursor to inspect this panel. This is a prototype diagnostic, not a player map design.</p>`;
   root.append(toggle, panel);
   const element = <T extends HTMLElement>(selector: string) => panel.querySelector<T>(selector)!;
-  const map = svg('svg', { viewBox: '-30 -30 60 60', role: 'img', 'aria-label': 'Live maze rooms, connections, gates, player and graph route', 'data-testid': 'debug-map' });
+  const { width, depth } = mazeExtent(layout);
+  const map = svg('svg', { viewBox: `${-width / 2} ${-depth / 2} ${width} ${depth}`, role: 'img', 'aria-label': 'Live maze rooms, connections, gates, player and graph route', 'data-testid': 'debug-map' });
   element('.debug-map').append(map);
-  map.append(svg('rect', { x: -30, y: -30, width: 60, height: 60, fill: '#16291f' }));
-  for (const wall of MAZE_WALLS) map.append(svg('rect', { x: wall.minX, y: wall.minZ,
+  map.append(svg('rect', { x: -width / 2, y: -depth / 2, width, height: depth, fill: '#16291f' }));
+  const plaza = plazaRect(layout);
+  if (plaza) map.append(svg('rect', { x: plaza.minX, y: plaza.minZ, width: plaza.maxX - plaza.minX,
+    height: plaza.maxZ - plaza.minZ, fill: RING_COLORS.sanctuary, opacity: 0.55 }));
+  for (const wall of options.walls) map.append(svg('rect', { x: wall.minX, y: wall.minZ,
     width: wall.maxX - wall.minX, height: wall.maxZ - wall.minZ, fill: '#48564c' }));
   for (const cell of layout.cells) {
-    const { x, z } = cellPosition(cell);
+    const { x, z } = cellPosition(cell, layout);
+    const ring = rings?.[cell.id];
     const room = svg('rect', { x: x - 2, y: z - 2, width: 4, height: 4,
-      fill: cell.id === layout.start ? '#bba36b' : '#294536', 'data-testid': 'debug-room', 'data-cell-id': cell.id });
-    room.append(svg('title', {}, cell.id)); map.append(room);
+      fill: ring ? RING_COLORS[ring] : cell.id === layout.start ? '#bba36b' : '#294536', 'data-testid': 'debug-room', 'data-cell-id': cell.id,
+      ...(ring ? { 'data-ring': ring } : {}) });
+    room.append(svg('title', {}, ring ? `${cell.id} · ${ring}` : cell.id)); map.append(room);
   }
   const edges = layout.edges.map((edge) => {
-    const a = cellPosition(layout.cells.find((cell) => cell.id === edge.a)!);
-    const b = cellPosition(layout.cells.find((cell) => cell.id === edge.b)!);
+    const a = cellPosition(findCell(layout, edge.a), layout);
+    const b = cellPosition(findCell(layout, edge.b), layout);
     const line = svg('line', { x1: a.x, y1: a.z, x2: b.x, y2: b.z, class: 'debug-link', 'data-edge-id': edge.id });
     line.append(svg('title', {}, edge.id)); map.append(line);
     const row = document.createElement('li');
@@ -57,11 +81,11 @@ export function createMazeDebug(root: HTMLElement) {
     return { edge, line, status };
   });
   for (const cell of layout.cells) {
-    const { x, z } = cellPosition(cell);
+    const { x, z } = cellPosition(cell, layout);
     map.append(svg('text', { x, y: z + 0.45, class: 'debug-cell-label' }, `${cell.column},${cell.row}`));
   }
   for (const landmark of layout.landmarks) {
-    const rect = landmarkRect(landmark);
+    const rect = landmarkRect(landmark, layout);
     map.append(svg('rect', { x: rect.minX, y: rect.minZ, width: rect.maxX - rect.minX,
       height: rect.maxZ - rect.minZ, fill: landmark.color }));
   }
@@ -80,21 +104,33 @@ export function createMazeDebug(root: HTMLElement) {
   function setVisible(visible: boolean) {
     panel.hidden = !visible; toggle.setAttribute('aria-expanded', String(visible)); lastUpdate = -Infinity;
   }
-  function probe(run: MazeRun) {
+  function probe(view: DebugView) {
     if (panel.hidden) return;
-    const result = probeSanctuaryIsolation(layout, run.shift.openness);
+    const result = probeSanctuaryIsolation(layout, view.openness, options.entrances);
     const message = element('[data-testid="debug-probe-result"]');
     message.dataset.result = result.check.ok ? 'accepted' : 'rejected';
     message.textContent = result.check.ok ? 'Accepted dry run. No changes applied.'
-      : `Rejected dry run at revision ${run.shift.revision}: ${result.check.unreachable.length}/${layout.cells.length} cells lose a route. No changes applied.`;
+      : `Rejected dry run at revision ${view.revision}: ${result.check.unreachable.length}/${layout.cells.length} cells lose a route. No changes applied.`;
     element<HTMLDetailsElement>('.debug-probe-details').hidden = false;
     element('.debug-probe-details code').textContent = `Proposed blocked edges:\n${result.blockedEdges.join('\n')}\n\n${result.check.reason}`;
-    console.info('Maze validation dry run', { revision: run.shift.revision, ...result });
+    console.info('Maze validation dry run', { revision: view.revision, ...result });
   }
   toggle.addEventListener('click', () => setVisible(Boolean(panel.hidden)), { signal: events.signal });
   // The callback reads current state; the UI never owns or mutates maze truth.
-  let currentRun: MazeRun | null = null;
+  let currentRun: DebugView | null = null;
   element('.debug-probe').addEventListener('click', () => { if (currentRun) probe(currentRun); }, { signal: events.signal });
+  if (seed) {
+    const form = element<HTMLFormElement>('.debug-seed');
+    const error = element('[data-testid="seed-error"]');
+    form.addEventListener('submit', (event) => {
+      event.preventDefault();
+      const text = element<HTMLInputElement>('[data-testid="seed-input"]').value.trim();
+      const value = /^\d{1,10}$/.test(text) ? Number(text) : NaN;
+      if (!(value <= 0xffffffff)) { error.textContent = 'Seed must be a whole number from 0 to 4294967295.'; return; }
+      seed.onLoad(value);
+    }, { signal: events.signal });
+    form.querySelector('[data-action="random"]')!.addEventListener('click', () => seed.onRandom(), { signal: events.signal });
+  }
   return {
     toggle() { setVisible(Boolean(panel.hidden)); },
     probe,
@@ -105,21 +141,22 @@ export function createMazeDebug(root: HTMLElement) {
       element<HTMLDetailsElement>('.debug-probe-details').open = false;
       currentRun = null; lastUpdate = -Infinity;
     },
-    update(run: MazeRun, timestamp: number) {
-      currentRun = run;
+    update(view: DebugView, timestamp: number) {
+      currentRun = view;
       if (panel.hidden || timestamp - lastUpdate < 100) return;
       lastUpdate = timestamp;
-      const data = buildMazeDiagnostics(run);
-      element('[data-testid="debug-revision"]').textContent = String(run.shift.revision);
-      element('[data-testid="debug-phase"]').textContent = run.shift.phase;
-      element('[data-testid="debug-location"]').textContent = `${data.location} · X ${data.player.x.toFixed(2)} / Z ${data.player.z.toFixed(2)}`;
+      const data = buildLayoutDiagnostics(view);
+      element('[data-testid="debug-revision"]').textContent = String(view.revision);
+      element('[data-testid="debug-phase"]').textContent = hasGates ? view.phase : 'static · shifts arrive in M5';
+      const ring = rings && data.cell ? ` · ${rings[data.cell]} ring` : '';
+      element('[data-testid="debug-location"]').textContent = `${data.location}${ring} · X ${data.player.x.toFixed(2)} / Z ${data.player.z.toFixed(2)}`;
       element('[data-testid="debug-route"]').textContent = data.route ? `${data.route.edges.length} connections home from ${data.origin}.` : data.routeNote;
-      element('[data-testid="debug-plan"]').textContent = run.shift.validation?.reason ?? 'No shift checked yet.';
+      element('[data-testid="debug-plan"]').textContent = view.validation ?? (hasGates ? 'No shift checked yet.' : 'This layout has no gates yet.');
       pointer.setAttribute('transform', `translate(${data.player.x} ${data.player.z}) rotate(${-data.player.yaw * 180 / Math.PI})`);
       pointer.dataset.x = String(data.player.x); pointer.dataset.z = String(data.player.z); pointer.dataset.yaw = String(data.player.yaw);
       for (const { edge, line, status } of edges) {
         const gate = data.gates.find((gate) => gate.id === edge.gate);
-        const open = !edge.gate || run.shift.openness[edge.gate] === 1;
+        const open = !edge.gate || view.openness[edge.gate] === 1;
         line.dataset.open = String(open); line.dataset.route = String(data.route?.edges.includes(edge.id) ?? false);
         status.textContent = gate ? `${gate.status.toUpperCase()} ${Math.round(gate.openness * 100)}%` : 'OPEN';
       }

@@ -1,17 +1,20 @@
 import { BoxGeometry, CanvasTexture, Group, InstancedMesh, Matrix4, Mesh, MeshBasicMaterial,
   MeshStandardMaterial, PlaneGeometry, SRGBColorSpace } from 'three';
 import type { Scene } from 'three';
-import { HAND_BUILT_MAZE, MAZE_GATE_IDS, MAZE_WALLS, cellPosition, landmarkRect, mazeGateRect } from '../simulation/maze';
+import { HAND_BUILT_MAZE, MAZE_GATE_IDS, MAZE_WALLS, cellPosition, findCell, landmarkRect, mazeGateRect, plazaRect } from '../simulation/maze';
+import type { MazeLayout } from '../simulation/maze';
+import type { WallRect } from '../simulation/player';
 import type { MazeShift } from '../simulation/mazeShift';
 
-export function createMazeView(scene: Scene) {
+// Hand-built M2/M3 maze by default; generated layouts pass their own derived walls.
+export function createMazeView(scene: Scene, layout: MazeLayout = HAND_BUILT_MAZE, mazeWalls: readonly WallRect[] = MAZE_WALLS) {
   const group = new Group();
   scene.add(group);
   const box = new BoxGeometry(1, 1, 1);
   const wallMaterial = new MeshStandardMaterial({ color: '#929c94', roughness: 1 });
-  const walls = new InstancedMesh(box, wallMaterial, MAZE_WALLS.length);
+  const walls = new InstancedMesh(box, wallMaterial, mazeWalls.length);
   const matrix = new Matrix4();
-  MAZE_WALLS.forEach((wall, i) => walls.setMatrixAt(i, matrix.makeScale(wall.maxX - wall.minX, wall.height, wall.maxZ - wall.minZ)
+  mazeWalls.forEach((wall, i) => walls.setMatrixAt(i, matrix.makeScale(wall.maxX - wall.minX, wall.height, wall.maxZ - wall.minZ)
     .setPosition((wall.minX + wall.maxX) / 2, wall.height / 2, (wall.minZ + wall.maxZ) / 2)));
   group.add(walls);
   const geometries: (BoxGeometry | PlaneGeometry)[] = [box];
@@ -39,16 +42,18 @@ export function createMazeView(scene: Scene) {
     back.position.copy(mesh.position); back.rotation.y = rotation + Math.PI; group.add(back);
     geometries.push(mesh.geometry); materials.push(material); textures.push(texture);
   }
-  block(3.8, 0.02, 3.8, 0, 0.02, 0, '#bba36b');
+  const plaza = plazaRect(layout);
+  if (plaza) block(plaza.maxX - plaza.minX - 0.2, 0.02, plaza.maxZ - plaza.minZ - 0.2, 0, 0.02, 0, '#bba36b');
+  else block(3.8, 0.02, 3.8, 0, 0.02, 0, '#bba36b');
   sign('SANCTUARY / START', 0, 3.5, -1.8);
-  for (const landmark of HAND_BUILT_MAZE.landmarks) {
-    const rect = landmarkRect(landmark);
+  for (const landmark of layout.landmarks) {
+    const rect = landmarkRect(landmark, layout);
     block(rect.maxX - rect.minX, rect.height, rect.maxZ - rect.minZ,
       (rect.minX + rect.maxX) / 2, rect.height / 2, (rect.minZ + rect.maxZ) / 2, landmark.color);
-    const { x, z } = cellPosition(HAND_BUILT_MAZE.cells.find((cell) => cell.id === landmark.cell)!);
+    const { x, z } = cellPosition(findCell(layout, landmark.cell), layout);
     sign(landmark.name.toUpperCase(), x, 4.5, z, Math.atan2(-x, -z), landmark.color);
   }
-  const gates = MAZE_GATE_IDS.map((id) => {
+  const gates = MAZE_GATE_IDS.filter((id) => layout.edges.some((edge) => edge.gate === id)).map((id) => {
     const rect = mazeGateRect(id, 0);
     const mesh = block(rect.maxX - rect.minX, rect.height, rect.maxZ - rect.minZ, 0, rect.height / 2, 0, '#ae965f');
     const vertical = rect.maxZ - rect.minZ > rect.maxX - rect.minX;
@@ -68,7 +73,8 @@ export function createMazeView(scene: Scene) {
     return { id, mesh, outlines };
   });
   return {
-    update(state: MazeShift) {
+    update(state?: MazeShift) {
+      if (!state) return;
       for (const gate of gates) {
         const rect = mazeGateRect(gate.id, state.openness[gate.id]);
         gate.mesh.position.set((rect.minX + rect.maxX) / 2, rect.height / 2, (rect.minZ + rect.maxZ) / 2);

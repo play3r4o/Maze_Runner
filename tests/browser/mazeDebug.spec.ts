@@ -6,7 +6,7 @@ test('debug map follows movement, gate revisions/routes, rejected probes and pau
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
   page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
-  await installBrowserClock(page); await page.goto('/');
+  await installBrowserClock(page); await page.goto('/?scene=maze');
   await expect(page.getByTestId('maze-debug')).toBeHidden();
   await page.getByRole('button', { name: 'F2 · Debug map' }).click();
   await expect(page.getByTestId('maze-debug')).toBeVisible();

@@ -9,7 +9,7 @@ function watchErrors(page: Page) {
   return errors;
 }
 async function start(page: Page) {
-  await installBrowserClock(page); await page.goto('/');
+  await installBrowserClock(page); await page.goto('/?scene=maze');
   await expect(page.getByRole('heading', { name: 'Find your way home.' })).toBeVisible();
   await expect(page.getByText('DEVELOPMENT BUILD / M3 · GRAPH DIAGNOSTICS')).toBeVisible();
   await page.getByRole('button', { name: 'Start exploring' }).click();

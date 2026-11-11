@@ -8,14 +8,17 @@ import { ROOM_SIZE, ROOM_WALLS } from '../simulation/room';
 import { GATE_IDS, gateRect, JUNCTION_SIZE, JUNCTION_WALLS, openGatesFor } from '../simulation/junction';
 import type { JunctionState } from '../simulation/shift';
 import type { MazeShift } from '../simulation/mazeShift';
-import { MAZE_SIZE } from '../simulation/maze';
+import { MAZE_SIZE, mazeExtent } from '../simulation/maze';
+import type { GeneratedWorld } from '../game/generatedRun';
 import { createMazeView } from './mazeView';
 
-export function createScene(canvas: HTMLCanvasElement, mode: 'room' | 'junction' | 'maze') {
+export type SceneMode = 'room' | 'junction' | 'maze' | 'generated';
+export function createScene(canvas: HTMLCanvasElement, mode: SceneMode, generated?: GeneratedWorld) {
   const renderer = new WebGLRenderer({ canvas, antialias: true });
   const scene = new Scene();
   scene.background = new Color('#a8b3b0');
-  const camera = new PerspectiveCamera(75, 1, 0.05, 150);
+  const generatedSize = generated ? mazeExtent(generated.maze).width : 0;
+  const camera = new PerspectiveCamera(75, 1, 0.05, Math.max(150, generatedSize * 1.5));
   camera.rotation.order = 'YXZ';
 
   scene.add(new HemisphereLight('#edf3ed', '#535b55', 2.5));
@@ -26,7 +29,7 @@ export function createScene(canvas: HTMLCanvasElement, mode: 'room' | 'junction'
   const floorMaterial = new MeshStandardMaterial({ color: '#68746e', roughness: 1 });
   const wallMaterial = new MeshStandardMaterial({ color: '#929c94', roughness: 1 });
   const blockMaterial = new MeshStandardMaterial({ color: '#69776f', roughness: 1 });
-  const floorSize = mode === 'room' ? ROOM_SIZE : mode === 'maze' ? MAZE_SIZE : JUNCTION_SIZE;
+  const floorSize = mode === 'room' ? ROOM_SIZE : mode === 'maze' ? MAZE_SIZE : mode === 'generated' ? generatedSize : JUNCTION_SIZE;
   const floor = new Mesh(new PlaneGeometry(floorSize, floorSize), floorMaterial);
   floor.rotation.x = -Math.PI / 2;
   scene.add(floor);
@@ -35,7 +38,7 @@ export function createScene(canvas: HTMLCanvasElement, mode: 'room' | 'junction'
   grid.position.y = 0.005;
   scene.add(grid);
 
-  const wallMeshes = (mode === 'room' ? ROOM_WALLS : mode === 'maze' ? [] : JUNCTION_WALLS).map((wall) => {
+  const wallMeshes = (mode === 'room' ? ROOM_WALLS : mode === 'junction' ? JUNCTION_WALLS : []).map((wall) => {
     const mesh = new Mesh(
       new BoxGeometry(wall.maxX - wall.minX, wall.height, wall.maxZ - wall.minZ),
       wall.id === 'block' ? blockMaterial : wallMaterial,
@@ -45,7 +48,8 @@ export function createScene(canvas: HTMLCanvasElement, mode: 'room' | 'junction'
     return mesh;
   });
 
-  const mazeView = mode === 'maze' ? createMazeView(scene) : null;
+  const mazeView = mode === 'maze' ? createMazeView(scene)
+    : mode === 'generated' && generated ? createMazeView(scene, generated.maze, generated.walls) : null;
   const gates = mode !== 'junction' ? [] : GATE_IDS.map((id) => {
     const rect = gateRect(id, 0);
     const material = new MeshStandardMaterial({ color: '#ae965f', roughness: 1 });
@@ -108,7 +112,7 @@ export function createScene(canvas: HTMLCanvasElement, mode: 'room' | 'junction'
   resize();
 
   return {
-    render(player: PlayerState, yaw: number, pitch: number, junction: JunctionState, maze: MazeShift) {
+    render(player: PlayerState, yaw: number, pitch: number, junction: JunctionState, maze?: MazeShift) {
       mazeView?.update(maze);
       for (const gate of gates) {
         const rect = gateRect(gate.id, junction.openness[gate.id]);

@@ -11,6 +11,7 @@
 - The developer then confirmed “all works perfect. Go next”: M1 push-before-crush is human accepted, and M2 is approved. M3 and later remain unapproved.
 - The next instruction “all works, go next” accepts M2 and authorizes M3 graph validation/diagnostics. M4 and later remain unapproved.
 - On 2026-11-11, after the M3 Retry fix deployed (run 43005063616, commit `97d3ad9`), the developer replied “accepted, go next”: M3 is human accepted and M4 seeded generation is approved. M5 and later remain unapproved.
+- On 2026-11-11 the developer replied “okay, all looks and works good” after testing the deployed M6: M6 is human accepted. M7 has not been approved yet.
 - On 2026-11-11 the developer replied “all works, go next” after testing the deployed M5: M5 is human accepted and M6 reproduction/stability tools are approved. M7 and later remain unapproved.
 - On 2026-11-11 the developer replied “all works, go next” after testing the deployed M4: M4 is human accepted and M5 safe generated-maze shifts are approved. M6 and later remain unapproved.
 - Planning-only instruction on 2026-11-11: after a concept review the developer chose co-op PvE before PvP and asked for the tension/wayfinding ideas to be added to the plan. This authorizes editing `development_plan.md` only. It does not approve M4 or any later milestone, and no source code changed.
@@ -25,7 +26,7 @@
 | M3 | Human accepted on 2026-11-11 |
 | M4 | Human accepted on 2026-11-11 |
 | M5 | Human accepted on 2026-11-11 |
-| M6 | Deployed (run 43060010059); awaiting human acceptance |
+| M6 | Human accepted on 2026-11-11 |
 | M7 | Not started |
 | M7b (added 2026-11-11) | Not started |
 | M9 (scheduled after M7b) | Not started |
@@ -119,7 +120,7 @@ The developer confirmed M1's original gates work and subsequently accepted the f
 
 ## Next action
 
-Wait for M6 manual acceptance. M7 remains unapproved. M6 remains unapproved. 
+Wait for explicit approval to start M7. M7 remains unapproved. M6 remains unapproved. 
 
 ### M1 crushing-gate revision — 2026-11-11
 

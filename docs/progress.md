@@ -23,7 +23,7 @@
 | M2 | Human accepted on 2026-11-11 |
 | M3 | Human accepted on 2026-11-11 |
 | M4 | Human accepted on 2026-11-11 |
-| M5 | Implemented; awaiting CI/deployment and human acceptance |
+| M5 | Implemented; CI blocked by runner DNS failure, not deployed |
 | M6–M7 | Not started |
 | M7b (added 2026-11-11) | Not started |
 | M9 (scheduled after M7b) | Not started |
@@ -218,4 +218,5 @@ Confirm the M5 Pages workflow run, then wait for M5 manual acceptance. M6 remain
 - Unit: 908 tests in ten files pass, including 200 seeds of gate rules, plan validation and isolation rejection with a fixture, determinism, bounded log, **100 seeds × 100 shifts** with connectivity checked at every 0.25 s step (10 000 accepted shifts, none rejected because static corridors guarantee connectivity), and physical push-then-crush, mechanism-after-death, Retry and escape-while-pushed on three seeds. A first version of the escape test started at the passage centre and was crushed: from the middle of an 8 m passage there is not enough time once pushing starts (intended danger). The test now starts 1.5 m from the end.
 - Browser (local Google Chrome, SwiftShader): all three generated-maze scenarios pass (seed reproduction and form; debug map with rings, eight gates, rejected entrance probe, walking out of the plaza; G shift with warning, named gates, revision 2, accepted and ignored log entries, completed shift). M3 debug map, all four M1 junction and all seven M0 room checks pass. The two long M2 `maze.spec.ts` scenarios were not rerun locally: they exceed their budgets in this sandbox on unmodified code too (see M4 entry); GitHub Actions is the check for them.
 - Visual check (seed 41, gate G7 straight north of the plaza): warning outline and `G7 / 8m CRUSH` sign, slab sliding in from its pocket during closing, debug map showing all gates, the closing gate and the updated route home. No console or page errors.
+- Commit `63e4167` pushed to main. GitHub Actions run 43038433908 failed twice (original and one re-run) at **Install test browser**: the runner could not resolve `azure.archive.ubuntu.com` while `playwright install --with-deps` fetched apt packages (exit 100). **Test simulation** (unit suite) passed in CI both times; the browser suite and deployment did not run. This is a runner network failure, not a code failure; nothing in the workflow was changed. The live site still serves M4 until a run succeeds.
 - Human acceptance pending: use the [M5 checklist](milestones/M5.md#human-acceptance-checklist).

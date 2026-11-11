@@ -37,6 +37,18 @@ export function stepPlayer(
   const dx = (strafe * Math.cos(player.yaw) - forward * Math.sin(player.yaw)) * distance;
   const dz = (-forward * Math.cos(player.yaw) - strafe * Math.sin(player.yaw)) * distance;
 
+  return movePlayerBy(player, dx, dz, walls);
+}
+
+// Shared swept collision for walking and displacement imposed by moving stone.
+// Gate displacement is not capped by the player's voluntary walking speed.
+export function movePlayerBy(
+  player: PlayerState,
+  dx: number,
+  dz: number,
+  walls: readonly WallRect[],
+): PlayerState {
+
   let x = player.x + dx;
   for (const wall of walls) {
     const minX = wall.minX - PLAYER_HALF_WIDTH;

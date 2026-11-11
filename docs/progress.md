@@ -7,13 +7,14 @@
 - On 2026-11-10 the developer authorized GitHub hosting to make the prototype playable without a local installation. Approved pushes use the existing Pages workflow.
 - The developer confirmed M0 mouse/WASD/collision worked, then confirmed all remaining manual checks passed and explicitly approved the next step. M0 is accepted; M1 is approved. M2 and later are not approved to start.
 - On 2026-11-11 the developer confirmed the original gates work, then requested lethal contact instead of obstruction holds, slower closing, and longer crossings. This authorizes an M1 revision with death/Retry; M2 remains unapproved. Proposed tuning defaults are 8 m passages, 2 s warning and 4 s closing.
+- Follow-up instruction on 2026-11-11: the wall must push the character toward the opposite wall first, and kill only when the remaining gap cannot fit the body. This supersedes immediate contact death. Existing passage length/timings remain; M2 is still unapproved.
 
 ## Status
 
 | Milestone | Status |
 | --- | --- |
 | M0 | Human accepted on 2026-11-10 |
-| M1 | Original gates confirmed working; lethal revision locally verified, awaiting deployment/manual acceptance |
+| M1 | Original lethal revision deployed; push-before-crush follow-up locally verified, awaiting deployment/manual acceptance |
 | M2–M8 | Not started |
 | M9 (scheduled after M7) | Not started |
 | M10–M12 | Not started |
@@ -104,7 +105,7 @@ The developer confirmed M1's original gates work and requested the lethal revisi
 
 ## Next action
 
-Complete verification and deploy the approved lethal-gate revision, then stop for M1 manual results. Do not start M2 without acceptance and explicit approval.
+Deploy the approved push-before-crush follow-up, verify the workflow result, then wait for revised M1 manual checks. Do not start M2 without acceptance and explicit approval.
 
 ### M1 crushing-gate revision — 2026-11-11
 
@@ -115,4 +116,14 @@ Complete verification and deploy the approved lethal-gate revision, then stop fo
 - Updated tests to the new requirements: crush contact in all four directions, late entry, body footprint, no premature death, retreat/outside safety, stationary-gate blocking, continued motion after death and clean Retry. Final validation passed: 53 unit tests across four files, TypeScript/build, and all 11 production-browser checks (four revised M1 scenarios plus seven M0 regressions). No skips or retries. Longer M1 scenarios use a 90 s test budget because they execute every frame of the longer walks/animations.
 - Warning assertions advance 200 ms of controlled time so they sample beyond the HUD's 100 ms diagnostic interval. Initial checks at exactly one interval could read the previous idle label; the two-second gameplay warning was not shortened or bypassed.
 - Production screenshots of instructions, eight-meter passage, closing marks, crush screen and Retry were visually inspected. The visual browser run observed no console/page errors. System Chromium 156/full headless/SwiftShader was used locally; GitHub's matching bundled-browser deployment run is still to be confirmed.
-- The source changes are ready for the approved Pages workflow. Human acceptance of this revised lethal behavior remains pending.
+- Commit `aed8dfc` was pushed to main. GitHub Actions run [42983560785](https://github.com/play3r4o/Maze_Runner/actions/runs/42983560785) passed build (3m 1s) and deployment (12s), overall 3m 21s. The public summary confirms `https://play3r4o.github.io/Maze_Runner/`. Use `?v=aed8dfc` for a fresh request and check M1 / CRUSHING GATES. Human acceptance of this revised lethal behavior remains pending.
+- This deployment result is recorded locally for the next source checkpoint, avoiding an otherwise redundant documentation-only deployment.
+
+### M1 push-before-crush follow-up — 2026-11-11
+
+- Replaced immediate contact death with collision-constrained kinematic pushing. Closing stone sweeps the character ahead of its leading face; the same displacement collision routine used by walking clamps against real static walls and other gates. Gates continue without occupancy holds or cancellation.
+- Death occurs only if the resolved player footprint still overlaps the advanced gate: the body cannot fit against the opposing obstacle. Exact 0.6 m clearance survives; the next narrower step kills. Without an opposing wall, closing can push the player clear and is not inherently fatal. No pushing through solids, automatic escape teleport, or forced camera rotation.
+- Player input along the corridor remains active while being pushed. HUD reports the pushing gate and prompts escape. The camera follows the displaced body; terminal death/continued mechanism/Retry behavior remains. Dead/Retry state clears push feedback. Eight-meter passages, two-second warning, four-second closing and outer route are unchanged.
+- Updated brief amendment, architecture, M1 specification, README and agent instructions so future work follows push-before-crush instead of the earlier contact-death rule.
+- Verification passed: 58 unit tests, TypeScript/build and all 11 production-browser checks in 2.2 minutes. Added/updated checks cover push-before-death in all four directions, exact fit and narrower gap, no opposing wall, large gate displacement, resistance without tunneling, escape while pushed, dead input and clean Retry. The full browser test checks visible camera-position displacement while still alive, pinning at the wall, death, continued closure and reset. No tests were skipped/retried.
+- Separate production-browser screenshots were visually inspected at initial pushing, a narrow but survivable gap, and final pinning/death. The camera follows the sideways displacement and the HUD changes from escape feedback to Crushed/Retry. No console/page errors were observed. Local verification used system Chromium 156/full headless/SwiftShader; GitHub deployment confirmation and human acceptance remain pending. No M2 work started.

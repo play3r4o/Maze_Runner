@@ -6,7 +6,7 @@ Purpose of this document: Give Codex enough context to turn the concept into an 
 
 Design amendment — 2026-11-11
 
-The developer revised the early nonlethal gate rule after testing M1: closing stone should kill a player it physically catches, rather than hold or cancel. Prototype defaults are a two-second warning, four-second closing movement and eight-meter-long danger passages. Keep the longer outer detour, clear visual warnings, physical contact detection, and a death/Retry flow. This amendment supersedes conflicting no-crushing/occupied-gate-abort statements below. Other scope limits remain in force.
+The developer revised the early nonlethal gate rule after testing M1. Updated after follow-up feedback: closing stone first pushes the character toward the opposite wall, and kills only when there is no longer enough space for the full body to fit. Contact alone is not lethal. Gates never hold/cancel for occupancy, and the player can still escape along the passage while being pushed. Defaults remain a two-second warning, four-second closing and eight-meter-long danger passages. Keep the longer outer detour, clear warnings, collision-constrained pushing, and death/Retry. This amendment supersedes conflicting no-crushing rules below and the first instant-kill-on-contact prototype. Other scope limits remain in force.
 
 1. Executive summary
 

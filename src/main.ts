@@ -71,7 +71,7 @@ function startRoom() {
       scene.render(player, state.yaw, state.pitch, run.junction);
     }
     hud.updatePosition(player, timestamp);
-    if (mode === 'junction') hud.updateJunction(run.junction, timestamp);
+    if (mode === 'junction') hud.updateJunction(run.junction, timestamp, run.pushedBy);
     frameId = requestAnimationFrame(frame);
   }
   frameId = requestAnimationFrame(frame);

@@ -47,11 +47,11 @@ Early contracts: PlayerState/MoveIntent/WallRect/stepPlayer; stable maze cell an
 
 ### Collision and shift rules
 
-Start planar: square player footprint, rectangular walls, swept X then Z movement against inflated bounds, fixed camera height. Render and collision use the same geometry descriptors. No gravity, slopes, rigid bodies, pushing or stairs. Consider Rapier only through a focused experiment if the simple controller cannot reliably handle demonstrated requirements.
+Start planar: square player footprint, rectangular walls, swept X then Z movement against inflated bounds, fixed camera height. Render and collision use the same geometry descriptors. Gate-imposed pushing uses the same swept movement routine; general rigid-body simulation, gravity, slopes and stairs remain deferred. Consider Rapier only through a focused experiment if the simple controller cannot reliably handle demonstrated requirements.
 
-M1 shifts warn, open replacement routes first, then close existing routes. Validate intermediate and final connectivity. Per the developer's 2026-11-11 revision, occupancy no longer stops or cancels closure: moving stone kills on physical swept-body contact. Use a two-second warning, four-second closing, eight-meter danger passages and a longer safe outer loop. Rendered stone and collision use the same pose. Pause freezes the living attempt; after death the mechanism finishes while the player cannot move, and Retry resets the attempt. No forced displacement or live-player embedding. One shift plan at a time.
+M1 shifts warn, open replacement routes first, then close existing routes. Validate intermediate and final connectivity. Per the developer's 2026-11-11 revision, occupancy no longer stops or cancels closure: moving stone pushes the player ahead of its leading face; crushing occurs only if the remaining physical space cannot fit the body against an opposing solid. Use a two-second warning, four-second closing, eight-meter danger passages and a longer safe outer loop. Rendered stone and collision use the same pose. Pause freezes the living attempt; after death the mechanism finishes while the player cannot move, and Retry resets the attempt. Gate-imposed displacement respects solid collisions; no teleporting through walls or living-player embedding. One shift plan at a time.
 
-Decision record, 2026-11-11: lethal gates intentionally replace the original early nonlethal rule after the developer tested M1. Long means distance along the player's crossing direction, not only slab width. The first trade-off is a risky short crossing versus a safe longer detour; loot rewards remain deferred to M7/M8. Death/Retry moves forward from later death-loop work only as needed for this gate prototype.
+Decision record, 2026-11-11: lethal gates intentionally replace the original early nonlethal rule after the developer tested M1. Follow-up feedback replaces instant contact death with physical pushing followed by crushing when the body no longer fits. Escape input remains usable while being pushed. Long means distance along the player's crossing direction, not only slab width. The first trade-off is a risky short crossing versus a safe longer detour; loot rewards remain deferred to M7/M8. Death/Retry moves forward from later death-loop work only as needed for this gate prototype.
 
 ## Milestones
 
@@ -73,8 +73,8 @@ All milestones inherit the common completion checks above. S/M/L describes relat
 - **Components:** Pure gate state machine, arrangement fixtures, moving colliders, warning, debug key, rejection display.
 - **Order:** Fixture → gate states/travel paths → warning/timing → simulation-driven animation → swept crush detection/death/Retry → diagnostics.
 - **Human:** Explore both states, trigger ten changes, stand in each closing path and try entering during movement.
-- **Automated:** Phase ordering, repeat triggers, swept crush contact, escape timing, uninterrupted closure, death/Retry, intermediate collision.
-- **Done:** Readable two-second warning and four-second closure, eight-meter passages, lethal physical contact, a usable escape/detour and clean Retry; no living-player clipping.
+- **Automated:** Phase ordering, repeat triggers, collision-constrained pushing, minimum body clearance, escape while pushed, uninterrupted closure, death/Retry.
+- **Done:** Readable two-second warning and four-second closure, eight-meter passages, visible push-before-crush, a usable escape/detour and clean Retry; no living-player clipping.
 - **Avoid:** Random/automatic pacing, full maze, polished sound, physics-engine integration.
 
 ### M2 — Tiny hand-built maze (M)
@@ -113,7 +113,7 @@ All milestones inherit the common completion checks above. S/M/L describes relat
 - **Components:** Eligible edges, candidate planner, temporary/final graph checks, M1 crush/contact rules, revisions/logs.
 - **Order:** Select a few dynamic edges → plan → validate → phase execution → revision/cancellation logging.
 - **Human:** Force 50 changes across seeds, test crossing/retreat/death, visit outer cells during shifts.
-- **Automated:** 100 seeds × 100 attempted shifts: accepted plans retain all-cell reachability, intermediate safety, reject isolation and detect lethal swept contact consistently.
+- **Automated:** 100 seeds × 100 attempted shifts: accepted plans retain all-cell reachability, intermediate safety, reject isolation and resolve gate pushing and insufficient body clearance consistently.
 - **Done:** No accepted plan isolates a region; reasons are observable; physical tests show no embedded player/impossible accepted passage.
 - **Avoid:** Concurrent plans, whole-maze movement, final run-duration guarantees. Graph tests do not prove physical safety.
 
@@ -234,7 +234,7 @@ All milestones inherit the common completion checks above. S/M/L describes relat
 | Feature creep | High/very high | Each gate | One weapon/creature; defer progression |
 | Imitation/IP | Medium/medium | Pre-art review | Original names, lore, architecture and motifs |
 
-Defaults/decision checkpoints: solo release accepted; no player map initially (review M7); developer map M3; lethal closing gates with warnings and physical contact M1 (revised 2026-11-11); connected extraction and objective alternatives M4–5; 3–5 min/no deadline M7; six non-stacking slots M8; crossbow only M11; fixed safe Sanctuary; garden/workshop optional M14; authoritative two-client ephemeral sessions M9. Accounts, hosting, matchmaking and online progression require separate later planning. Record any change and update acceptance criteria rather than silently treating proposals as requirements.
+Defaults/decision checkpoints: solo release accepted; no player map initially (review M7); developer map M3; closing gates that push before crushing with insufficient body clearance M1 (revised 2026-11-11); connected extraction and objective alternatives M4–5; 3–5 min/no deadline M7; six non-stacking slots M8; crossbow only M11; fixed safe Sanctuary; garden/workshop optional M14; authoritative two-client ephemeral sessions M9. Accounts, hosting, matchmaking and online progression require separate later planning. Record any change and update acceptance criteria rather than silently treating proposals as requirements.
 
 ## Testing and AI-friendly workflow
 

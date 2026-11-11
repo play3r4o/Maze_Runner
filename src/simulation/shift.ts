@@ -22,7 +22,7 @@ export function createJunctionState(): JunctionState {
     phase: 'idle', phaseSeconds: 0,
     openness: { north: 1, east: 0, south: 1, west: 0 },
     settled: 'north-south', target: 'east-west', completedShifts: 0,
-    notice: 'Press G to change routes. Closing gates crush. The outer loop is the safer detour.',
+    notice: 'Press G to change routes. Stone pushes, then crushes when you no longer fit. The outer loop is safer.',
   };
 }
 
@@ -38,7 +38,7 @@ export function requestShift(state: JunctionState): JunctionState {
   }
   return {
     ...state, phase: 'warning', phaseSeconds: 0,
-    notice: `${state.target === 'east-west' ? 'East / west' : 'North / south'} will open. Leave closing passages before the stone reaches you.`,
+    notice: `${state.target === 'east-west' ? 'East / west' : 'North / south'} will open. Leave closing passages before the gap becomes too narrow.`,
   };
 }
 
@@ -81,6 +81,6 @@ export function advanceShift(state: JunctionState, dtSeconds: number): JunctionS
     settled: finished ? state.target : state.settled,
     target: finished ? (state.target === 'east-west' ? 'north-south' : 'east-west') : state.target,
     completedShifts: state.completedShifts + Number(finished),
-    notice: finished ? 'Shift complete. Press G again after the cooldown.' : 'Stone closing. Clear the entire marked passage!',
+    notice: finished ? 'Shift complete. Press G again after the cooldown.' : 'Stone closing. Escape along the passage before you are pinned!',
   });
 }

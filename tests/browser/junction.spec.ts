@@ -61,7 +61,7 @@ test('warned shift opens a blocked long passage and closes the old routes', asyn
   expect(errors).toEqual([]);
 });
 
-test('closing stone kills, keeps moving after death, and Retry resets the attempt', async ({ page }, testInfo) => {
+test('stone pushes while the body fits, crushes at the wall, and Retry resets the attempt', async ({ page }, testInfo) => {
   const errors = watchErrors(page);
   await start(page);
   await walk(page, 'KeyW', 2700);
@@ -73,16 +73,29 @@ test('closing stone kills, keeps moving after death, and Retry resets the attemp
   await expect(page.getByTestId('shift-phase')).toHaveAttribute('data-phase', 'closing');
   await expect(page.getByTestId('hud')).toHaveAttribute('data-state', 'running');
   await page.clock.runFor(2100);
+  const pushed = await position(page);
+  await expect(page.getByTestId('hud')).toHaveAttribute('data-state', 'running');
+  await expect(page.getByTestId('shift-phase')).toHaveText('Being pushed · escape');
+  expect(pushed.x).toBeLessThan(stopped.x - 0.25);
+  expect(pushed.x).toBeGreaterThan(-1.7);
+  expect(pushed.z).toBe(stopped.z);
+  await page.clock.runFor(1000);
+  await expect(page.getByTestId('hud')).toHaveAttribute('data-state', 'running');
+  expect((await position(page)).x).toBeLessThan(pushed.x);
+  await page.clock.runFor(500);
   await expect(page.getByRole('heading', { name: 'Crushed.' })).toBeVisible();
   await expect(page.getByTestId('hud')).toHaveAttribute('data-state', 'dead');
-  await expect(page.getByText(/The NORTH gate caught you/)).toBeVisible();
+  await expect(page.getByText(/The NORTH gate pinned you against the opposite wall/)).toBeVisible();
+  const pinned = await position(page);
+  expect(pinned.x).toBeCloseTo(-1.7, 2);
+  expect(pinned.z).toBe(stopped.z);
   await expect.poll(() => page.evaluate(() => document.pointerLockElement)).toBeNull();
   await testInfo.attach('crushed', { body: await page.screenshot(), contentType: 'image/png' });
   await page.keyboard.press('KeyG');
   await walk(page, 'KeyW', 2000);
   await expect(page.getByTestId('gate-north')).toHaveText('CLOSED');
   await expect(page.getByTestId('shift-count')).toHaveText('1 shift');
-  expect(await position(page)).toEqual(stopped);
+  expect(await position(page)).toEqual(pinned);
   await page.getByRole('button', { name: 'Retry', exact: true }).click();
   await expect(page.getByTestId('hud')).toHaveAttribute('data-state', 'running');
   await page.clock.runFor(120);
@@ -95,12 +108,15 @@ test('closing stone kills, keeps moving after death, and Retry resets the attemp
   expect(errors).toEqual([]);
 });
 
-test('retreating out of the long danger zone before contact survives the closing', async ({ page }) => {
+test('walking along the passage escapes while the wall is already pushing', async ({ page }) => {
   const errors = watchErrors(page);
   await start(page);
   await walk(page, 'KeyW', 2700);
   await page.keyboard.press('KeyG');
   await page.clock.runFor(3500);
+  await page.clock.runFor(1850);
+  await expect(page.getByTestId('shift-phase')).toHaveText('Being pushed · escape');
+  expect((await position(page)).x).toBeLessThan(-0.05);
   await walk(page, 'KeyS', 1100);
   expect((await position(page)).z).toBeGreaterThan(-5.7);
   await page.clock.runFor(3200);

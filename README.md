@@ -17,7 +17,7 @@ Open Vite's printed address in a current desktop browser. The development server
 
 Click **Start exploring** to capture the mouse. **WASD** moves, **mouse** looks, **G** requests a gate shift, and **Escape** pauses/releases the cursor. Click **Resume exploring** to continue. Switching tabs or losing focus pauses and clears movement and pending shift requests.
 
-The default scene is a four-way junction with **eight-meter-long crushing passages**. NORTH/SOUTH initially open. G gives a two-second warning, opens the other pair, then closes the old pair over four seconds. A closing slab kills when it reaches your body; it never waits or cancels because you are in the way. Markings and signs identify the full danger zone. At normal speed the passage takes about 2.7 seconds to cross. Use the longer outside loop when a crossing is too risky.
+The default scene is a four-way junction with **eight-meter-long crushing passages**. NORTH/SOUTH initially open. G gives a two-second warning, opens the other pair, then closes the old pair over four seconds. A closing slab pushes you toward the opposite wall. It kills only when the remaining space cannot fit your whole body, and never waits or cancels for occupancy. You can walk along the passage and escape while being pushed. Markings and signs identify the full danger zone. At normal speed the passage takes about 2.7 seconds to cross. Use the longer outside loop when a crossing is too risky.
 
 If crushed, the cursor releases and a **Retry** button appears. Gates finish closing behind the death screen. Retry resets player position/look, gates and shift count, then reacquires the mouse. Pausing while alive still freezes the mechanism.
 

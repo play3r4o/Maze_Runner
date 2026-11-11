@@ -25,7 +25,7 @@
 | M3 | Human accepted on 2026-11-11 |
 | M4 | Human accepted on 2026-11-11 |
 | M5 | Human accepted on 2026-11-11 |
-| M6 | Implemented; awaiting CI/deployment and human acceptance |
+| M6 | Deployed (run 43060010059); awaiting human acceptance |
 | M7 | Not started |
 | M7b (added 2026-11-11) | Not started |
 | M9 (scheduled after M7b) | Not started |
@@ -119,7 +119,7 @@ The developer confirmed M1's original gates work and subsequently accepted the f
 
 ## Next action
 
-Confirm the M6 Pages workflow run, then wait for M6 manual acceptance. M7 remains unapproved. M6 remains unapproved. 
+Wait for M6 manual acceptance. M7 remains unapproved. M6 remains unapproved. 
 
 ### M1 crushing-gate revision — 2026-11-11
 
@@ -236,4 +236,5 @@ Confirm the M6 Pages workflow run, then wait for M6 manual acceptance. M7 remain
 - Bug found by the browser test: SVG cell labels intercepted clicks on rooms. Map elements other than rooms now ignore pointer events.
 - Unit: 960 tests in eleven files pass, including 40 scripted sessions reproduced exactly (coverage asserted: mid-shift, completed, frozen and teleported states), a crushed-run reproduction, continuation equivalence for 400 steps, two named scenarios, strict parsing cases, teleport validity of every room on three seeds in two gate poses, bounded events.
 - Browser (local Google Chrome, SwiftShader): three new M6 scenarios pass (freeze and teleport with events; mid-closing report copied on seed 41, loaded from seed 1, identical revision, G7 openness, position and phase; wrong-version refusal; ten Random seeds in a row with matching fingerprints and no page errors). Rerun after M6 UI changes: all three generated-maze scenarios, M3 debug map, M0 pointer-lock movement. The long M2 scenarios and the remaining M1/M0 tests are left to GitHub Actions as before.
+- Commit `36a53e4` pushed. GitHub Actions run 43060010059 passed the full suite (unit, all browser scenarios including the long M2 ones) and deployed in 12m 52s. Test at `https://play3r4o.github.io/Maze_Runner/?v=36a53e4`. This note is committed locally for the next checkpoint.
 - Human acceptance pending: use the [M6 checklist](milestones/M6.md#human-acceptance-checklist).

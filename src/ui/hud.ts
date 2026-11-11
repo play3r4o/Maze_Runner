@@ -3,13 +3,18 @@ import { GATE_IDS, openGatesFor } from '../simulation/junction';
 import type { GateId } from '../simulation/junction';
 import type { JunctionState } from '../simulation/shift';
 import { WARNING_SECONDS } from '../simulation/shift';
+import { HAND_BUILT_MAZE, MAZE_GATE_IDS } from '../simulation/maze';
+import type { MazeRun } from '../game/mazeRun';
 
-export function createHud(root: HTMLElement, scene: 'room' | 'junction') {
+export function createHud(root: HTMLElement, scene: 'room' | 'junction' | 'maze') {
   const isJunction = scene === 'junction';
-  const startTitle = isJunction ? 'The walls can move.' : 'A place to begin.';
+  const isMaze = scene === 'maze';
+  const hasGates = isJunction || isMaze;
+  const gateIds = isMaze ? MAZE_GATE_IDS : GATE_IDS;
+  const startTitle = isMaze ? 'Find your way home.' : isJunction ? 'The walls can move.' : 'A place to begin.';
   root.innerHTML = `
     <header class="prototype-header">
-      <span class="eyebrow">DEVELOPMENT BUILD / ${isJunction ? 'M1 · PUSH &amp; CRUSH' : 'M0'}</span>
+      <span class="eyebrow">DEVELOPMENT BUILD / ${isMaze ? 'M2 · HAND-BUILT MAZE' : isJunction ? 'M1 · PUSH &amp; CRUSH' : 'M0'}</span>
       <p class="wordmark">Shifting Labyrinth<span>Working title</span></p>
     </header>
     <div class="session-status" role="status" aria-live="polite">
@@ -18,33 +23,36 @@ export function createHud(root: HTMLElement, scene: 'room' | 'junction') {
     <div class="crosshair" aria-hidden="true"></div>
     <section class="pause-overlay" aria-labelledby="panel-title">
       <div class="pause-panel">
-        <p class="eyebrow">MILESTONE ${isJunction ? '01 · SINGLE JUNCTION' : '00'}</p>
+        <p class="eyebrow">MILESTONE ${isMaze ? '02 · TINY MAZE' : isJunction ? '01 · SINGLE JUNCTION' : '00'}</p>
         <h1 id="panel-title">${startTitle}</h1>
-        <p class="panel-description">${isJunction ? 'Moving stone pushes you toward the opposite wall. Escape the 8-meter passage before the gap becomes too narrow to fit, or take the outer loop. Press G to shift.' : 'One room. Four walls. The foundation for a changing maze.'}</p>
+        <p class="panel-description">${isMaze ? 'Leave the warm Sanctuary marker, find three colored landmarks, then return home. G swaps two gate shortcuts. The 8-meter stone passages push and crush; permanent corridors offer detours. Learn the routes as you explore.' : isJunction ? 'Moving stone pushes you toward the opposite wall. Escape the 8-meter passage before the gap becomes too narrow to fit, or take the outer loop. Press G to shift.' : 'One room. Four walls. The foundation for a changing maze.'}</p>
         <div class="control-list" aria-label="Controls">
           <p><span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span><span>Move</span></p>
           <p><span class="control-name">Mouse</span><span>Look around</span></p>
           <p><span><kbd>Esc</kbd></span><span>Pause &amp; release cursor</span></p>
-          ${isJunction ? '<p><span><kbd>G</kbd></span><span>Request a shift</span></p>' : ''}
+          ${hasGates ? '<p><span><kbd>G</kbd></span><span>Request a shift</span></p>' : ''}
         </div>
         <button type="button" class="start-button">Start exploring <span aria-hidden="true">&gt;</span></button>
         <p class="panel-hint" data-message>Click to capture your mouse. Press Escape to release it.</p>
       </div>
     </section>
-    ${isJunction ? `
-      <aside class="shift-panel" aria-label="Junction status">
-        <p class="eyebrow">JUNCTION CONTROL <span data-testid="shift-count">0 shifts</span></p>
+    ${hasGates ? `
+      <aside class="shift-panel" aria-label="${isMaze ? 'Maze' : 'Junction'} status">
+        <p class="eyebrow">${isMaze ? 'MAZE' : 'JUNCTION'} CONTROL <span data-testid="shift-count">0 shifts</span></p>
         <p class="shift-phase" data-testid="shift-phase">Ready</p>
         <p class="shift-layout" data-testid="shift-layout">North / south open</p>
-        <div class="gate-statuses">${GATE_IDS.map((id) => `<div><span>${id.toUpperCase()}</span><output data-testid="gate-${id}"></output></div>`).join('')}</div>
+        <div class="gate-statuses">${gateIds.map((id) => `<div><span>${id.toUpperCase()}</span><output data-testid="gate-${id}"></output></div>`).join('')}</div>
         <p class="shift-notice" data-testid="shift-notice" role="status">Press G to change routes.</p>
         <p class="shift-help"><kbd>G</kbd> SHIFT <span>Escape before the gap closes around you.</span></p>
+        ${isMaze ? `<div class="navigation-check"><p class="eyebrow">NAVIGATION CHECK</p>
+          ${HAND_BUILT_MAZE.landmarks.map((landmark) => `<p><span class="landmark-dot" style="background:${landmark.color}"></span>${landmark.name}<output data-testid="visit-${landmark.id}">—</output></p>`).join('')}
+          <p class="return-status" data-testid="return-status" role="status">Visit all three, then return.</p></div>` : ''}
       </aside>` : ''}
     <footer class="diagnostics">
-      <span class="diagnostics-label">${isJunction ? 'JUNCTION' : 'ROOM'} TEST <span class="separator">/</span> POSITION</span>
+      <span class="diagnostics-label">${isMaze ? 'MAZE' : isJunction ? 'JUNCTION' : 'ROOM'} TEST <span class="separator">/</span> POSITION</span>
       <span>X <output data-testid="position-x">0.00</output></span>
-      <span>Z <output data-testid="position-z">${isJunction ? '0.00' : '8.00'}</output></span>
-      <span class="footer-controls">WASD · MOVE ${isJunction ? '<span class="separator">/</span> G · SHIFT' : ''} <span class="separator">/</span> ESC · PAUSE</span>
+      <span>Z <output data-testid="position-z">${hasGates ? '0.00' : '8.00'}</output></span>
+      <span class="footer-controls">WASD · MOVE ${hasGates ? '<span class="separator">/</span> G · SHIFT' : ''} <span class="separator">/</span> ESC · PAUSE</span>
     </footer>
   `;
 
@@ -66,11 +74,14 @@ export function createHud(root: HTMLElement, scene: 'room' | 'junction') {
   let hasStarted = false;
   let lastPositionUpdate = -Infinity;
   let lastJunctionUpdate = -Infinity;
-  const phase = isJunction ? element<HTMLElement>('[data-testid="shift-phase"]') : null;
-  const layout = isJunction ? element<HTMLElement>('[data-testid="shift-layout"]') : null;
-  const count = isJunction ? element<HTMLElement>('[data-testid="shift-count"]') : null;
-  const notice = isJunction ? element<HTMLElement>('[data-testid="shift-notice"]') : null;
-  const gateLabels = isJunction ? GATE_IDS.map((id) => ({ id, label: element<HTMLElement>(`[data-testid="gate-${id}"]`) })) : [];
+  const phase = hasGates ? element<HTMLElement>('[data-testid="shift-phase"]') : null;
+  const layout = hasGates ? element<HTMLElement>('[data-testid="shift-layout"]') : null;
+  const count = hasGates ? element<HTMLElement>('[data-testid="shift-count"]') : null;
+  const notice = hasGates ? element<HTMLElement>('[data-testid="shift-notice"]') : null;
+  const gateLabels = hasGates ? gateIds.map((id) => ({ id, label: element<HTMLElement>(`[data-testid="gate-${id}"]`) })) : [];
+  const visits = isMaze ? HAND_BUILT_MAZE.landmarks.map((landmark) => ({ id: landmark.id,
+    label: element<HTMLElement>(`[data-testid="visit-${landmark.id}"]`) })) : [];
+  const returnStatus = isMaze ? element<HTMLElement>('[data-testid="return-status"]') : null;
 
   root.dataset.state = 'paused';
 
@@ -116,10 +127,36 @@ export function createHud(root: HTMLElement, scene: 'room' | 'junction') {
       overlay.hidden = false;
       title.textContent = 'Crushed.';
       mode.textContent = 'CRUSHED';
-      description.textContent = `The ${gate.toUpperCase()} gate pinned you against the opposite wall. There was no longer enough room for your body. Escape earlier or use the outer loop.`;
-      message.textContent = 'Retry starts a fresh attempt at the central junction.';
+      description.textContent = `The ${gate.toUpperCase()} gate pinned you against the opposite wall. There was no longer enough room for your body. Escape earlier or use ${isMaze ? 'a permanent detour' : 'the outer loop'}.`;
+      message.textContent = `Retry starts a fresh attempt at ${isMaze ? 'Sanctuary' : 'the central junction'}.`;
       button.textContent = 'Retry';
       button.focus({ preventScroll: true });
+    },
+    updateMaze(run: MazeRun, timestamp: number) {
+      if (!phase || !layout || !count || !notice || timestamp - lastJunctionUpdate < 100) return;
+      lastJunctionUpdate = timestamp;
+      const state = run.shift;
+      const labels = { idle: 'Ready · press G', warning: `Shift in ${(WARNING_SECONDS - state.phaseSeconds).toFixed(1)}s`,
+        opening: 'Opening new shortcut', closing: run.pushedBy ? 'Being pushed · escape' : 'Closing · squeeze hazard', cooldown: 'Cooling down' };
+      phase.textContent = labels[state.phase]; phase.dataset.phase = state.phase;
+      layout.textContent = `${state.settled.toUpperCase()} shortcut arrangement`;
+      count.textContent = `${state.completedShifts} shift${state.completedShifts === 1 ? '' : 's'}`;
+      notice.textContent = run.pushedBy ? `${run.pushedBy.toUpperCase()} stone is pushing you. Escape along the passage!` : state.notice;
+      for (const { id, label } of gateLabels) {
+        if (id !== 'north' && id !== 'east') continue;
+        const value = state.openness[id];
+        const text = value === 1 ? 'OPEN' : value === 0 ? 'CLOSED' : state.phase === 'closing' && id !== state.target ? 'CLOSING' : 'OPENING';
+        label.textContent = text; label.dataset.status = text.toLowerCase();
+      }
+      for (const { id, label } of visits) {
+        label.textContent = run.visited.includes(id) ? 'FOUND' : '—';
+        label.dataset.visited = String(run.visited.includes(id));
+      }
+      if (returnStatus) {
+        returnStatus.textContent = run.returned ? 'Returned to Sanctuary · route check complete.'
+          : run.visited.length === 3 ? 'All landmarks found · return to Sanctuary.' : `${run.visited.length}/3 found · visit all three, then return.`;
+        returnStatus.dataset.complete = String(run.returned);
+      }
     },
     resetAttempt() {
       root.dataset.state = 'paused';

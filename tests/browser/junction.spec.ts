@@ -14,7 +14,7 @@ function watchErrors(page: Page) {
 
 async function start(page: Page) {
   await installBrowserClock(page);
-  await page.goto('/');
+  await page.goto('/?scene=junction');
   await expect(page.getByRole('heading', { name: 'The walls can move.' })).toBeVisible();
   await page.getByRole('button', { name: 'Start exploring' }).click();
   await expect.poll(() => page.evaluate(() => document.pointerLockElement?.id)).toBe('scene');

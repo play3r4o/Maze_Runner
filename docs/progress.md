@@ -8,14 +8,16 @@
 - The developer confirmed M0 mouse/WASD/collision worked, then confirmed all remaining manual checks passed and explicitly approved the next step. M0 is accepted; M1 is approved. M2 and later are not approved to start.
 - On 2026-11-11 the developer confirmed the original gates work, then requested lethal contact instead of obstruction holds, slower closing, and longer crossings. This authorizes an M1 revision with death/Retry; M2 remains unapproved. Proposed tuning defaults are 8 m passages, 2 s warning and 4 s closing.
 - Follow-up instruction on 2026-11-11: the wall must push the character toward the opposite wall first, and kill only when the remaining gap cannot fit the body. This supersedes immediate contact death. Existing passage length/timings remain; M2 is still unapproved.
+- The developer then confirmed “all works perfect. Go next”: M1 push-before-crush is human accepted, and M2 is approved. M3 and later remain unapproved.
 
 ## Status
 
 | Milestone | Status |
 | --- | --- |
 | M0 | Human accepted on 2026-11-10 |
-| M1 | Original lethal revision deployed; push-before-crush follow-up locally verified, awaiting deployment/manual acceptance |
-| M2–M8 | Not started |
+| M1 | Human accepted on 2026-11-11 |
+| M2 | Locally verified; awaiting GitHub deployment/manual acceptance |
+| M3–M8 | Not started |
 | M9 (scheduled after M7) | Not started |
 | M10–M12 | Not started |
 | M13 | Conditional, not started |
@@ -75,7 +77,7 @@ At the end of the original M0 implementation, changes were local to this cloud c
 
 M0 accepted: the developer confirmed mouse movement, WASD, collision, then all remaining checks (pause/resume, switching tabs, movement edges, camera/resize and reload) passed. CPU/GPU/browser reference details are not yet supplied; performance targets are not yet verified.
 
-The developer confirmed M1's original gates work and requested the lethal revision. Acceptance of that revision is pending; use the [updated M1 checklist](milestones/M1.md#human-checklist).
+The developer confirmed M1's original gates work and subsequently accepted the final push-before-crush revision with “all works perfect. Go next” on 2026-11-11. M2 is approved; use the [M2 checklist](milestones/M2.md#human-checklist) for its separate acceptance.
 
 ### M1 implementation — 2026-11-10
 
@@ -105,7 +107,7 @@ The developer confirmed M1's original gates work and requested the lethal revisi
 
 ## Next action
 
-Deploy the approved push-before-crush follow-up, verify the workflow result, then wait for revised M1 manual checks. Do not start M2 without acceptance and explicit approval.
+Verify the M2 GitHub deployment and remaining visual evidence, then wait for M2 manual acceptance. Do not start M3 without acceptance and explicit approval.
 
 ### M1 crushing-gate revision — 2026-11-11
 
@@ -126,4 +128,22 @@ Deploy the approved push-before-crush follow-up, verify the workflow result, the
 - Player input along the corridor remains active while being pushed. HUD reports the pushing gate and prompts escape. The camera follows the displaced body; terminal death/continued mechanism/Retry behavior remains. Dead/Retry state clears push feedback. Eight-meter passages, two-second warning, four-second closing and outer route are unchanged.
 - Updated brief amendment, architecture, M1 specification, README and agent instructions so future work follows push-before-crush instead of the earlier contact-death rule.
 - Verification passed: 58 unit tests, TypeScript/build and all 11 production-browser checks in 2.2 minutes. Added/updated checks cover push-before-death in all four directions, exact fit and narrower gap, no opposing wall, large gate displacement, resistance without tunneling, escape while pushed, dead input and clean Retry. The full browser test checks visible camera-position displacement while still alive, pinning at the wall, death, continued closure and reset. No tests were skipped/retried.
-- Separate production-browser screenshots were visually inspected at initial pushing, a narrow but survivable gap, and final pinning/death. The camera follows the sideways displacement and the HUD changes from escape feedback to Crushed/Retry. No console/page errors were observed. Local verification used system Chromium 156/full headless/SwiftShader; GitHub deployment confirmation and human acceptance remain pending. No M2 work started.
+- Separate production-browser screenshots were visually inspected at initial pushing, a narrow but survivable gap, and final pinning/death. The camera follows the sideways displacement and the HUD changes from escape feedback to Crushed/Retry. No console/page errors were observed. Local verification used system Chromium 156/full headless/SwiftShader; human acceptance remains pending. No M2 work started.
+- Commit `3616052` was pushed to main. GitHub Actions run [42986945991](https://github.com/play3r4o/Maze_Runner/actions/runs/42986945991) completed successfully, including the existing test/build and Pages deployment workflow. Test the update at `https://play3r4o.github.io/Maze_Runner/?v=3616052` and check the M1 / PUSH & CRUSH label.
+- A direct live-page fetch from this workspace returned proxy HTTP 403, so hosted asset contents were not independently compared. Deployment success is confirmed by the public Actions result; physical input and live-page acceptance remain the developer's manual check.
+- Deployment evidence is recorded locally after the source checkpoint to avoid a redundant documentation-only deployment. Await human acceptance of the changed physical behavior.
+
+### M2 hand-built maze — 2026-11-11
+
+- M1 is human accepted. M2 is approved by the developer's explicit instruction to continue; M3 is not approved.
+- Added a fixed 5×5 layout with 25 stable cell IDs, 31 adjacent edges, two gate shortcuts, a central Sanctuary start and three colored landmark pillars. Static corridors keep all cells connected when both gates are unavailable. This is handwritten data, not procedural generation.
+- Corridor rectangles and the complement of rooms/passages determine static walls; rendering and walking use the same descriptors. Twelve-meter spacing leaves eight-meter crushing passages with four-meter width and solid pockets. Recorded the sizing departure from M4's proposed six-meter cells for review before generation.
+- Extracted M1's accepted push resolver into a pure shared moving-wall routine. Both scenes retain warning/open/close/cooldown, constrained pushing, insufficient-clearance death, mechanism continuation and Retry. No physics dependency or change to movement speed was added.
+- Default route now opens M2; `?scene=room` and `?scene=junction` preserve M0/M1. M2 tracks physical arrival at three landmark rooms and a subsequent return to Sanctuary; this is a navigation checklist without loot, extraction rewards or persistence. Retry clears the attempt.
+- Repeated static walls use one instanced mesh; gates, warning outlines, labels and landmark colors are simple geometry. No assets, frameworks, accounts, network stack, map/teleport or automatic shifts were added. Landmark signs face toward the central area.
+- Initial unit-route testing exposed a test-helper error: floating-point near-zero displacement selected an unwanted diagonal input. The helper now treats near-zero components as zero; all 71 unit tests then passed.
+- The first browser navigation run reached the correct home room but failed its exact centering assertion by one 0.05 m fixed tick after a 1.7 m retreat. The test now reads visible position and finishes that retreat with actual keyboard nudges; it never sets game state. Original position, closure, visit and return assertions remain. The targeted complete navigation check passed in 3.7 minutes at 1280×800. Other 12 browser checks passed in the initial full run.
+- The final navigation test uses the supported 960×640 viewport to reduce software-WebGL cost and a six-minute budget for its full walk at unchanged game speed, with every frame/fixed tick executed. Final full-suite validation, visual inspection and deployment evidence follow below; human acceptance remains pending.
+- Full local validation passed: 71 unit tests, strict TypeScript, production build and all 13 browser checks in 5.3 minutes, one worker, no skips/retries. The two M2 scenarios verify physical landmark arrival, closed-shortcut collision, a usable detour, all-landmark return, pause during pushing, crush/death and Retry; M0/M1 regressions remain green.
+- Visually inspected the captured Sanctuary, changed-route, landmark-visit and completed-return states. A mirrored reverse-side sign was found and corrected with separate front-facing text planes sharing geometry/material. After that visual-only correction, unit tests/build/type check passed again; a separate production browser confirmed readable gate labels and the Amber approach. Remaining landmark views and GitHub's full test/deployment run are recorded next.
+- Local checks use system Chromium 156/full headless/SwiftShader; Actions uses its bundled Chromium. Main JS output is about 565.52 kB minified / 142.79 kB gzip, retaining the existing non-failing Vite size warning. No dependencies, thresholds or performance claims were added.

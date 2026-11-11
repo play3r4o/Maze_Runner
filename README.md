@@ -1,8 +1,8 @@
 # Shifting Labyrinth
 
-Working title. A browser game project starting with a small, first-person shifting-maze prototype. **M0 is accepted; M1, one shifting junction, is implemented for manual testing.** Extraction and the wider maze are later milestones.
+Working title. A browser game project starting with a small, first-person shifting-maze prototype. **M0 and M1 are accepted; M2, a tiny hand-built maze, is ready for manual testing.** Extraction and procedural generation are later milestones.
 
-Read [the brief](project_brief.md), [development plan](docs/development_plan.md), [M1 specification](docs/milestones/M1.md), and [current progress](docs/progress.md).
+Read [the brief](project_brief.md), [development plan](docs/development_plan.md), [M2 specification](docs/milestones/M2.md), and [current progress](docs/progress.md).
 
 ## Run
 
@@ -17,11 +17,13 @@ Open Vite's printed address in a current desktop browser. The development server
 
 Click **Start exploring** to capture the mouse. **WASD** moves, **mouse** looks, **G** requests a gate shift, and **Escape** pauses/releases the cursor. Click **Resume exploring** to continue. Switching tabs or losing focus pauses and clears movement and pending shift requests.
 
-The default scene is a four-way junction with **eight-meter-long crushing passages**. NORTH/SOUTH initially open. G gives a two-second warning, opens the other pair, then closes the old pair over four seconds. A closing slab pushes you toward the opposite wall. It kills only when the remaining space cannot fit your whole body, and never waits or cancels for occupancy. You can walk along the passage and escape while being pushed. Markings and signs identify the full danger zone. At normal speed the passage takes about 2.7 seconds to cross. Use the longer outside loop when a crossing is too risky.
+The default scene is a **fixed 5×5 maze**. Start at the warm Sanctuary floor marker. Find the **Amber Spire**, **Blue Beacon** and **Rose Pillar**, then return to Sanctuary; the navigation checklist records physical visits and your return. The colored pillars and signs are geometric placeholders. This is a route-finding exercise, with no rewards, collectibles or saved progress.
 
-If crushed, the cursor releases and a **Retry** button appears. Gates finish closing behind the death screen. Retry resets player position/look, gates and shift count, then reacquires the mouse. Pausing while alive still freezes the mechanism.
+Two **eight-meter-long crushing shortcuts** alternate: NORTH initially opens and EAST starts closed. G gives a two-second warning, opens the replacement, then closes the old shortcut over four seconds. A closing slab pushes you toward the opposite wall. It kills only when the remaining space cannot fit your whole body, and never waits or cancels for occupancy. You can walk along the passage and escape while being pushed. Markings and signs identify the full danger zone. At normal speed the passage takes about 2.7 seconds to cross. Permanent corridors provide longer detours; every room remains reachable even with both shortcuts closed.
 
-Follow the [M1 manual checklist](docs/milestones/M1.md#human-checklist) before approving M2. The accepted M0 reference room is retained by adding `?scene=room` to the page URL. Neither prototype has an objective, jumping or sprinting yet.
+If crushed, the cursor releases and a **Retry** button appears. Gates finish closing behind the death screen. Retry resets player position/look, gates, shift count and landmark visits, then reacquires the mouse. Pausing while alive still freezes the mechanism.
+
+Follow the [M2 manual checklist](docs/milestones/M2.md#human-checklist) before approving M3. Accepted reference scenes remain available: `?scene=room` for M0 and `?scene=junction` for M1. There is no map, teleport, automatic shifting, jumping or sprinting yet.
 
 ## Check and build
 
@@ -70,15 +72,16 @@ One-time repository setup:
 
 For the current repository, the expected default URL is `https://play3r4o.github.io/Maze_Runner/`. It becomes usable only after GitHub reports a successful deployment; an expected URL alone is not proof of publication.
 
-Open the game in a desktop browser tab and click **Start exploring**. No local Node.js installation is required for the hosted version. After a new deployment, refresh and check the M1 header before testing the junction.
+Open the game in a desktop browser tab and click **Start exploring**. No local Node.js installation is required for the hosted version. After a new deployment, refresh and check the **M2 · HAND-BUILT MAZE** header; remove `scene=room` or `scene=junction` from the URL to play M2.
 
 If Pages is unavailable for the repository's visibility or account plan, keep those settings unchanged and report the limitation. Enabling Pages does not require adding credentials to the game or creating a separate server.
 
 ## Structure
 
-- `src/simulation`: plain room data and pure movement/collision, no Three.js or browser imports.
+- `src/simulation`: pure movement/collision, shared moving-wall pushing, fixed maze cells/edges, geometry derivation and shift rules; no Three.js or browser imports.
+- `src/game`: run state, navigation checklist, death and resets.
 - `src/input`: browser input produces movement intentions.
-- `src/rendering`: Three.js scene/camera built from the room data.
+- `src/rendering`: Three.js scene/camera built from simulation geometry; repeated maze walls use one instanced mesh.
 - `src/ui`: DOM HUD and pause/errors.
 - `src/loop.ts`: testable fixed-step timing.
 - `tests`: pure rule tests and production-browser checks.
@@ -87,4 +90,4 @@ The local npm cache is ignored `.cache/npm` to work inside restricted cloud work
 
 Stop the development server before reinstalling dependencies and restart it afterward. If Vite reports an outdated optimized dependency after an install, restart the server rather than changing application code.
 
-Next milestone is M2 (a tiny hand-built maze), **after M1 human acceptance and explicit approval**. Approved GitHub pushes trigger the Pages workflow; a successful local build alone does not establish a successful hosted deployment.
+Next milestone is M3 (graph validation and visible diagnostics), **after M2 human acceptance and explicit approval**. Approved GitHub pushes trigger the Pages workflow; a successful local build alone does not establish a successful hosted deployment.

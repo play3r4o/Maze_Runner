@@ -87,6 +87,8 @@ All milestones inherit the common completion checks above. S/M/L describes relat
 - **Done:** The fixture is navigable with no separately handwritten mesh truth.
 - **Avoid:** Seeds, collectibles, complex rooms, polished landmarks.
 
+M2 implementation contract: `milestones/M2.md`. Hand-built cells use 12 m spacing and 4 m corridors so the accepted 8 m gates fit in actual solid wall pockets. M4's original six-meter cells are therefore provisional: choose module sizing compatible with these hazards before generation. M2 adds a visit/return navigation checklist only; M7 remains the extraction gate. Reference scenes remain available via query parameters.
+
 ### M3 — Graph validation and visible diagnostics (M)
 
 - **Build/why:** Inspect simulation truth before procedural complexity.

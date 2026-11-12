@@ -11,6 +11,7 @@
 - The developer then confirmed “all works perfect. Go next”: M1 push-before-crush is human accepted, and M2 is approved. M3 and later remain unapproved.
 - The next instruction “all works, go next” accepts M2 and authorizes M3 graph validation/diagnostics. M4 and later remain unapproved.
 - On 2026-11-11, after the M3 Retry fix deployed (run 43005063616, commit `97d3ad9`), the developer replied “accepted, go next”: M3 is human accepted and M4 seeded generation is approved. M5 and later remain unapproved.
+- M7b, 2026-11-12 13:32: “works well but I would want it to be a toggle with c and LMB… When done, you can go ahead directly with the next step.” M7b is treated as human accepted with the chalk toggle as its last change. No written rules-on/off comparison was given. The next milestone has not been chosen.
 - M7 verdict, 2026-11-12: “all seems to be working fine and it's okay in terms of fun. We need way more traps and enemies so it's a bit harder as now it's quite easy. But that is for later on. Continue with next step.” M7 is accepted with an okay-fun verdict; difficulty is too low. Traps and enemies are deferred to their planned milestones (M10 stalker, M12 traps) and should be expanded there; M7b pressure rules are approved next. M8 and later remain unapproved.
 - On 2026-11-11 the developer replied “okay, all looks and works good” after testing the deployed M6: M6 is human accepted. At 20:21 they replied “go next”: M7 complete solo extraction is approved. M7b and later remain unapproved.
 - On 2026-11-11 the developer replied “all works, go next” after testing the deployed M5: M5 is human accepted and M6 reproduction/stability tools are approved. M7 and later remain unapproved.
@@ -29,7 +30,7 @@
 | M5 | Human accepted on 2026-11-11 |
 | M6 | Human accepted on 2026-11-11 |
 | M7 | Human accepted 2026-11-12 (okay fun, too easy) |
-| M7b (added 2026-11-11) | Deployed with free-draw chalk (run 43203946222); awaiting the comparison |
+| M7b (added 2026-11-11) | Human accepted 2026-11-12 (chalk toggle deployed in run 43211237014) |
 | M9 (scheduled after M7b) | Not started |
 | M8 | Not started |
 | M10–M12 | Not started |

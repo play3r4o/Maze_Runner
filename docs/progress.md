@@ -29,7 +29,7 @@
 | M5 | Human accepted on 2026-11-11 |
 | M6 | Human accepted on 2026-11-11 |
 | M7 | Human accepted 2026-11-12 (okay fun, too easy) |
-| M7b (added 2026-11-11) | Implemented; awaiting CI/deployment and the comparison |
+| M7b (added 2026-11-11) | Deployed (run 43182160127); awaiting the comparison |
 | M9 (scheduled after M7b) | Not started |
 | M8 | Not started |
 | M10–M12 | Not started |
@@ -121,7 +121,7 @@ The developer confirmed M1's original gates work and subsequently accepted the f
 
 ## Next action
 
-Confirm the M7b Pages workflow run, then stop for the rules-on versus rules-off comparison. M8 and M9 remain unapproved. M7 remains unapproved. M6 remains unapproved. 
+Stop for the rules-on versus rules-off comparison. M8 and M9 remain unapproved. M7 remains unapproved. M6 remains unapproved. 
 
 ### M1 crushing-gate revision — 2026-11-11
 
@@ -265,4 +265,5 @@ Confirm the M7b Pages workflow run, then stop for the rules-on versus rules-off 
 - Unit: 1180 tests in thirteen files pass (10 new M7b tests plus all earlier ones, which run with every rule on by default).
 - Browser (local Google Chrome, SwiftShader): both M7b scenarios pass (chalk marks and map, audio running with sounds played on a shift, rule switch in the address and after reload, mute; bell at 150 s with notice and event, NIGHT with a 10 s interval at 240 s via reports, hash-only report link); all generated-maze, M6 and M7 scenarios pass after updating headers and the report format; M3 debug map and all M0 room checks pass. Bells and night are reached through bug reports that set the run clock, rather than simulating minutes of frames.
 - Visual check: chalk arrows on the plaza point the drawn directions after the height fix. No page errors.
+- Commit `65876ca` pushed. GitHub Actions run 43182160127 passed the full suite (unit and all 24 browser scenarios, including the long M1/M2 tests) and deployed in 18m 27s, on the first attempt. Test at `https://play3r4o.github.io/Maze_Runner/?v=65876ca`. This note is committed locally for the next checkpoint.
 - Human comparison pending: see the [M7b checklist](milestones/M7b.md#human-acceptance-checklist).

@@ -331,4 +331,5 @@ Stop for the rules-on versus rules-off comparison. M8 and M9 remain unapproved. 
 - Found while testing: footstep noise was cleared by the monster step that same tick, so it is now emitted after combat and heard on the next step, like trap noises.
 - Unit: 1426 tests pass, 7 new. Browser: new scenarios pass (jam prompt and F, thread on the map; a death leaves a cairn on the next run of the same seed and not another). Loot and solo scenarios updated for the free spool. Visual check: cairn, faded drawing and red thread read clearly.
 - Full local browser suite: all 31 scenarios pass (27.9 min); after the input fix, the key-dependent scenarios (room, loot, stage 2, monsters, pressure) pass again.
+- Commit `3bf236b`: GitHub Actions run 43256834841 passed all 31 browser scenarios on the first attempt and deployed (31m 56s). Test at `https://play3r4o.github.io/Maze_Runner/?v=3bf236b`. This note is committed locally for the next checkpoint.
 - Human acceptance pending: see the [M8 checklist](milestones/M8.md#human-acceptance-checklist-after-stage-2).

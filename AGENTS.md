@@ -2,7 +2,7 @@
 
 Read `project_brief.md`, `docs/development_plan.md`, `docs/progress.md`, and the current milestone specification before editing.
 
-- Implement only the currently approved milestone. M0–M7b are human accepted. M10 (monsters, widened) and M12 (traps, widened) are approved together with the minimal M11 crossbow and player health; M8, M9 and later require a new instruction after human testing.
+- Implement only the currently approved milestone. M0–M7b and M10 + M12 (widened monsters and traps, with the minimal M11 crossbow and player health) are human accepted. M8, M9 and later require a new instruction.
 - Each cloud task already has an isolated checkout. Use it; do not create worktrees unless requested.
 - Keep simulation and game rules independent of Three.js, DOM, storage, and networking. Rendering consumes state.
 - Prefer small explicit modules, plain types, primitive geometry, and minimal dependencies.

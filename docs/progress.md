@@ -11,6 +11,7 @@
 - The developer then confirmed “all works perfect. Go next”: M1 push-before-crush is human accepted, and M2 is approved. M3 and later remain unapproved.
 - The next instruction “all works, go next” accepts M2 and authorizes M3 graph validation/diagnostics. M4 and later remain unapproved.
 - On 2026-11-11, after the M3 Retry fix deployed (run 43005063616, commit `97d3ad9`), the developer replied “accepted, go next”: M3 is human accepted and M4 seeded generation is approved. M5 and later remain unapproved.
+- M10 + M12 verdict, 2026-11-12 16:03: “all works, what's next?” M10 + M12 (traps, health, monsters, Warden, minimal M11 crossbow) is human accepted. The next milestone has not been chosen.
 - M10 + M12, 2026-11-12 14:06: “let's do 10 and 12. For 10 I want more monsters. Some that can be killed by me and others “bosses” that cannot but can be lured into traps. I want … traps. Places you step that trigger traps. Balls rolling, spike from the side/ground, holes opening and anything else …” Approved together: several monster kinds (killable ones and unkillable bosses that die only to traps or gates), pressure-plate traps (rolling boulder, wall spears, floor spikes, opening pit, dart volleys, swinging blade). Killing monsters needs a weapon, so the plan's minimal M11 crossbow and player health come with it. M8 and M9 remain unapproved. Delivered in two stages: traps and health, then monsters and the crossbow.
 - M7b, 2026-11-12 13:32: “works well but I would want it to be a toggle with c and LMB… When done, you can go ahead directly with the next step.” M7b is treated as human accepted with the chalk toggle as its last change. No written rules-on/off comparison was given. The next milestone has not been chosen.
 - M7 verdict, 2026-11-12: “all seems to be working fine and it's okay in terms of fun. We need way more traps and enemies so it's a bit harder as now it's quite easy. But that is for later on. Continue with next step.” M7 is accepted with an okay-fun verdict; difficulty is too low. Traps and enemies are deferred to their planned milestones (M10 stalker, M12 traps) and should be expanded there; M7b pressure rules are approved next. M8 and later remain unapproved.
@@ -34,7 +35,7 @@
 | M7b (added 2026-11-11) | Human accepted 2026-11-12 (chalk toggle deployed in run 43211237014) |
 | M9 (scheduled after M7b) | Not started |
 | M8 | Not started |
-| M10 + M12 (with minimal M11 crossbow) | Implemented; human acceptance pending |
+| M10 + M12 (with minimal M11 crossbow) | Human accepted 2026-11-12 (deployed in run 43227058037) |
 | M10–M12 | Not started |
 | M13 (co-op PvE) | Conditional, not started |
 | M13b (PvP, added 2026-11-11) | Conditional, not started |

@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import type { Page } from '@playwright/test';
 import { installBrowserClock, freezeBrowserClock, clickWithBrowserFrames } from './clock';
 import { generateMaze, layoutFingerprint } from '../../src/simulation/mazeGenerator';
+import { REPORT_FORMAT } from '../../src/game/runReport';
 
 function watchErrors(page: Page) {
   const errors: string[] = [];
@@ -93,7 +94,7 @@ test('a copied report reloads its seed and reproduces gate state and position ex
 
   // Malformed and wrong-version reports are refused with a reason.
   await page.locator('.debug-report summary').click();
-  await page.getByTestId('report-text').fill('{"format":3,"version":"m4.1"}');
+  await page.getByTestId('report-text').fill(JSON.stringify({ format: REPORT_FORMAT, version: 'm4.1' }));
   await page.getByRole('button', { name: 'Load report' }).click();
   await expect(page.getByTestId('debug-tool-status')).toContainText('Report not loaded: Report is from generator m4.1');
   expect(errors).toEqual([]);

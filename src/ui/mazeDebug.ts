@@ -2,6 +2,7 @@ import { HAND_BUILT_MAZE, MAZE_WALLS, cellPosition, corridorRect, findCell, land
 import type { MazeLayout } from '../simulation/maze';
 import type { WallRect } from '../simulation/player';
 import type { Ring } from '../simulation/mazeGenerator';
+import type { RuleKey } from '../game/pressure';
 import { buildLayoutDiagnostics, probeSanctuaryIsolation } from '../simulation/mazeDiagnostics';
 import type { DebugView } from '../simulation/mazeDiagnostics';
 
@@ -14,6 +15,8 @@ export type MazeDebugOptions = {
   tools?: {
     config: string; teleports: readonly { label: string; cell: string }[];
     onFreeze(): string; onTeleport(cell: string): string; onCopyReport(): string; onLoadReport(text: string): string;
+    // M7b rule switches (development only).
+    rules?: readonly RuleKey[]; onRule?(key: RuleKey, on: boolean): string;
   };
 };
 export const RING_COLORS: Record<Ring, string> = { sanctuary: '#bba36b', inner: '#3f8a5c', middle: '#a08a3a', outer: '#a44b5a' };
@@ -51,6 +54,8 @@ export function createMazeDebug(root: HTMLElement,
     ${options.tools ? `<section class="debug-tools" aria-label="Debug tools">
       <p class="debug-caution">${options.tools.config} · tick <output data-testid="debug-tick">0</output> · page errors <output data-testid="debug-errors">0</output></p>
       <p class="debug-caution" data-testid="debug-run"></p>
+      ${options.tools.rules ? `<div class="debug-tool-row debug-rules" data-testid="debug-rules" aria-label="Rules">Rules: ${options.tools.rules.map((key) =>
+        `<label><input type="checkbox" data-rule="${key}" checked> ${key}</label>`).join('')}</div>` : ''}
       <div class="debug-tool-row"><button type="button" data-action="freeze" data-testid="debug-freeze" aria-pressed="false">Freeze shifts</button>
         <button type="button" data-action="copy-report">Copy report</button></div>
       <div class="debug-tool-row" aria-label="Teleport">${options.tools.teleports.map((item) =>
@@ -117,6 +122,9 @@ export function createMazeDebug(root: HTMLElement,
       class: 'debug-gate-label' }, edge.gate === 'north' ? 'N' : edge.gate === 'east' ? 'E' : edge.gate!.toUpperCase()));
     return { id: edge.gate!, rect };
   });
+  // M7b chalk marks: small arrows in the direction drawn.
+  const chalkLayer = svg('g', { 'data-testid': 'debug-chalk' });
+  map.append(chalkLayer);
   const pointer = svg('g', { class: 'debug-player', 'data-testid': 'debug-player' });
   pointer.append(svg('rect', { x: -0.3, y: -0.3, width: 0.6, height: 0.6, fill: '#fff6d6' }),
     svg('path', { d: 'M 0 0 L 0 -1.9 M -.55 -1.2 L 0 -1.9 L .55 -1.2', fill: 'none', stroke: '#fff6d6', 'stroke-width': 0.35 }));
@@ -158,6 +166,9 @@ export function createMazeDebug(root: HTMLElement,
       return 'Report copied (also shown below). Paste it into the bug description.';
     });
     on('[data-action="load-report"]', () => tools.onLoadReport(element<HTMLTextAreaElement>('[data-testid="report-text"]').value));
+    for (const box of panel.querySelectorAll<HTMLInputElement>('[data-rule]')) {
+      box.addEventListener('change', () => status(tools.onRule?.(box.dataset.rule as RuleKey, box.checked) ?? ''), { signal: events.signal });
+    }
     for (const button of panel.querySelectorAll<HTMLButtonElement>('[data-teleport]')) {
       button.addEventListener('click', () => status(tools.onTeleport(button.dataset.teleport!)), { signal: events.signal });
     }
@@ -199,6 +210,16 @@ export function createMazeDebug(root: HTMLElement,
         element('[data-testid="debug-tick"]').textContent = String(view.tools.tick);
         element('[data-testid="debug-errors"]').textContent = String(view.tools.errors);
         element('[data-testid="debug-run"]').textContent = view.tools.run;
+        const marks = view.tools.chalk ?? [];
+        if (chalkLayer.childElementCount !== marks.length) {
+          chalkLayer.replaceChildren(...marks.map((mark) => svg('path', { d: 'M0 1.2 L0 -1.2 M-0.8 -0.4 L0 -1.2 L0.8 -0.4', fill: 'none',
+            stroke: '#f4f1e6', 'stroke-width': 0.35, 'data-testid': 'debug-chalk-mark',
+            transform: `translate(${mark.x} ${mark.z}) rotate(${mark.headingIndex * 45})` })));
+        }
+        for (const [key, on] of Object.entries(view.tools.rules ?? {})) {
+          const box = panel.querySelector<HTMLInputElement>(`[data-rule="${key}"]`);
+          if (box && box.checked !== on) box.checked = on;
+        }
         const freeze = element('[data-testid="debug-freeze"]');
         freeze.setAttribute('aria-pressed', String(view.tools.frozen));
         freeze.textContent = view.tools.frozen ? 'Resume shifts' : 'Freeze shifts';

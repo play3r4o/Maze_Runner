@@ -12,6 +12,7 @@ export class BrowserInput {
   private pitch = 0;
   private shiftRequested = false;
   private interactRequested = false;
+  private chalkRequested = false;
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -35,6 +36,9 @@ export class BrowserInput {
       } else if (event.code === 'KeyE') {
         event.preventDefault();
         if (!event.repeat) this.interactRequested = true;
+      } else if (event.code === 'KeyC') {
+        event.preventDefault();
+        if (!event.repeat) this.chalkRequested = true;
       } else if (event.code === 'KeyV' && this.onDebugAction) {
         event.preventDefault();
         if (!event.repeat) this.onDebugAction('probe');
@@ -59,6 +63,7 @@ export class BrowserInput {
       this.keys.clear();
       this.shiftRequested = false;
       this.interactRequested = false;
+      this.chalkRequested = false;
       this.active = document.pointerLockElement === canvas && !document.hidden;
       this.onModeChange(this.active);
     }, options);
@@ -90,6 +95,7 @@ export class BrowserInput {
     this.keys.clear();
     this.shiftRequested = false;
     this.interactRequested = false;
+    this.chalkRequested = false;
     this.onModeChange(false, message);
     if (document.pointerLockElement === this.canvas) document.exitPointerLock();
   }
@@ -104,6 +110,12 @@ export class BrowserInput {
         strafe: Number(this.keys.has('KeyD')) - Number(this.keys.has('KeyA')),
       },
     };
+  }
+
+  consumeChalkRequest(): boolean {
+    const requested = this.active && this.chalkRequested;
+    this.chalkRequested = false;
+    return requested;
   }
 
   consumeInteractRequest(): boolean {

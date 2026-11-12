@@ -11,6 +11,7 @@
 - The developer then confirmed “all works perfect. Go next”: M1 push-before-crush is human accepted, and M2 is approved. M3 and later remain unapproved.
 - The next instruction “all works, go next” accepts M2 and authorizes M3 graph validation/diagnostics. M4 and later remain unapproved.
 - On 2026-11-11, after the M3 Retry fix deployed (run 43005063616, commit `97d3ad9`), the developer replied “accepted, go next”: M3 is human accepted and M4 seeded generation is approved. M5 and later remain unapproved.
+- M7 verdict, 2026-11-12: “all seems to be working fine and it's okay in terms of fun. We need way more traps and enemies so it's a bit harder as now it's quite easy. But that is for later on. Continue with next step.” M7 is accepted with an okay-fun verdict; difficulty is too low. Traps and enemies are deferred to their planned milestones (M10 stalker, M12 traps) and should be expanded there; M7b pressure rules are approved next. M8 and later remain unapproved.
 - On 2026-11-11 the developer replied “okay, all looks and works good” after testing the deployed M6: M6 is human accepted. At 20:21 they replied “go next”: M7 complete solo extraction is approved. M7b and later remain unapproved.
 - On 2026-11-11 the developer replied “all works, go next” after testing the deployed M5: M5 is human accepted and M6 reproduction/stability tools are approved. M7 and later remain unapproved.
 - On 2026-11-11 the developer replied “all works, go next” after testing the deployed M4: M4 is human accepted and M5 safe generated-maze shifts are approved. M6 and later remain unapproved.
@@ -27,8 +28,8 @@
 | M4 | Human accepted on 2026-11-11 |
 | M5 | Human accepted on 2026-11-11 |
 | M6 | Human accepted on 2026-11-11 |
-| M7 | Deployed (run 43084039917); awaiting the fun verdict |
-| M7b (added 2026-11-11) | Not started |
+| M7 | Human accepted 2026-11-12 (okay fun, too easy) |
+| M7b (added 2026-11-11) | Implemented; awaiting CI/deployment and the comparison |
 | M9 (scheduled after M7b) | Not started |
 | M8 | Not started |
 | M10–M12 | Not started |
@@ -120,7 +121,7 @@ The developer confirmed M1's original gates work and subsequently accepted the f
 
 ## Next action
 
-Stop for the M7 fun verdict. M7b remains unapproved. M7 remains unapproved. M6 remains unapproved. 
+Confirm the M7b Pages workflow run, then stop for the rules-on versus rules-off comparison. M8 and M9 remain unapproved. M7 remains unapproved. M6 remains unapproved. 
 
 ### M1 crushing-gate revision — 2026-11-11
 
@@ -253,3 +254,15 @@ Stop for the M7 fun verdict. M7b remains unapproved. M7 remains unapproved. M6 r
 - CI run 43083709751 (`eb06530`) failed in **Test simulation**: the M6 scripted-session coverage test took 5.2 s on the runner (3.5 s locally) against the 5 s default timeout. It now has a 30 s limit. `AGENTS.md` scope wording corrected (the single relic is allowed loot).
 - Run 43084039917 (`8fa3ba1`): unit suite passed; 19 of 22 browser tests passed, including both M7 scenarios. The M1 junction crush/Retry test and both long M2 maze tests failed on runner slowness (context creation timeout, stalled clicks near the budget), the same pattern as M5. A re-run of the failed job passed everything and deployed. Test at `https://play3r4o.github.io/Maze_Runner/?v=8fa3ba1`. Risk: these three older long tests are now intermittently slow on runners without the apt browser dependencies; consider hardening them if it recurs. This note is committed locally for the next checkpoint.
 - Human verdict pending: see the [M7 checklist](milestones/M7.md#human-acceptance-checklist).
+
+### M7b pressure and wayfinding — 2026-11-12
+
+- M7 accepted with an okay-fun, too-easy verdict; M7b approved. Contract: `milestones/M7b.md`.
+- New `game/tuning.ts` (all numbers) and `game/pressure.ts` (rule switches, unrest, interval, bells, night factor, heading snapping, sound event type). `game/generatedRun.ts` gains rules, chalk, charges, bells and a bounded sound list; automatic interval now follows unrest and night; bells ring once per threshold; warnings and grinding queue positional sounds; `placeChalk`, `setRule`.
+- `rendering/audio.ts`: Three.js positional audio with code-generated buffers, at most 12 voices, volume and mute, started on the pointer-lock click. Scene: night dimming of light and sky, chalk arrows (hidden under slabs), switchable beams. HUD: chalk count, C key, bell notice, volume/mute, seed on the result screen. F2: rule checkboxes, run line (unrest, interval, countdown, clock, next bell or NIGHT), chalk on the map.
+- Daily UTC seed when none is given; `?off=` keeps rule switches across reloads and New run. Reports are format 3.
+- Found and fixed while testing: a `#repro=` link opened on the same page only changed the hash and was ignored (now applied on hashchange); its message was then overwritten because pausing is reported twice (a pending pause message now lasts until the game resumes); chalk on the gold plaza tile sat at the tile's height and could not be seen (raised to 5 cm).
+- Unit: 1180 tests in thirteen files pass (10 new M7b tests plus all earlier ones, which run with every rule on by default).
+- Browser (local Google Chrome, SwiftShader): both M7b scenarios pass (chalk marks and map, audio running with sounds played on a shift, rule switch in the address and after reload, mute; bell at 150 s with notice and event, NIGHT with a 10 s interval at 240 s via reports, hash-only report link); all generated-maze, M6 and M7 scenarios pass after updating headers and the report format; M3 debug map and all M0 room checks pass. Bells and night are reached through bug reports that set the run clock, rather than simulating minutes of frames.
+- Visual check: chalk arrows on the plaza point the drawn directions after the height fix. No page errors.
+- Human comparison pending: see the [M7b checklist](milestones/M7b.md#human-acceptance-checklist).

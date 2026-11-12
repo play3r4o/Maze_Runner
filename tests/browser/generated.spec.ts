@@ -3,6 +3,7 @@ import type { Page } from '@playwright/test';
 import { installBrowserClock, freezeBrowserClock } from './clock';
 import { generateMaze, layoutFingerprint } from '../../src/simulation/mazeGenerator';
 import { CELL_SPACING, findCell } from '../../src/simulation/maze';
+import { dailySeed } from '../../src/game/tuning';
 
 function watchErrors(page: Page) {
   const errors: string[] = [];
@@ -22,8 +23,8 @@ async function walk(page: Page, key: string, ms: number) {
 test('a seed rebuilds the same maze; other seeds, reloads and the seed form behave', async ({ page }) => {
   const errors = watchErrors(page);
   await page.goto('/?seed=1');
-  await expect(page).toHaveTitle('Shifting Labyrinth · M7');
-  await expect(page.getByText('DEVELOPMENT BUILD / M7 · SOLO EXTRACTION')).toBeVisible();
+  await expect(page).toHaveTitle('Shifting Labyrinth · M7b');
+  await expect(page.getByText('DEVELOPMENT BUILD / M7b · PRESSURE')).toBeVisible();
   await expect(page.getByTestId('hud-seed')).toHaveText('seed 1');
   expect(await fingerprint(page)).toBe(layoutFingerprint(generateMaze(1)));
   await page.reload();
@@ -32,10 +33,12 @@ test('a seed rebuilds the same maze; other seeds, reloads and the seed form beha
   expect(await fingerprint(page)).toBe(layoutFingerprint(generateMaze(2)));
   expect(layoutFingerprint(generateMaze(2))).not.toBe(layoutFingerprint(generateMaze(1)));
 
-  // No seed: one is chosen and written into the address so the URL reproduces it.
+  // No seed: today's seed is used and written into the address so the URL reproduces it.
   await page.goto('/');
   await expect(page).toHaveURL(/[?&]seed=\d+/);
   const chosen = Number(new URL(page.url()).searchParams.get('seed'));
+  // M7b daily seed: the UTC date (checked either side of a midnight that might fall mid-test).
+  expect([dailySeed(new Date(Date.now() - 60_000)), dailySeed(new Date())]).toContain(chosen);
   expect(await fingerprint(page)).toBe(layoutFingerprint(generateMaze(chosen)));
   // Invalid seeds are reported and replaced, never coerced.
   await page.goto('/?seed=abc');

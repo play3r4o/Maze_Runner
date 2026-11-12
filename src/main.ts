@@ -12,13 +12,16 @@ import { debugViewOfMazeRun } from './simulation/mazeDiagnostics';
 import type { DebugView } from './simulation/mazeDiagnostics';
 import type { SceneMode } from './rendering/scene';
 import { MAX_SEED, generateMaze, layoutFingerprint, parseSeed, serializeMaze } from './simulation/mazeGenerator';
-import { AUTO_SHIFT_TICKS, abandonGeneratedRun, buildGeneratedWorld, createGeneratedRun, interactGeneratedRun, isRunOver, relicInReach,
+import { abandonGeneratedRun, placeChalk, setRule, buildGeneratedWorld, createGeneratedRun, interactGeneratedRun, isRunOver, relicInReach,
   requestGeneratedRunShift, setGeneratedRunFrozen, stepGeneratedRun, teleportGeneratedRun } from './game/generatedRun';
 import { createRunReport, parseRunReport, reproduceRun } from './game/runReport';
+import { ALL_RULES_ON, RULE_KEYS, autoShiftTicks, isNight, nextBellTick, nightFactor, unrestOf } from './game/pressure';
+import type { RuleKey, RuleToggles } from './game/pressure';
+import { dailySeed } from './game/tuning';
 import type { RunReport } from './game/runReport';
 import type { GeneratedRun } from './game/generatedRun';
 import type { ShiftLogEntry } from './simulation/generatedShift';
-import { MAZE_GATE_IDS } from './simulation/maze';
+import { MAZE_GATE_IDS, layoutGateColliders } from './simulation/maze';
 
 const canvas = document.querySelector<HTMLCanvasElement>('#scene')!;
 const params = new URLSearchParams(location.search);
@@ -26,7 +29,7 @@ const requestedScene = params.get('scene');
 // M0 room, M1 junction and M2/M3 hand-built maze stay reachable for regression checks.
 const mode: SceneMode = requestedScene === 'room' ? 'room' : requestedScene === 'junction' ? 'junction'
   : requestedScene === 'maze' ? 'maze' : 'generated';
-document.title = `Shifting Labyrinth · ${{ generated: 'M7', maze: 'M3', junction: 'M1', room: 'M0' }[mode]}`;
+document.title = `Shifting Labyrinth · ${{ generated: 'M7b', maze: 'M3', junction: 'M1', room: 'M0' }[mode]}`;
 canvas.setAttribute('aria-label', { generated: 'First-person shifting seeded maze', maze: 'First-person hand-built maze',
   junction: 'First-person shifting junction', room: 'First-person gray room' }[mode]);
 
@@ -39,7 +42,11 @@ function seedUrl(seed: number) {
 }
 const requestedSeed = params.get('seed');
 const parsedSeed = parseSeed(requestedSeed);
-const seed = parsedSeed ?? randomSeed();
+// T8: with no seed in the address everyone gets today's maze (UTC date); a bad seed gets a random one.
+const seed = parsedSeed ?? (requestedSeed === null ? dailySeed(new Date()) : randomSeed());
+// M7b rule switches: `?off=dusk,sound` starts runs with those rules off, so comparisons survive New run.
+const offRules = (params.get('off') ?? '').split(',').filter((key): key is RuleKey => (RULE_KEYS as readonly string[]).includes(key));
+const initialRules: RuleToggles = { ...ALL_RULES_ON, ...Object.fromEntries(offRules.map((key) => [key, false])) };
 const world = mode === 'generated' ? buildGeneratedWorld(generateMaze(seed)) : null;
 if (world && parsedSeed === null) history.replaceState(null, '', seedUrl(seed));
 if (world) {
@@ -74,6 +81,7 @@ const debug = mode === 'maze' ? createMazeDebug(hudRoot)
       config: `${world.maze.config.size}×${world.maze.config.size} · loops ${world.maze.config.loopChance} · ${world.maze.config.gateCount} gates`,
       teleports: [{ label: 'Sanctuary', cell: world.maze.start },
         ...world.maze.landmarks.map((landmark) => ({ label: landmark.name.split(' ')[0], cell: landmark.cell }))],
+      rules: RULE_KEYS, onRule: (key, on) => debugTools?.onRule?.(key, on) ?? '',
       onFreeze: () => debugTools?.onFreeze() ?? '', onTeleport: (cell) => debugTools?.onTeleport(cell) ?? '',
       onCopyReport: () => debugTools?.onCopyReport() ?? '', onLoadReport: (text) => debugTools?.onLoadReport(text) ?? '',
     } }) : null;
@@ -90,7 +98,7 @@ function startRoom() {
   let roomPlayer = { ...PLAYER_SPAWN };
   let run = createJunctionRun();
   let mazeRun = createMazeRun();
-  let generatedRun: GeneratedRun | null = world ? createGeneratedRun(world) : null;
+  let generatedRun: GeneratedRun | null = world ? createGeneratedRun(world, initialRules) : null;
   const logLine = (entry: ShiftLogEntry) => `#${entry.request + 1} rev ${entry.revision} ${entry.outcome.toUpperCase()}`
     + `${entry.plan ? ` · ${entry.plan.open.toUpperCase()} opens, ${entry.plan.close.toUpperCase()} closes` : ''}`
     + `${entry.rejectedCandidates ? ` · ${entry.rejectedCandidates} rejected` : ''} · ${entry.reason}`;
@@ -100,9 +108,16 @@ function startRoom() {
     revision: generatedRun.shift.revision, validation: generatedRun.shift.validation?.reason ?? null,
     log: generatedRun.shift.log.map(logLine),
     tools: { tick: generatedRun.tick, frozen: generatedRun.frozen, teleports: generatedRun.teleports, errors: pageErrors.length,
-      run: `Run ${generatedRun.status}${generatedRun.carrying ? ' · carrying relic' : ''} · relic ${world.relic.cell} · `
-        + (generatedRun.status === 'out' && generatedRun.shift.phase === 'idle'
-          ? `auto shift in ${((AUTO_SHIFT_TICKS - generatedRun.autoTicks) / 60).toFixed(1)}s` : 'auto shift waiting'),
+      rules: generatedRun.rules, chalk: generatedRun.chalk,
+      run: (() => {
+        const r = generatedRun;
+        const interval = autoShiftTicks(r.rules, r.carrying, r.runTicks);
+        const bell = nextBellTick(r.runTicks);
+        return `Run ${r.status}${r.carrying ? ' · carrying relic' : ''} · relic ${world.relic.cell} · unrest ${unrestOf(r.rules, r.carrying)}`
+          + ` · interval ${(interval / 60).toFixed(0)}s · `
+          + (r.status === 'out' && r.shift.phase === 'idle' ? `auto shift in ${((interval - r.autoTicks) / 60).toFixed(1)}s` : 'auto shift waiting')
+          + ` · clock ${(r.runTicks / 60).toFixed(1)}s · ${isNight(r.rules, r.runTicks) ? 'NIGHT' : r.rules.dusk && bell ? `next bell ${(bell / 60).toFixed(0)}s` : 'no bell'}`;
+      })(),
       events: generatedRun.events.map((event) => `${(event.tick / 60).toFixed(1)}s ${event.kind}: ${event.detail}`) } } : debugViewOfMazeRun(mazeRun);
   let graphicsAvailable = true;
   const stepper = createFixedStepper((dt) => {
@@ -112,6 +127,7 @@ function startRoom() {
       let next = generatedRun!;
       const wasOver = isRunOver(next.status);
       if (input.consumeInteractRequest()) next = interactGeneratedRun(world, next);
+      if (input.consumeChalkRequest()) next = placeChalk({ ...next, player: { ...next.player, yaw: state.yaw } });
       if (shiftRequested) {
         next = requestGeneratedRunShift(world, next);
         const entry = next.shift.log.at(-1);
@@ -143,19 +159,26 @@ function startRoom() {
       roomPlayer = stepPlayer({ ...roomPlayer, yaw: state.yaw }, state.intent, ROOM_WALLS, dt);
     }
   });
+  // A message to show on the next pause (set before releasing the mouse, which reports later).
+  let pendingPauseMessage: string | null = null;
   const input = new BrowserInput(canvas, (running, message) => {
     stepper.reset();
-    hud.setMode(running, message);
+    // Pausing can be reported more than once (direct pause, then the pointer-lock release),
+    // so the message stays until the game runs again.
+    const notice = message ?? (running ? undefined : pendingPauseMessage ?? undefined);
+    if (running) pendingPauseMessage = null;
+    hud.setMode(running, notice);
   }, debug ? (action) => { if (action === 'toggle') debug.toggle(); else debug.probe(debugView()); } : undefined);
   // M7 results: the main button starts a new seed; Retry replays this seed; Abandon ends the run.
   const resetGeneratedRun = () => {
-    generatedRun = createGeneratedRun(world!);
+    generatedRun = createGeneratedRun(world!, generatedRun?.rules ?? initialRules);
+    scene.audio?.reset();
     input.resetLook();
     stepper.reset();
     hud.resetAttempt();
     debug?.resetAttempt();
   };
-  const onRetrySeed = () => { resetGeneratedRun(); void input.start(); };
+  const onRetrySeed = () => { resetGeneratedRun(); scene.audio?.resume(); void input.start(); };
   const onAbandon = () => {
     if (!generatedRun || isRunOver(generatedRun.status)) return;
     generatedRun = abandonGeneratedRun(generatedRun);
@@ -172,14 +195,19 @@ function startRoom() {
     if (run.crushedBy || mazeRun.crushedBy) {
       run = createJunctionRun();
       mazeRun = createMazeRun();
-      generatedRun = world ? createGeneratedRun(world) : null;
       input.resetLook();
       stepper.reset();
       hud.resetAttempt();
       debug?.resetAttempt();
     }
+    // Audio may only start inside a user gesture; this click also requests pointer lock.
+    scene.audio?.resume();
     void input.start();
   };
+  const onVolume = () => scene.audio?.setVolume(Number(hud.volume!.value) / 100);
+  const onMute = () => scene.audio?.setMuted(hud.mute!.checked);
+  hud.volume?.addEventListener('input', onVolume);
+  hud.mute?.addEventListener('change', onMute);
   hud.button.addEventListener('click', onStart);
 
   // M6 debug tools (generated maze only). They act on the live run between simulation ticks.
@@ -198,6 +226,16 @@ function startRoom() {
   }
   if (world) debugTools = {
     config: '', teleports: [],
+    rules: RULE_KEYS,
+    onRule(key, on) {
+      generatedRun = setRule(generatedRun!, key, on);
+      // Keep switched-off rules in the address so New run and reloads keep the comparison.
+      const url = new URL(location.href);
+      const off = RULE_KEYS.filter((rule) => !generatedRun!.rules[rule]);
+      if (off.length) url.searchParams.set('off', off.join(',')); else url.searchParams.delete('off');
+      history.replaceState(null, '', url);
+      return `${key} ${on ? 'on' : 'off'}.`;
+    },
     onFreeze() {
       generatedRun = setGeneratedRunFrozen(generatedRun!, !generatedRun!.frozen);
       return generatedRun.frozen ? 'Shift timers frozen. Gates hold their pose; walking continues.' : 'Shift timers resumed.';
@@ -229,6 +267,19 @@ function startRoom() {
     const parsed = parseRunReport(reproText);
     hud.setMode(false, parsed.ok ? applyReport(parsed.report) : `Report not loaded: ${parsed.error}`);
   }
+  // A #repro= link opened on the same page changes only the hash (no reload): apply it too.
+  const onHashChange = () => {
+    if (!world || !location.hash.startsWith('#repro=')) return;
+    const text = decodeURIComponent(location.hash.slice('#repro='.length));
+    history.replaceState(null, '', location.pathname + location.search);
+    const parsed = parseRunReport(text);
+    if (parsed.ok && parsed.report.seed !== seed) { location.assign(`${seedUrl(parsed.report.seed)}#repro=${encodeURIComponent(text)}`); return; }
+    const message = parsed.ok ? applyReport(parsed.report) : `Report not loaded: ${parsed.error}`;
+    pendingPauseMessage = message;
+    input.pause();
+    hud.setMode(false, message);
+  };
+  window.addEventListener('hashchange', onHashChange);
 
   const onContextLost = (event: Event) => {
     event.preventDefault();
@@ -248,7 +299,15 @@ function startRoom() {
     if (graphicsAvailable) {
       const gates = generatedRun ? { ...generatedRun.shift, closing: generatedRun.shift.plan?.close ?? null }
         : mode === 'maze' ? { ...mazeRun.shift, closing: MAZE_GATE_IDS.find((id) => id !== mazeRun.shift.target)! } : undefined;
-      scene.render(player, state.yaw, state.pitch, run.junction, gates, generatedRun?.carrying ?? false);
+      const live = generatedRun;
+      scene.render(player, state.yaw, state.pitch, run.junction, gates, live && world ? {
+        carried: live.carrying, beams: live.rules.beams, night: nightFactor(live.rules, live.runTicks), chalk: live.chalk,
+        slabs: layoutGateColliders(world.maze, live.shift.openness), sounds: live.sounds } : undefined);
+      // Read-only audio diagnostics for tests and bug reports.
+      if (scene.audio) {
+        document.documentElement.dataset.audioState = scene.audio.state;
+        document.documentElement.dataset.soundsPlayed = String(scene.audio.played);
+      }
     }
     hud.updatePosition(player, timestamp);
     if (mode === 'junction') hud.updateJunction(run.junction, timestamp, run.pushedBy);
@@ -263,6 +322,9 @@ function startRoom() {
     cancelAnimationFrame(frameId);
     hud.button.removeEventListener('click', onStart);
     hud.retrySeed?.removeEventListener('click', onRetrySeed);
+    window.removeEventListener('hashchange', onHashChange);
+    hud.volume?.removeEventListener('input', onVolume);
+    hud.mute?.removeEventListener('change', onMute);
     hud.abandon?.removeEventListener('click', onAbandon);
     canvas.removeEventListener('webglcontextlost', onContextLost);
     input.dispose();

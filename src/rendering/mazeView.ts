@@ -5,6 +5,21 @@ import { HAND_BUILT_MAZE, MAZE_WALLS, cellPosition, findCell, gateEdges, gateRec
 import type { MazeLayout, MazeOpenness } from '../simulation/maze';
 import type { WallRect } from '../simulation/player';
 import type { ShiftPhase } from '../simulation/shift';
+import type { ChalkMark } from '../game/pressure';
+
+// A white chalk arrow pointing to the texture's top (north once laid flat).
+function chalkTexture() {
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = 64;
+  const draw = canvas.getContext('2d');
+  if (draw) {
+    draw.strokeStyle = '#f4f1e6'; draw.lineWidth = 7; draw.lineCap = 'round'; draw.lineJoin = 'round';
+    draw.beginPath(); draw.moveTo(32, 56); draw.lineTo(32, 10); draw.moveTo(14, 28); draw.lineTo(32, 10); draw.lineTo(50, 28); draw.stroke();
+  }
+  const texture = new CanvasTexture(canvas);
+  texture.colorSpace = SRGBColorSpace;
+  return texture;
+}
 
 // What the view needs to draw gates: poses plus which gate is warning/closing.
 export type GateView = { phase: ShiftPhase; phaseSeconds: number; openness: MazeOpenness; closing: string | null };
@@ -55,17 +70,22 @@ export function createMazeView(scene: Scene, layout: MazeLayout = HAND_BUILT_MAZ
     geometries.push(mesh.geometry); materials.push(material); group.add(mesh);
     return mesh;
   }
-  let relicParts: Mesh[] = [];
+  const chalkMap = chalkTexture();
+  const chalkMaterial = new MeshBasicMaterial({ map: chalkMap, transparent: true, depthWrite: false });
+  const chalkGeometry = new PlaneGeometry(1.1, 1.1);
+  const chalkMeshes: Mesh[] = [];
   let crystal: Mesh | null = null;
+  let relicBeam: Mesh | null = null;
+  let homeBeam: Mesh | null = null;
   if (relic) {
-    beam(0, 0, '#f0b53c', 0.55);
+    homeBeam = beam(0, 0, '#f0b53c', 0.55);
     const material = new MeshBasicMaterial({ color: '#cfeffb' });
     // A floating crystal with no collider: the room centre stays walkable. Crystal and beam vanish when taken.
     const geometry = new OctahedronGeometry(0.32);
     crystal = new Mesh(geometry, material);
     crystal.position.set(relic.x, 1.25, relic.z);
     geometries.push(geometry); materials.push(material); group.add(crystal);
-    relicParts = [crystal, beam(relic.x, relic.z, '#57d6f5', 0.6)];
+    relicBeam = beam(relic.x, relic.z, '#57d6f5', 0.6);
   }
   const plaza = plazaRect(layout);
   if (plaza) block(plaza.maxX - plaza.minX - 0.2, 0.02, plaza.maxZ - plaza.minZ - 0.2, 0, 0.02, 0, '#bba36b');
@@ -100,9 +120,27 @@ export function createMazeView(scene: Scene, layout: MazeLayout = HAND_BUILT_MAZ
     return { id, edge, mesh, outlines };
   });
   return {
-    setRelic(carried: boolean, seconds: number) {
-      for (const part of relicParts) part.visible = !carried;
+    // Crystal hides when carried; beams follow the `beams` rule (relic beam also hides when carried).
+    setRelic(carried: boolean, seconds: number, beamsOn = true) {
+      if (crystal) crystal.visible = !carried;
+      if (relicBeam) relicBeam.visible = beamsOn && !carried;
+      if (homeBeam) homeBeam.visible = beamsOn;
       if (crystal) { crystal.rotation.y = seconds * 1.2; crystal.position.y = 1.25 + Math.sin(seconds * 2) * 0.08; }
+    },
+    // T4: chalk arrows on the floor. Hidden while a gate slab covers the mark's centre.
+    setChalk(marks: readonly ChalkMark[], slabs: readonly WallRect[]) {
+      while (chalkMeshes.length < marks.length) {
+        const mesh = new Mesh(chalkGeometry, chalkMaterial);
+        mesh.rotation.order = 'YXZ'; mesh.rotation.x = -Math.PI / 2;
+        group.add(mesh); chalkMeshes.push(mesh);
+      }
+      chalkMeshes.forEach((mesh, index) => {
+        const mark = marks[index];
+        mesh.visible = Boolean(mark) && !slabs.some((rect) => mark.x > rect.minX && mark.x < rect.maxX && mark.z > rect.minZ && mark.z < rect.maxZ);
+        if (!mark) return;
+        mesh.position.set(mark.x, 0.05, mark.z);
+        mesh.rotation.y = -mark.headingIndex * Math.PI / 4;
+      });
     },
     update(state?: GateView) {
       if (!state) return;
@@ -122,6 +160,7 @@ export function createMazeView(scene: Scene, layout: MazeLayout = HAND_BUILT_MAZ
       for (const geometry of geometries) geometry.dispose();
       for (const material of materials) material.dispose();
       for (const texture of textures) texture.dispose();
+      chalkGeometry.dispose(); chalkMaterial.dispose(); chalkMap.dispose();
     },
   };
 }

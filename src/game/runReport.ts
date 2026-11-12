@@ -9,11 +9,14 @@ import type { GeneratedShift } from '../simulation/generatedShift';
 import type { ShiftPhase } from '../simulation/shift';
 import { RUN_EVENT_LIMIT, addRunEvent, createGeneratedRun, teleportTarget } from './generatedRun';
 import type { GeneratedRun, GeneratedWorld, RunEvent, RunStatus } from './generatedRun';
+import { RULE_KEYS } from './pressure';
+import type { ChalkMark, RuleToggles } from './pressure';
+import { CHALK_CHARGES } from './tuning';
 
 // A bug report is plain JSON. With the same build it rebuilds the maze (seed + config),
 // replays the same shift requests to the same gate poses, and puts the player back.
 // Bump REPORT_FORMAT if fields change meaning.
-export const REPORT_FORMAT = 2;
+export const REPORT_FORMAT = 3;
 export type RunReport = {
   format: number; version: string; seed: number; config: GeneratorConfig; fingerprint: string;
   // Replay inputs.
@@ -22,6 +25,8 @@ export type RunReport = {
   visited: string[]; leftSanctuary: boolean; returned: boolean; teleports: number; crushedBy: string | null;
   // M7 expedition state.
   status: RunStatus; carrying: boolean; runTicks: number; autoTicks: number;
+  // M7b rules state.
+  rules: RuleToggles; chalk: ChalkMark[]; chalkLeft: number; bells: number;
   // Recorded results, compared after replay.
   expect: { phase: ShiftPhase; revision: number; completedShifts: number; openness: MazeOpenness };
   // Context for a human reader; not used for replay.
@@ -36,6 +41,7 @@ export function createRunReport(world: GeneratedWorld, run: GeneratedRun, contex
     player: { x: run.player.x, z: run.player.z, yaw: run.player.yaw }, cell: run.cell, ring: run.ring,
     visited: [...run.visited], leftSanctuary: run.leftSanctuary, returned: run.returned, teleports: run.teleports, crushedBy: run.crushedBy,
     status: run.status, carrying: run.carrying, runTicks: run.runTicks, autoTicks: run.autoTicks,
+    rules: { ...run.rules }, chalk: run.chalk.map((mark) => ({ ...mark })), chalkLeft: run.chalkLeft, bells: run.bells,
     expect: { phase: run.shift.phase, revision: run.shift.revision, completedShifts: run.shift.completedShifts, openness: { ...run.shift.openness } },
     events: run.events.slice(-20), shiftLog: context.shiftLog ?? [], errors: (context.errors ?? []).slice(-10), note: context.note ?? '',
   };
@@ -71,6 +77,12 @@ export function parseRunReport(text: string): { ok: true; report: RunReport } | 
   if (!['ready', 'out', 'extracted', 'failed', 'abandoned'].includes(data.status as string) || typeof data.carrying !== 'boolean'
     || !isInt(data.runTicks, 0, 1e9) || !isInt(data.autoTicks, 0, 1e9)) {
     return { ok: false, error: 'Report run status, carrying, runTicks or autoTicks is missing or invalid.' };
+  }
+  if (!isObject(data.rules) || !RULE_KEYS.every((key) => typeof (data.rules as Record<string, unknown>)[key] === 'boolean')
+    || !Array.isArray(data.chalk) || !data.chalk.every((mark) => isObject(mark) && isInt(mark.id, 1, CHALK_CHARGES)
+      && isNumber(mark.x) && isNumber(mark.z) && isInt(mark.headingIndex, 0, 7))
+    || !isInt(data.chalkLeft, 0, CHALK_CHARGES) || data.chalk.length + (data.chalkLeft as number) !== CHALK_CHARGES || !isInt(data.bells, 0, 3)) {
+    return { ok: false, error: 'Report rules, chalk or bells are missing or invalid.' };
   }
   const report = {
     events: [], shiftLog: [], errors: [], note: '', frozen: false, cell: null, ring: 'sanctuary', leftSanctuary: false,
@@ -125,7 +137,8 @@ export function reproduceRun(world: GeneratedWorld, report: RunReport): { run: G
     cell: report.cell, ring: report.ring, visited: [...report.visited], leftSanctuary: report.leftSanctuary, returned: report.returned,
     teleports: report.teleports, events: report.events.slice(-RUN_EVENT_LIMIT),
     // A failed run comes back alive and running, so the moment before death can be replayed.
-    status: report.status === 'failed' ? 'out' : report.status, carrying: report.carrying, runTicks: report.runTicks, autoTicks: report.autoTicks };
+    status: report.status === 'failed' ? 'out' : report.status, carrying: report.carrying, runTicks: report.runTicks, autoTicks: report.autoTicks,
+    rules: { ...report.rules }, chalk: report.chalk.map((mark) => ({ ...mark })), chalkLeft: report.chalkLeft, bells: report.bells };
   return { mismatches, run: { ...run, events: addRunEvent(run, 'report',
     `reproduced seed ${report.seed}, ${report.requests} requests${mismatches.length ? `; ${mismatches.length} mismatch(es)` : ''}`) } };
 }

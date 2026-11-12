@@ -1,4 +1,4 @@
-import { cellPosition, deriveMazeWalls, gateEdges, gateRect, inCellRoom, landmarkRect, layoutGateColliders, plazaRect } from '../simulation/maze';
+import { cellPosition, corridorRect, deriveMazeWalls, gateEdges, gateRect, inCellRoom, landmarkRect, layoutGateColliders, plazaRect } from '../simulation/maze';
 import { overlapsBody } from '../simulation/movingWalls';
 import { advanceGeneratedShift, createGeneratedShift, requestGeneratedShift } from '../simulation/generatedShift';
 import type { GeneratedShift } from '../simulation/generatedShift';
@@ -10,12 +10,14 @@ import { createRng } from '../simulation/mazeGenerator';
 import type { GeneratedMaze, Ring } from '../simulation/mazeGenerator';
 import { findMazeRoute } from '../simulation/mazeGraph';
 import { FIXED_DT } from '../loop';
+import { CLOSING_SECONDS, OPENING_SECONDS } from '../simulation/shift';
+import { AUTO_SHIFT_SECONDS, CHALK_CHARGES, RELIC_REACH, ticks } from './tuning';
+import { ALL_RULES_ON, BELL_TICKS, HEADING_NAMES, SOUND_LIMIT, autoShiftTicks, bellsDue, headingIndexForYaw } from './pressure';
+import type { ChalkMark, RuleKey, RuleToggles, SoundEvent, SoundKind } from './pressure';
 
-// M7 tuning (plan defaults): warned automatic shifts every 45 s of idle maze time; no deadline.
-export const AUTO_SHIFT_SECONDS = 45;
-export const AUTO_SHIFT_TICKS = Math.round(AUTO_SHIFT_SECONDS / FIXED_DT);
-// The relic can be taken from this far (body centre to relic centre, metres).
-export const RELIC_REACH = 1.6;
+export { AUTO_SHIFT_SECONDS, RELIC_REACH };
+// Base interval in steps (no unrest, daytime). The live interval comes from autoShiftTicks().
+export const AUTO_SHIFT_TICKS = ticks(AUTO_SHIFT_SECONDS);
 
 // One relic per seed, at the centre of an outer-ring room in the farther half of outer rooms
 // by static route length (gates closed), never a landmark room. Seeded, so reports reproduce it.
@@ -41,7 +43,8 @@ export function buildGeneratedWorld(maze: GeneratedMaze): GeneratedWorld {
 }
 
 // Bounded record of what happened in this attempt, for the debug panel and bug reports.
-export type RunEventKind = 'shift' | 'freeze' | 'teleport' | 'visit' | 'ring' | 'death' | 'return' | 'report' | 'run' | 'relic';
+export type RunEventKind = 'shift' | 'freeze' | 'teleport' | 'visit' | 'ring' | 'death' | 'return' | 'report' | 'run' | 'relic'
+  | 'bell' | 'chalk' | 'rules';
 // ready: in Sanctuary, clock not started. out: the expedition is running. The other three are
 // terminal: each run reaches exactly one of them, once.
 export type RunStatus = 'ready' | 'out' | 'extracted' | 'failed' | 'abandoned';
@@ -64,12 +67,40 @@ export type GeneratedRun = {
   // M7 expedition: status, whether the relic is carried, run clock (ticks while out and alive),
   // and idle ticks towards the next automatic shift.
   status: RunStatus; carrying: boolean; runTicks: number; autoTicks: number;
+  // M7b: rule toggles, chalk marks and charges left, bells already rung, and the last sounds
+  // (bounded; the audio module plays ids it has not played yet).
+  rules: RuleToggles; chalk: ChalkMark[]; chalkLeft: number; bells: number; sounds: SoundEvent[]; nextSoundId: number;
 };
-export function createGeneratedRun(world: GeneratedWorld): GeneratedRun {
+export function createGeneratedRun(world: GeneratedWorld, rules: RuleToggles = ALL_RULES_ON): GeneratedRun {
   return { player: { x: 0, z: 0, yaw: 0 }, visited: [], leftSanctuary: false, returned: false, cell: null, ring: 'sanctuary',
     shift: createGeneratedShift(world.maze), crushedBy: null, pushedBy: null,
     tick: 0, shiftTicks: 0, frozen: false, teleports: 0, events: [],
-    status: 'ready', carrying: false, runTicks: 0, autoTicks: 0 };
+    status: 'ready', carrying: false, runTicks: 0, autoTicks: 0,
+    rules: { ...rules }, chalk: [], chalkLeft: CHALK_CHARGES, bells: 0, sounds: [], nextSoundId: 1 };
+}
+
+// T3: queue a positioned sound if sound is enabled. Returns the updated sound fields.
+function withSound(run: GeneratedRun, kind: SoundKind, x: number, z: number, extra: { seconds?: number; strikes?: number } = {}) {
+  if (!run.rules.sound) return run;
+  const sound: SoundEvent = { id: run.nextSoundId, kind, x, z, tick: run.tick, ...extra };
+  return { ...run, sounds: [...run.sounds, sound].slice(-SOUND_LIMIT), nextSoundId: run.nextSoundId + 1 };
+}
+const gateCentre = (world: GeneratedWorld, gate: string) => {
+  const rect = corridorRect(world.maze, world.maze.edges.find((edge) => edge.gate === gate)!);
+  return { x: (rect.minX + rect.maxX) / 2, z: (rect.minZ + rect.maxZ) / 2 };
+};
+
+// T4: place a chalk arrow where the player stands, pointing where they face.
+export function placeChalk(run: GeneratedRun): GeneratedRun {
+  if (!run.rules.chalk || run.chalkLeft <= 0 || run.crushedBy || isRunOver(run.status)) return run;
+  const mark: ChalkMark = { id: CHALK_CHARGES - run.chalkLeft + 1, x: run.player.x, z: run.player.z, headingIndex: headingIndexForYaw(run.player.yaw) };
+  return { ...run, chalk: [...run.chalk, mark], chalkLeft: run.chalkLeft - 1,
+    events: addRunEvent(run, 'chalk', `mark ${mark.id} points ${HEADING_NAMES[mark.headingIndex]}${run.cell ? ` in ${run.cell}` : ''}`) };
+}
+// Debug: switch one rule. Applies from the next step; logged so reports explain odd runs.
+export function setRule(run: GeneratedRun, key: RuleKey, on: boolean): GeneratedRun {
+  if (run.rules[key] === on) return run;
+  return { ...run, rules: { ...run.rules, [key]: on }, events: addRunEvent(run, 'rules', `${key} ${on ? 'on' : 'off'}`) };
 }
 export function addRunEvent(run: GeneratedRun, kind: RunEventKind, detail: string): RunEvent[] {
   return [...run.events, { tick: run.tick, kind, detail }].slice(-RUN_EVENT_LIMIT);
@@ -81,8 +112,14 @@ export function requestGeneratedRunShift(world: GeneratedWorld, run: GeneratedRu
   const entry = shift.log.at(-1);
   const accepted = run.shift.phase === 'idle' && shift.phase === 'warning';
   const detail = entry ? `${source} ${entry.outcome}${entry.plan ? ` ${entry.plan.open} opens, ${entry.plan.close} closes` : ''} (request ${entry.request + 1})` : 'request';
-  return { ...run, shift, shiftTicks: accepted ? 0 : run.shiftTicks, autoTicks: run.shift.phase === 'idle' ? 0 : run.autoTicks,
+  let next: GeneratedRun = { ...run, shift, shiftTicks: accepted ? 0 : run.shiftTicks, autoTicks: run.shift.phase === 'idle' ? 0 : run.autoTicks,
     events: addRunEvent(run, 'shift', detail) };
+  // T3: both gates about to move are heard when the warning starts.
+  if (accepted && shift.plan) for (const gate of [shift.plan.open, shift.plan.close]) {
+    const { x, z } = gateCentre(world, gate);
+    next = withSound(next, 'shiftWarning', x, z);
+  }
+  return next;
 }
 
 export const relicInReach = (world: GeneratedWorld, run: GeneratedRun) => !run.carrying && !run.crushedBy && !isRunOver(run.status)
@@ -134,14 +171,27 @@ export function stepGeneratedRun(world: GeneratedWorld, previous: GeneratedRun, 
   if (previous.status === 'extracted' || previous.status === 'abandoned') return previous;
   let start = previous;
   // Automatic shifts: only during an expedition, alive, unfrozen, with the maze idle.
+  // The interval follows unrest (T1) and night (T2); a change applies to the countdown under way.
   if (start.status === 'out' && !start.crushedBy && !start.frozen && start.shift.phase === 'idle') {
     start = { ...start, autoTicks: start.autoTicks + 1 };
-    if (start.autoTicks >= AUTO_SHIFT_TICKS) start = requestGeneratedRunShift(world, start, 'auto');
+    if (start.autoTicks >= autoShiftTicks(start.rules, start.carrying, start.runTicks)) start = requestGeneratedRunShift(world, start, 'auto');
   }
   const moving = !start.frozen && start.shift.phase !== 'idle';
-  const run = { ...start, tick: start.tick + 1, shiftTicks: start.shiftTicks + Number(moving),
+  let run: GeneratedRun = { ...start, tick: start.tick + 1, shiftTicks: start.shiftTicks + Number(moving),
     runTicks: start.runTicks + Number(start.status === 'out' && !start.crushedBy) };
+  // T2: the dusk bell rings once per threshold the run clock reaches while dusk is enabled.
+  if (run.rules.dusk && bellsDue(run.runTicks) > run.bells) {
+    const strikes = bellsDue(run.runTicks);
+    run = withSound({ ...run, bells: strikes, events: addRunEvent(run, 'bell', `${strikes} strike${strikes === 1 ? '' : 's'}${strikes === BELL_TICKS.length ? ' · night falls' : ''}`) },
+      'bellToll', 0, 0, { strikes });
+  }
   const shift = previous.frozen ? run.shift : advanceGeneratedShift(run.shift, dt, maze);
+  // T3: a slab is heard grinding from the moment it starts to move.
+  if (shift.plan && shift.phase !== run.shift.phase && (shift.phase === 'opening' || shift.phase === 'closing')) {
+    const gate = shift.phase === 'opening' ? shift.plan.open : shift.plan.close;
+    const { x, z } = gateCentre(world, gate);
+    run = withSound(run, 'gateGrind', x, z, { seconds: shift.phase === 'opening' ? OPENING_SECONDS : CLOSING_SECONDS });
+  }
   if (run.crushedBy) return { ...run, shift, pushedBy: null };
   const contact = resolveMovingWalls(run.player, gateEdges(maze).map((edge) => ({ id: edge.gate!,
     before: gateRect(maze, edge, run.shift.openness[edge.gate!]), after: gateRect(maze, edge, shift.openness[edge.gate!]),

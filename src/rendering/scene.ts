@@ -11,6 +11,13 @@ import { MAZE_SIZE, mazeExtent } from '../simulation/maze';
 import type { GeneratedWorld } from '../game/generatedRun';
 import { createMazeView } from './mazeView';
 import type { GateView } from './mazeView';
+import { createAudio } from './audio';
+import type { ChalkMark, SoundEvent } from '../game/pressure';
+import type { WallRect } from '../simulation/player';
+
+// Per-frame expedition state the view presents (generated maze only).
+export type ExpeditionView = { carried: boolean; beams: boolean; night: number; chalk: readonly ChalkMark[];
+  slabs: readonly WallRect[]; sounds: readonly SoundEvent[] };
 
 export type SceneMode = 'room' | 'junction' | 'maze' | 'generated';
 export function createScene(canvas: HTMLCanvasElement, mode: SceneMode, generated?: GeneratedWorld) {
@@ -21,7 +28,8 @@ export function createScene(canvas: HTMLCanvasElement, mode: SceneMode, generate
   const camera = new PerspectiveCamera(75, 1, 0.05, Math.max(150, generatedSize * 1.5));
   camera.rotation.order = 'YXZ';
 
-  scene.add(new HemisphereLight('#edf3ed', '#535b55', 2.5));
+  const sky = new HemisphereLight('#edf3ed', '#535b55', 2.5);
+  scene.add(sky);
   const sun = new DirectionalLight('#fff5df', 2);
   sun.position.set(5, 9, 6);
   scene.add(sun);
@@ -48,6 +56,9 @@ export function createScene(canvas: HTMLCanvasElement, mode: SceneMode, generate
     return mesh;
   });
 
+  // M7b: positional audio for the generated expedition only.
+  const audio = mode === 'generated' ? createAudio(scene, camera) : null;
+  const dayBackground = new Color('#a8b3b0'), nightBackground = new Color('#27302f');
   const mazeView = mode === 'maze' ? createMazeView(scene)
     : mode === 'generated' && generated ? createMazeView(scene, generated.maze, generated.walls, generated.relic) : null;
   const gates = mode !== 'junction' ? [] : GATE_IDS.map((id) => {
@@ -112,9 +123,18 @@ export function createScene(canvas: HTMLCanvasElement, mode: SceneMode, generate
   resize();
 
   return {
-    render(player: PlayerState, yaw: number, pitch: number, junction: JunctionState, maze?: GateView, relicCarried = false) {
+    audio,
+    render(player: PlayerState, yaw: number, pitch: number, junction: JunctionState, maze?: GateView, expedition?: ExpeditionView) {
       mazeView?.update(maze);
-      mazeView?.setRelic(relicCarried, performance.now() / 1000);
+      if (expedition) {
+        mazeView?.setRelic(expedition.carried, performance.now() / 1000, expedition.beams);
+        mazeView?.setChalk(expedition.chalk, expedition.slabs);
+        audio?.update(expedition.sounds);
+        // Night (T2): dim the light and darken the sky over the fade. Presentation only.
+        const night = expedition.night;
+        sky.intensity = 2.5 - 1.7 * night; sun.intensity = 2 - 1.6 * night;
+        (scene.background as Color).copy(dayBackground).lerp(nightBackground, night);
+      }
       for (const gate of gates) {
         const rect = gateRect(gate.id, junction.openness[gate.id]);
         gate.mesh.position.set((rect.minX + rect.maxX) / 2, rect.height / 2, (rect.minZ + rect.maxZ) / 2);
@@ -134,6 +154,7 @@ export function createScene(canvas: HTMLCanvasElement, mode: SceneMode, generate
     dispose() {
       window.removeEventListener('resize', resize);
       mazeView?.dispose();
+      audio?.dispose();
       for (const mesh of wallMeshes) mesh.geometry.dispose();
       floor.geometry.dispose();
       grid.geometry.dispose();

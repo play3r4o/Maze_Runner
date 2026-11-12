@@ -232,6 +232,8 @@ M7 implementation contract: `milestones/M7.md`. Navigation aids chosen for the f
 - **Done:** Developer judges the rules-on runs tenser and still fair, or records which rule to retune or remove. Baseline M7 behaviour is unchanged with every toggle off.
 - **Avoid:** HUD countdowns, player map, audio files, wall occlusion, thread, gate jam, creatures, closing Sanctuary doors, any backend for shared traces.
 
+M7b implementation contract: `milestones/M7b.md`. Decision, 2026-11-12: the M7 light beams stay but get their own development switch (`beams`), because T4 called chalk the only navigation aid and the developer found M7 too easy. Developer feedback after M7: many more traps and enemies are wanted later; widen M10–M12 accordingly when they are planned in detail.
+
 ### M9 — Early two-client synchronization (L, high risk)
 
 - **Build/why:** Prove multiplayer before inventory/AI/combat coupling.

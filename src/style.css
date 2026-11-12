@@ -99,6 +99,8 @@ kbd { font: 11px ui-monospace, monospace; min-width: 23px; height: 23px; padding
 .debug-seed .debug-validation:empty { display: none; }
 
 .debug-tools { border-top: 1px solid #c9d6ca26; border-bottom: 1px solid #c9d6ca26; margin: 6px 0 10px; padding: 4px 0; }
+.debug-rules { font-size: 10px; color: #c5d2c3; align-items: center; }
+.debug-rules label { display: inline-flex; gap: 3px; align-items: center; }
 .debug-tool-row { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
 .debug-tool-row button, .debug-report button { padding: 5px 8px; border: 1px solid #c9d6ca40; border-radius: 3px; background: #334b3d; color: #eee5cc; cursor: pointer; font-size: 10px; }
 .debug-tool-row button[aria-pressed='true'] { background: #8a6a2c; }
@@ -107,6 +109,8 @@ kbd { font: 11px ui-monospace, monospace; min-width: 23px; height: 23px; padding
 .debug-map svg * { pointer-events: none; }
 .debug-map svg [data-testid='debug-room'] { pointer-events: auto; cursor: pointer; }
 [data-state='error'] .debug-toggle, [data-state='error'] .maze-debug { display: none; }
+.audio-controls { display: flex; gap: 14px; align-items: center; margin-top: 10px; font-size: 11px; color: #c5d2c3; }
+.audio-controls input[type='range'] { width: 110px; vertical-align: middle; }
 .run-actions { display: flex; gap: 8px; margin-top: 10px; }
 .run-actions button { padding: 8px 12px; border: 1px solid #c9d6ca40; border-radius: 4px; background: transparent; color: #dfe6d6; cursor: pointer; font-size: 12px; }
 .run-objective { font-size: 12px; line-height: 1.5; color: #eee5cc; margin: 6px 0; }

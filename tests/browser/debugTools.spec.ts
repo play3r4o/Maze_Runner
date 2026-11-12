@@ -23,7 +23,7 @@ test('freeze holds a shift in place, teleport moves rings, and events record bot
   const errors = watchErrors(page);
   const maze = generateMaze(41);
   await installBrowserClock(page); await page.goto('/?seed=41');
-  await expect(page).toHaveTitle('Shifting Labyrinth · M7');
+  await expect(page).toHaveTitle('Shifting Labyrinth · M7b');
   await page.getByRole('button', { name: 'F2 · Debug map' }).click();
   await startRunning(page, 'Start exploring');
   await freezeBrowserClock(page);
@@ -93,7 +93,7 @@ test('a copied report reloads its seed and reproduces gate state and position ex
 
   // Malformed and wrong-version reports are refused with a reason.
   await page.locator('.debug-report summary').click();
-  await page.getByTestId('report-text').fill('{"format":2,"version":"m4.1"}');
+  await page.getByTestId('report-text').fill('{"format":3,"version":"m4.1"}');
   await page.getByRole('button', { name: 'Load report' }).click();
   await expect(page.getByTestId('debug-tool-status')).toContainText('Report not loaded: Report is from generator m4.1');
   expect(errors).toEqual([]);

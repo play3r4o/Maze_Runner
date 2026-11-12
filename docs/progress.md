@@ -29,7 +29,7 @@
 | M5 | Human accepted on 2026-11-11 |
 | M6 | Human accepted on 2026-11-11 |
 | M7 | Human accepted 2026-11-12 (okay fun, too easy) |
-| M7b (added 2026-11-11) | Free-draw chalk revision in progress; awaiting the comparison |
+| M7b (added 2026-11-11) | Deployed with free-draw chalk (run 43203946222); awaiting the comparison |
 | M9 (scheduled after M7b) | Not started |
 | M8 | Not started |
 | M10–M12 | Not started |
@@ -275,3 +275,4 @@ Stop for the rules-on versus rules-off comparison. M8 and M9 remain unapproved. 
 - Unit: 1184 tests pass (chalk tests rewritten: aiming at floor, wall and gate, drawing and ink, release, surface change, ink exhaustion, stroke cap, disabled states, gate drawing sliding 4.5 m, other drawings unchanged by shifts, report round trip and tampered ink).
 - Browser: both M7b scenarios pass, now drawing two strokes by holding C and moving the mouse. Visual check: “HI” written on the plaza's north wall reads clearly. No page errors.
 - CI run 43201158837 (`60fbd77`) failed: the M6 debug-tools browser test still sent a format 3 report in its wrong-version check (my miss when bumping the format; it now uses `REPORT_FORMAT`), plus two runner context-setup timeouts before any page loaded (room draw, M2 maze).
+- Run 43203946222 (`f8d7767`): 23 of 24 browser tests passed; the long M2 push/crush/Retry test hit its 90 s budget (recurring runner slowness). A re-run of the failed job passed and deployed. Test at `https://play3r4o.github.io/Maze_Runner/?v=f8d7767`. The long M1/M2 browser tests now fail intermittently on most runs; hardening them (or giving them a larger budget) is worth doing before more features land. This note is committed locally for the next checkpoint.

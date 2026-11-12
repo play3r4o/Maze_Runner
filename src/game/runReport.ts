@@ -19,12 +19,14 @@ import type { Bolt, Monster } from './monsters';
 import type { GridItem } from './inventory';
 import { gridValid } from './inventory';
 import type { Container } from './loot';
+import type { Equipment } from './equipment';
+import { SLOTS } from './equipment';
 import { BAG_SIZE } from './tuning';
 
 // A bug report is plain JSON. With the same build it rebuilds the maze (seed + config),
 // replays the same shift requests to the same gate poses, and puts the player back.
 // Bump REPORT_FORMAT if fields change meaning.
-export const REPORT_FORMAT = 8;
+export const REPORT_FORMAT = 9;
 export type RunReport = {
   format: number; version: string; seed: number; config: GeneratorConfig; fingerprint: string;
   // Replay inputs.
@@ -43,6 +45,7 @@ export type RunReport = {
   bag: GridItem[]; containers: Container[]; openContainer: string | null; runNumber: number; nextSack: number;
   footstep: number; thread: { x: number; z: number }[][]; threadLeft: number; laying: boolean;
   jam: { gate: string; seconds: number } | null; jams: { gate: string; request: number }[];
+  equipment: Equipment; activeHand: 'main' | 'off'; attackCooldown: number; blocking: boolean;
   // Recorded results, compared after replay.
   expect: { phase: ShiftPhase; revision: number; completedShifts: number; openness: MazeOpenness };
   // Context for a human reader; not used for replay.
@@ -65,6 +68,7 @@ export function createRunReport(world: GeneratedWorld, run: GeneratedRun, contex
     bag: structuredClone(run.bag), containers: structuredClone(run.containers), openContainer: run.openContainer, runNumber: run.runNumber, nextSack: run.nextSack,
     footstep: run.footstep, thread: structuredClone(run.thread), threadLeft: run.threadLeft, laying: run.laying,
     jam: run.jam ? { ...run.jam } : null, jams: structuredClone(run.jams),
+    equipment: structuredClone(run.equipment), activeHand: run.activeHand, attackCooldown: run.attackCooldown, blocking: run.blocking,
     expect: { phase: run.shift.phase, revision: run.shift.revision, completedShifts: run.shift.completedShifts, openness: { ...run.shift.openness } },
     events: run.events.slice(-20), shiftLog: context.shiftLog ?? [], errors: (context.errors ?? []).slice(-10), note: context.note ?? '',
   };
@@ -136,6 +140,10 @@ export function parseRunReport(text: string): { ok: true; report: RunReport } | 
     || !(data.jam === null || (isObject(data.jam) && typeof data.jam.gate === 'string' && isNumber(data.jam.seconds)))) {
     return { ok: false, error: 'Report thread or gate jam state is missing or invalid.' };
   }
+  if (!isObject(data.equipment) || !Object.keys(data.equipment).every((slot) => (SLOTS as readonly string[]).includes(slot))
+    || !['main', 'off'].includes(data.activeHand as string) || !isNumber(data.attackCooldown) || typeof data.blocking !== 'boolean') {
+    return { ok: false, error: 'Report equipment is missing or invalid.' };
+  }
   const report = {
     events: [], shiftLog: [], errors: [], note: '', frozen: false, cell: null, ring: 'sanctuary', leftSanctuary: false,
     returned: false, teleports: 0, crushedBy: null, killedBy: null, fingerprint: '', ...data,
@@ -199,7 +207,8 @@ export function reproduceRun(world: GeneratedWorld, report: RunReport): { run: G
     bolts: report.bolts.map((bolt) => ({ ...bolt })), boltsLeft: report.boltsLeft, reload: report.reload, nextBoltId: report.nextBoltId,
     bag: structuredClone(report.bag), containers: structuredClone(report.containers), openContainer: report.openContainer, runNumber: report.runNumber, nextSack: report.nextSack,
     footstep: report.footstep, thread: structuredClone(report.thread), threadLeft: report.threadLeft, laying: report.laying,
-    jam: report.jam ? { ...report.jam } : null, jams: structuredClone(report.jams) };
+    jam: report.jam ? { ...report.jam } : null, jams: structuredClone(report.jams),
+    equipment: structuredClone(report.equipment), activeHand: report.activeHand, attackCooldown: report.attackCooldown, blocking: report.blocking, swing: null };
   return { mismatches, run: { ...run, events: addRunEvent(run, 'report',
     `reproduced seed ${report.seed}, ${report.requests} requests${mismatches.length ? `; ${mismatches.length} mismatch(es)` : ''}`) } };
 }

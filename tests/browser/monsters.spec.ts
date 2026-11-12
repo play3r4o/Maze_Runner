@@ -43,7 +43,9 @@ const open = (() => {
 // A running expedition with one monster moved (and set up) as given, the player at `at`.
 function reportWith(index: number, patch: Partial<Monster>, at: { x: number; z: number; yaw: number }) {
   const base = createGeneratedRun(world);
+  // M16: the crossbow is an item now; equip one.
   const run: GeneratedRun = { ...base, status: 'out', leftSanctuary: true, player: at, cell: null, ring: 'outer',
+    equipment: { mainHand: { uid: 't.bow', item: 'crossbow', x: 0, y: 0, rotated: false, roll: { rarity: 'common', bonuses: [] } } },
     monsters: base.monsters.map((monster, i) => (i === index ? { ...monster, ...patch } : monster)) };
   return JSON.stringify(createRunReport(world, run));
 }
@@ -60,12 +62,12 @@ test('monsters on the map; the crossbow fires limited bolts and one bolt kills a
   await page.getByRole('button', { name: 'F2 · Debug map' }).click();
   await expect(page.getByTestId('debug-monster')).toHaveCount(world.monsters.length);
   await expect(page.locator('[data-testid="debug-monster"][data-kind="warden"]')).toHaveCount(1);
-  await expect(page.getByTestId('bolts')).toHaveText(`${CROSSBOW_BOLTS} bolts`);
+  await expect(page.getByTestId('bolts')).toHaveText(`Crossbow · ${CROSSBOW_BOLTS} bolts`);
   await startRunning(page, 'Start exploring');
   await freezeBrowserClock(page);
   await page.mouse.down(); await page.mouse.up();
   await page.clock.runFor(1000);
-  await expect(page.getByTestId('bolts')).toHaveText(`${CROSSBOW_BOLTS - 1} bolts`);
+  await expect(page.getByTestId('bolts')).toHaveText(`Crossbow · ${CROSSBOW_BOLTS - 1} bolts`);
   const list = await events(page);
   await expect(list).toContainText('shot: bolt 1 fired');
   await expect(list).toContainText(`m${skitter + 1} skitter killed by bolt`);
@@ -76,7 +78,7 @@ test('monsters on the map; the crossbow fires limited bolts and one bolt kills a
   await page.keyboard.press('KeyC');
   await page.mouse.down(); await page.clock.runFor(300); await page.mouse.up();
   await page.clock.runFor(1000);
-  await expect(page.getByTestId('bolts')).toHaveText(`${CROSSBOW_BOLTS - 1} bolts`);
+  await expect(page.getByTestId('bolts')).toHaveText(`Crossbow · ${CROSSBOW_BOLTS - 1} bolts`);
   expect(errors).toEqual([]);
 });
 

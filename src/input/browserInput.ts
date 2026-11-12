@@ -16,6 +16,9 @@ export class BrowserInput {
   // out, holding the left mouse button draws.
   private chalkOut = false;
   private mouseDown = false;
+  // M16: right mouse raises a shield; Q swaps to the off-hand weapon.
+  private rightDown = false;
+  private swapRequested = false;
   // M11 crossbow: a left click while the chalk is away fires once.
   private fireRequested = false;
   // M8: T lays thread, F jams a closing gate.
@@ -64,6 +67,9 @@ export class BrowserInput {
       } else if (event.code === 'KeyE') {
         event.preventDefault();
         if (!event.repeat) this.interactRequested = true;
+      } else if (event.code === 'KeyQ') {
+        event.preventDefault();
+        if (!event.repeat) this.swapRequested = true;
       } else if (event.code === 'KeyT') {
         event.preventDefault();
         if (!event.repeat) this.threadRequested = true;
@@ -87,6 +93,7 @@ export class BrowserInput {
       if (this.active && MOVEMENT_KEYS.has(event.code)) event.preventDefault();
     }, options);
 
+    document.addEventListener('contextmenu', (event) => { if (this.active) event.preventDefault(); }, options);
     document.addEventListener('mousemove', (event) => {
       if (!this.active) return;
       this.yaw -= event.movementX * SENSITIVITY;
@@ -95,15 +102,17 @@ export class BrowserInput {
 
     document.addEventListener('mousedown', (event) => {
       if (this.active && event.button === 0) { this.mouseDown = true; if (!this.chalkOut) this.fireRequested = true; }
+      if (this.active && event.button === 2) this.rightDown = true;
     }, options);
     document.addEventListener('mouseup', (event) => {
       if (event.button === 0) this.mouseDown = false;
+      if (event.button === 2) this.rightDown = false;
     }, options);
 
     document.addEventListener('pointerlockchange', () => {
       const locked = document.pointerLockElement === canvas && !document.hidden;
       // Releasing the pointer to open the bag is not a pause.
-      if (this.panelOpen && !locked) { this.active = false; this.keys.clear(); this.mouseDown = false; return; }
+      if (this.panelOpen && !locked) { this.active = false; this.keys.clear(); this.mouseDown = false; this.rightDown = false; return; }
       this.keys.clear();
       this.shiftRequested = false;
       this.interactRequested = false;
@@ -145,6 +154,8 @@ export class BrowserInput {
     this.fireRequested = false;
     this.threadRequested = false;
     this.jamRequested = false;
+    this.rightDown = false;
+    this.swapRequested = false;
     this.onModeChange(false, message);
     if (document.pointerLockElement === this.canvas) document.exitPointerLock();
   }
@@ -190,6 +201,8 @@ export class BrowserInput {
     void this.start();
   }
 
+  isBlockHeld(): boolean { return this.active && this.rightDown; }
+  consumeSwapRequest(): boolean { const requested = this.swapRequested; this.swapRequested = false; return requested; }
   consumeThreadRequest(): boolean { const requested = this.threadRequested; this.threadRequested = false; return requested; }
   consumeJamRequest(): boolean { const requested = this.jamRequested; this.jamRequested = false; return requested; }
 

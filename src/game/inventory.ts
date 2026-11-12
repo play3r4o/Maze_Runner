@@ -1,8 +1,10 @@
 // M8 grid inventory: items take rectangles of cells, may be rotated a quarter turn, never
 // overlap and never leave their grid. Pure functions on plain arrays.
-import { ITEM_BY_ID, itemDef } from './items';
+import { ITEM_BY_ID, itemDef, itemValue } from './items';
+import type { GearRoll } from './items';
 
-export type GridItem = { uid: string; item: string; x: number; y: number; rotated: boolean };
+// `roll` is present on gear (M16): its rarity and bonus stats.
+export type GridItem = { uid: string; item: string; x: number; y: number; rotated: boolean; roll?: GearRoll };
 export type GridSize = { width: number; height: number };
 
 export const footprint = (entry: { item: string; rotated: boolean }) => {
@@ -55,7 +57,7 @@ export function quickMove(from: readonly GridItem[], to: readonly GridItem[], to
   const spot = firstFit(to, toSize, entry.item, uid);
   return spot ? { from: withoutItem(from, uid), to: [...to, spot] } : null;
 }
-export const gridValue = (grid: readonly GridItem[]) => grid.reduce((sum, entry) => sum + itemDef(entry.item).value, 0);
+export const gridValue = (grid: readonly GridItem[]) => grid.reduce((sum, entry) => sum + itemValue(entry), 0);
 export const gridCells = (grid: readonly GridItem[]) => grid.reduce((sum, entry) => { const f = footprint(entry); return sum + f.w * f.h; }, 0);
 // A whole grid is valid: known items, in bounds, no overlaps, unique uids.
 export function gridValid(grid: readonly GridItem[], size: GridSize): boolean {

@@ -6,7 +6,8 @@ import type { GeneratedMaze, Ring } from '../simulation/mazeGenerator';
 import { firstFit } from './inventory';
 import type { GridItem, GridSize } from './inventory';
 import { ITEMS, RARITIES, RELIC_ITEM } from './items';
-import { CHESTS_PER_RING, CONTAINER_SIZES, LOOT_ROLLS, RARITY_WEIGHTS } from './tuning';
+import { CHESTS_PER_RING, CONTAINER_SIZES, GEAR_SHARE, LOOT_ROLLS, RARITY_WEIGHTS } from './tuning';
+import { FINDABLE_GEAR, rollGear } from './equipment';
 import type { TrapSpec } from './traps';
 
 export type ContainerKind = keyof typeof CONTAINER_SIZES;
@@ -32,6 +33,14 @@ export function rollLoot(seed: number, key: string, ring: LootRing, kind: 'chest
     let roll = rng.next() * (weights as readonly number[]).reduce((sum, w) => sum + w, 0);
     let rarity = 0;
     while (roll >= weights[rarity]) { roll -= weights[rarity]; rarity++; }
+    // M16: about a third of rolls are gear of the rolled rarity, with rolled bonuses.
+    if (rng.next() < GEAR_SHARE) {
+      const def = rng.pick(FINDABLE_GEAR);
+      const roll = rollGear(RARITIES[rarity], () => rng.next());
+      const spot = firstFit(items, size, def.id, `${uidPrefix}.${n + 1}`);
+      if (spot) items.push({ ...spot, roll });
+      continue;
+    }
     const options = ITEMS.filter((def) => def.rarity === RARITIES[rarity] && def.id !== RELIC_ITEM && def.category !== 'tool');
     const def = rng.pick(options);
     const spot = firstFit(items, size, def.id, `${uidPrefix}.${n + 1}`);

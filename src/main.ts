@@ -12,14 +12,19 @@ import { debugViewOfMazeRun } from './simulation/mazeDiagnostics';
 import type { DebugView } from './simulation/mazeDiagnostics';
 import type { SceneMode } from './rendering/scene';
 import { MAX_SEED, generateMaze, layoutFingerprint, parseSeed, serializeMaze } from './simulation/mazeGenerator';
-import { abandonGeneratedRun, drawChalk, fireCrossbow, isDead, setRule, buildGeneratedWorld, createGeneratedRun, isRunOver,
+import { abandonGeneratedRun, drawChalk, isDead, setRule, buildGeneratedWorld, createGeneratedRun, isRunOver,
   requestGeneratedRunShift, setGeneratedRunFrozen, stepGeneratedRun, teleportGeneratedRun } from './game/generatedRun';
 import { createRunReport, parseRunReport, reproduceRun } from './game/runReport';
 import { ALL_RULES_ON, RULE_KEYS, autoShiftTicks, isNight, nextBellTick, nightFactor, unrestOf } from './game/pressure';
 import type { RuleKey, RuleToggles } from './game/pressure';
 import { CROSSBOW_RELOAD, dailySeed } from './game/tuning';
 import { closeLoot, containerInReach, dropFromBag, interactGeneratedRun, lootMove, lootQuickMove, openContainerOf } from './game/looting';
-import { hasSpool, jamGate, jamTarget, toggleThread, withBag } from './game/generatedRun';
+import { activeWeapon, attackGeneratedRun, hasSpool, jamGate, jamTarget, setBlocking, swapHands, toggleThread, withBag, withEquipment } from './game/generatedRun';
+import { equipItem, isGear, maxHealthOf, statsOf, unequipItem } from './game/equipment';
+import { lootEquip, lootUnequip, smartSlot } from './game/looting';
+import { TRADERS, buyFrom, buyPrice, marketFor, sellTo, traderBuys } from './game/traders';
+import type { SellFrom, TraderId, Wallet } from './game/traders';
+import { TRADER_GRID } from './game/tuning';
 import { moveBetween, quickMove } from './game/inventory';
 import { BAG_SIZE, STASH_SIZE } from './game/tuning';
 import { clearProfile, emptyProfile, finishedRun, loadProfile, saveProfile, startedRun, traceFor, withTrace } from './storage/save';
@@ -39,7 +44,7 @@ const requestedScene = params.get('scene');
 // M0 room, M1 junction and M2/M3 hand-built maze stay reachable for regression checks.
 const mode: SceneMode = requestedScene === 'room' ? 'room' : requestedScene === 'junction' ? 'junction'
   : requestedScene === 'maze' ? 'maze' : 'generated';
-document.title = `Shifting Labyrinth · ${{ generated: 'M8', maze: 'M3', junction: 'M1', room: 'M0' }[mode]}`;
+document.title = `Shifting Labyrinth · ${{ generated: 'M16', maze: 'M3', junction: 'M1', room: 'M0' }[mode]}`;
 canvas.setAttribute('aria-label', { generated: 'First-person shifting seeded maze', maze: 'First-person hand-built maze',
   junction: 'First-person shifting junction', room: 'First-person gray room' }[mode]);
 
@@ -114,7 +119,7 @@ function startRoom() {
   let roomPlayer = { ...PLAYER_SPAWN };
   let run = createJunctionRun();
   let mazeRun = createMazeRun();
-  const runStart = () => ({ runNumber: profile!.runs + 1, bag: profile!.bag, starterKit: true });
+  const runStart = () => ({ runNumber: profile!.runs + 1, bag: profile!.bag, equipment: profile!.equipment, starterKit: true });
   let generatedRun: GeneratedRun | null = world ? createGeneratedRun(world, initialRules, runStart()) : null;
   // Only runs started from the profile write back to it (a loaded bug report does not).
   let profileRun = Boolean(world);
@@ -124,10 +129,11 @@ function startRoom() {
   function trackProfile(before: GeneratedRun, after: GeneratedRun) {
     if (!profile || !profileRun) return;
     if (before.status === 'ready' && after.status !== 'ready' && !isRunOver(after.status)) storeProfile(startedRun(profile, after.runNumber));
-    else if (before.status === 'ready' && !isRunOver(after.status) && before.bag !== after.bag) storeProfile({ ...profile, bag: after.bag });
+    else if (before.status === 'ready' && !isRunOver(after.status) && (before.bag !== after.bag || before.equipment !== after.equipment)) storeProfile({ ...profile, bag: after.bag, equipment: after.equipment });
     if (!isRunOver(before.status) && isRunOver(after.status)) {
       if (before.status === 'ready') storeProfile({ ...profile, runs: Math.max(profile.runs, after.runNumber) });
-      storeProfile(finishedRun(profile, after.status === 'extracted', after.bag));
+      storeProfile(finishedRun(profile, after.status === 'extracted', after.bag, after.equipment));
+      storeProfile({ ...profile, market: marketFor(profile.market, profile.runs) });
       // T8: dying leaves a cairn and this run's chalk for the next run of the same seed.
       if (after.status === 'failed' && world) {
         storeProfile(withTrace(profile, { seed: world.maze.seed, version: world.maze.version, x: after.player.x, z: after.player.z, chalk: after.chalk }));
@@ -173,7 +179,9 @@ function startRoom() {
       next = drawChalk(world, { ...next, player: { ...next.player, yaw: state.yaw } }, state.pitch, input.isChalkHeld());
       if (input.consumeThreadRequest()) next = toggleThread(next);
       if (input.consumeJamRequest() && next.bag.length) next = jamGate(world, next, next.bag[next.bag.length - 1].uid);
-      if (input.consumeFireRequest()) next = fireCrossbow({ ...next, player: { ...next.player, yaw: state.yaw } });
+      next = setBlocking(next, input.isBlockHeld());
+      if (input.consumeSwapRequest()) next = swapHands(next);
+      if (input.consumeFireRequest()) next = attackGeneratedRun(world, { ...next, player: { ...next.player, yaw: state.yaw } });
       if (shiftRequested) {
         next = requestGeneratedRunShift(world, next);
         const entry = next.shift.log.at(-1);
@@ -229,24 +237,61 @@ function startRoom() {
     else if (key === 'bag' && generatedRun && !isDead(generatedRun) && !isRunOver(generatedRun.status)) {
       // Tab: the bag; in Sanctuary before leaving, the bag beside the stash.
       stashMode = generatedRun.status === 'ready';
+      baseTab = 'stash';
       input.openPanel();
       inventory.open(inventoryView(generatedRun));
     }
   });
+  // M16: what the first-person hands hold.
+  const MODEL_OF: Record<string, string> = { rustySword: 'sword', shortsword: 'sword', dagger: 'dagger', mace: 'mace', battleAxe: 'axe', spear: 'spear', crossbow: 'crossbow', buckler: 'buckler', heaterShield: 'heater' };
+  function heldState(run: GeneratedRun) {
+    const main = run.equipment.mainHand ? MODEL_OF[run.equipment.mainHand.item] ?? null : null;
+    const off = run.equipment.offHand ? MODEL_OF[run.equipment.offHand.item] ?? null : null;
+    const swingTicks = run.swing ? run.tick - run.swing.tick : Infinity;
+    return { shown: !input.isChalkOut() && !isDead(run) && !isRunOver(run.status), main, off,
+      active: run.activeHand, swing: Math.min(1, swingTicks / 18), blocking: run.blocking,
+      loaded: run.boltsLeft > 0 && run.reload <= 0, recoil: Math.min(1, run.reload / CROSSBOW_RELOAD) };
+  }
   // M8 bag, loot and stash screens. The pointer is released; the maze keeps running.
   let stashMode = false;
+  // M16 base screen tab: the stash or a trader.
+  let baseTab: 'stash' | TraderId = 'stash';
+  // Trading works on the profile (gold, stash, market) and the run's bag and gear at the base.
+  function trade(change: (wallet: Wallet) => Wallet | null) {
+    if (!generatedRun || !profile || generatedRun.status !== 'ready') return;
+    const wallet: Wallet = { gold: profile.gold, stash: profile.stash, bag: generatedRun.bag, equipment: generatedRun.equipment, market: marketFor(profile.market, profile.runs) };
+    const next = change(wallet);
+    if (!next) return;
+    generatedRun = withEquipment(withBag(generatedRun, next.bag), next.equipment);
+    storeProfile({ ...profile, gold: next.gold, stash: next.stash, bag: next.bag, equipment: next.equipment, market: next.market });
+  }
+  const sellNow = (from: SellFrom) => { if (baseTab !== 'stash') trade((w) => sellTo(w, baseTab as TraderId, from)); };
   const KIND_TITLES: Record<string, string> = { chest: 'Chest', remains: 'Remains', reliquary: 'Reliquary', sack: 'Dropped sack' };
   function inventoryView(run: GeneratedRun): InventoryView {
     const open = openContainerOf(run);
+    const trader = stashMode && profile && baseTab !== 'stash' ? TRADERS.find((item) => item.id === baseTab)! : null;
+    const stock = trader && profile ? marketFor(profile.market, profile.runs).stock[trader.id] : [];
     const left = open ? { key: 'container' as const, title: KIND_TITLES[open.kind] ?? open.kind, size: { width: open.width, height: open.height }, items: open.items }
+      : trader ? { key: 'trader' as const, title: trader.name, size: TRADER_GRID, items: stock, prices: Object.fromEntries(stock.map((entry) => [entry.uid, buyPrice(entry)])),
+          note: `${trader.buysText} Drag an item here (or right-click it) to sell; right-click or drag stock out to buy into your stash.` }
       : stashMode && profile ? { key: 'stash' as const, title: 'Stash', size: STASH_SIZE, items: profile.stash } : null;
+    const base = stashMode && profile ? {
+      tabs: [{ id: 'stash', label: 'Stash', active: baseTab === 'stash' }, ...TRADERS.map((item) => ({ id: item.id, label: item.name, active: baseTab === item.id }))],
+      gold: profile.gold, showCharacter: !trader, second: trader ? { key: 'stash' as const, title: 'Stash', size: STASH_SIZE, items: profile.stash } : null } : {};
+    const weapon = activeWeapon(run);
+    const weaponName = weapon.item ? itemDef(weapon.item.item).name : 'Fists';
+    const weaponLine = weapon.spec.kind === 'crossbow' ? `${weaponName} · ${run.boltsLeft} bolts` : `${weaponName} · ${Math.round(weapon.spec.damage * (1 + statsOf(run.equipment).damage / 100))} dmg`;
     return { left, bag: run.bag, bagSize: BAG_SIZE, canDrop: run.status === 'out',
+      equipment: run.equipment, stats: statsOf(run.equipment), maxHealth: maxHealthOf(run.equipment), weapon: weaponLine, ...base,
       hint: stashMode ? 'Drag between bag and stash · R rotates while dragging · right-click sends across · whatever is in the bag when you leave is at risk'
         : 'Drag to move · R rotates while dragging · right-click sends across · drop zone leaves it on the floor · the maze keeps moving' };
   }
   const inventory = createInventoryUI(document.body, {
+    tab(id) { baseTab = id as typeof baseTab; if (generatedRun) inventory.render(inventoryView(generatedRun)); },
     move(from: GridKey, uid, to: GridKey, target) {
       if (!generatedRun || !profile) return;
+      if (from === 'trader') { if (to !== 'trader' && baseTab !== 'stash') trade((w) => buyFrom(w, baseTab as TraderId, uid)); return; }
+      if (to === 'trader') { if (from === 'bag' || from === 'stash') sellNow({ grid: from, uid }); return; }
       if (from === 'stash' || to === 'stash') {
         if (generatedRun.status !== 'ready') return;
         const sizeOf = (key: GridKey) => (key === 'stash' ? STASH_SIZE : BAG_SIZE);
@@ -263,8 +308,50 @@ function startRoom() {
       generatedRun = lootMove(generatedRun, from as 'bag' | 'container', uid, to as 'bag' | 'container', target);
       trackProfile(before, generatedRun);
     },
+    equip(from: GridKey, uid, slot) {
+      if (!generatedRun || !profile) return;
+      if (from === 'stash') {
+        if (generatedRun.status !== 'ready') return;
+        const result = equipItem(generatedRun.equipment, profile.stash, STASH_SIZE, uid, slot);
+        if (!result) return;
+        generatedRun = withEquipment(generatedRun, result.equipment);
+        storeProfile({ ...profile, stash: result.source, equipment: generatedRun.equipment, bag: generatedRun.bag });
+        return;
+      }
+      const before = generatedRun;
+      generatedRun = lootEquip(generatedRun, from as 'bag' | 'container', uid, slot);
+      trackProfile(before, generatedRun);
+    },
+    unequip(slot, to: GridKey, target) {
+      if (!generatedRun || !profile) return;
+      if (to === 'trader') { sellNow({ grid: 'equipment', slot }); return; }
+      if (to === 'stash') {
+        if (generatedRun.status !== 'ready') return;
+        const result = unequipItem(generatedRun.equipment, slot, profile.stash, STASH_SIZE, target);
+        if (!result) return;
+        generatedRun = withEquipment(generatedRun, result.equipment);
+        storeProfile({ ...profile, stash: result.dest, equipment: generatedRun.equipment, bag: generatedRun.bag });
+        return;
+      }
+      const before = generatedRun;
+      generatedRun = lootUnequip(generatedRun, slot, to as 'bag' | 'container', target);
+      trackProfile(before, generatedRun);
+    },
     quick(from: GridKey, uid) {
       if (!generatedRun || !profile) return;
+      // At a trader: right-click stock buys, right-click your own item sells (if they buy it).
+      if (from === 'trader') { if (baseTab !== 'stash') trade((w) => buyFrom(w, baseTab as TraderId, uid)); return; }
+      if (stashMode && baseTab !== 'stash' && (from === 'bag' || from === 'stash')) {
+        const entry = (from === 'bag' ? generatedRun.bag : profile.stash).find((item) => item.uid === uid);
+        if (entry && traderBuys(baseTab, entry)) sellNow({ grid: from, uid });
+        return;
+      }
+      // Right-click on gear in the bag equips it.
+      const entry = from === 'bag' ? generatedRun.bag.find((item) => item.uid === uid) : null;
+      if (entry && isGear(entry.item)) {
+        const slot = smartSlot(generatedRun.equipment, entry);
+        if (slot) { this.equip('bag', uid, slot); return; }
+      }
       if (stashMode && generatedRun.status === 'ready') {
         const moved = from === 'stash' ? quickMove(profile.stash, generatedRun.bag, BAG_SIZE, uid) : quickMove(generatedRun.bag, profile.stash, STASH_SIZE, uid);
         if (!moved) return;
@@ -435,8 +522,7 @@ function startRoom() {
         monsters: live.monsters, bolts: live.bolts, monstersOn: live.rules.monsters,
         thread: live.thread, trace: activeTrace,
         containers: live.containers, relicHome: live.containers.some((c) => c.kind === 'reliquary' && c.items.length > 0),
-        bow: { shown: !input.isChalkOut() && !isDead(live) && !isRunOver(live.status), ready: live.boltsLeft > 0 && live.reload <= 0,
-          recoil: live.reload / CROSSBOW_RELOAD } } : undefined);
+        held: heldState(live) } : undefined);
       // Read-only audio diagnostics for tests and bug reports.
       if (scene.audio) {
         document.documentElement.dataset.audioState = scene.audio.state;

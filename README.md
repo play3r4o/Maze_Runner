@@ -1,8 +1,8 @@
 # Shifting Labyrinth
 
-Working title. A browser game project starting with a small, first-person shifting-maze prototype. **M0–M7b and M10–12 are accepted. M8 (awaiting acceptance) turns runs into loot runs: a grid bag, chests and remains to loot, extraction with whatever you carry, a saved stash, and a maze that reacts to what you carry.**
+Working title. A browser game project starting with a small, first-person shifting-maze prototype. **M0–M8 and M10–12 are accepted. M16 (awaiting acceptance) adds equipment with rolled stats, melee weapons and shields, gold, and traders at the base.**
 
-Read [the brief](project_brief.md), [development plan](docs/development_plan.md), [M7b specification](docs/milestones/M7b.md), [M10–12 specification](docs/milestones/M10-M12.md), [M8 specification](docs/milestones/M8.md), and [current progress](docs/progress.md).
+Read [the brief](project_brief.md), [development plan](docs/development_plan.md), [M7b specification](docs/milestones/M7b.md), [M10–12 specification](docs/milestones/M10-M12.md), [M8 specification](docs/milestones/M8.md), [M16 specification](docs/milestones/M16.md), and [current progress](docs/progress.md).
 
 ## Run
 
@@ -20,6 +20,8 @@ Click **Start exploring** to capture the mouse. **WASD** moves, **mouse** looks,
 **M7 expedition (default scene).** A relic waits in the outer ring under a tall **blue beam**. Leave Sanctuary, press **E** next to the relic, then carry it back into Sanctuary under the **gold beam**. Every 45 seconds the maze shifts by itself after a 2-second warning: one gate opens, another closes, so your way back may change. Crushing ends the run and loses the relic; **Abandon run** is in the pause menu. The result screen shows your time and shifts survived, with **New run** (fresh seed) and **Retry this seed**. G still forces a shift for debugging. See the [M7 specification](docs/milestones/M7.md).
 
 **M7b pressure.** Carrying the relic makes shifts come every 27 s. A bell from Sanctuary tolls once at 2:30, twice at 3:15 and three times at 4:00 of the run; then night falls and the maze shifts every 10 s. Gates warn and grind with positional sound (volume and mute in the pause menu). Press **C** to take out the chalk, then hold the **left mouse button** and look around to draw or write on floors, walls and gates within reach; C puts it away (30 m of line per run; drawings on a gate slide with it). With no `?seed=`, everyone gets today's maze (UTC date). For comparisons, F2 has switches for each rule and the beams; `?off=unrest,dusk,sound,chalk,beams` starts with them off. See the [M7b specification](docs/milestones/M7b.md).
+
+**M16 gear.** Tab shows your character beside the bag: main hand, off hand, chest, gloves, boots, amulet and ring. Gear is found in chests and remains, each piece with a rarity (common to legendary) and bonus stats: max health, armour, move speed, damage, attack speed, stealth, trap resistance. Drag gear onto a slot or right-click it to wear it. **Left mouse** attacks with the weapon in hand (swords, axes, spears, maces, daggers swing; the crossbow shoots), **right mouse** blocks with a shield, **Q** swaps to a second one-handed weapon. An empty main hand gets a free Rusty Shortsword. Worn gear is lost when you die. Back in Sanctuary before a run, **Tab** opens the base: your stash and four traders (Weaponsmith, Armourer, Jeweller, Quartermaster). Each buys only certain items for their gold value; drag an item onto them or right-click it to sell. Their stock (with prices) can be bought with gold and goes to your stash; it changes after every run. See the [M16 specification](docs/milestones/M16.md).
 
 **M8 loot.** Chests sit in room corners; killed husks and skitters leave remains. Press **E** next to one to open it and drag items into your **bag** (6 × 4 cells; items take 1 to 6 cells; **R** rotates while dragging; right-click sends an item across; drag to the drop zone to leave it on the floor). **Tab** opens the bag. The maze keeps moving while you loot. Step back into Sanctuary to extract and keep what you carry; dying, abandoning or closing the page mid-run loses the bag. In Sanctuary before leaving, Tab shows your **stash** beside the bag. Everything is saved in this browser. The Heart of the Maze (under the blue beam) is the richest prize. Heavy items (materials, relics) make the maze shift faster; coins clink and carry your footsteps further. Each run you get a free thread spool: **T** starts or stops laying a red line on the floor (150 m). When a gate is closing near you, **F** sacrifices an item to hold it for 6 s. Dying leaves a cairn and your faded drawings for your next try at the same seed. See the [M8 specification](docs/milestones/M8.md).
 
@@ -43,7 +45,7 @@ The topology revision starts at **0** and usually reaches **2** per complete swa
 
 With the view open, press **V** or click **Probe isolation** to propose blocking Sanctuary's connections in a **dry run**. Read the rejection and inspect the proposed edge IDs/unreachable cells. This cannot move walls, change the revision or alter the run. Escape releases the cursor so you can scroll/expand the connection and validation details. Retry resets revision/attempt history while keeping the panel's visibility for that page.
 
-Follow the [M8 checklist](docs/milestones/M8.md#human-acceptance-checklist-after-stage-2) before approving the next milestone. Accepted reference scenes remain available: `?scene=room` for M0, `?scene=junction` for M1 and `?scene=maze` for M2/M3. Teleport, automatic shifting, jumping and sprinting remain deferred.
+Follow the [M16 checklist](docs/milestones/M16.md#human-acceptance-checklist-after-stage-2) before approving the next milestone. Accepted reference scenes remain available: `?scene=room` for M0, `?scene=junction` for M1 and `?scene=maze` for M2/M3. Teleport, automatic shifting, jumping and sprinting remain deferred.
 
 ## Check and build
 
@@ -94,7 +96,7 @@ One-time repository setup:
 
 For the current repository, the expected default URL is `https://play3r4o.github.io/Maze_Runner/`. It becomes usable only after GitHub reports a successful deployment; an expected URL alone is not proof of publication.
 
-Open the game in a desktop browser tab and click **Start exploring**. No local Node.js installation is required for the hosted version. After a new deployment, refresh and check the **M8 · LOOT** header; remove any `scene=` parameter from the URL to play the current maze. Share a `?seed=N` address to reproduce a layout.
+Open the game in a desktop browser tab and click **Start exploring**. No local Node.js installation is required for the hosted version. After a new deployment, refresh and check the **M16 · GEAR** header; remove any `scene=` parameter from the URL to play the current maze. Share a `?seed=N` address to reproduce a layout.
 
 If Pages is unavailable for the repository's visibility or account plan, keep those settings unchanged and report the limitation. Enabling Pages does not require adding credentials to the game or creating a separate server.
 
@@ -112,4 +114,4 @@ The local npm cache is ignored `.cache/npm` to work inside restricted cloud work
 
 Stop the development server before reinstalling dependencies and restart it afterward. If Vite reports an outdated optimized dependency after an install, restart the server rather than changing application code.
 
-Next is M8 or M9 in the plan's order, **after the M8 checklist and explicit approval**. Approved GitHub pushes trigger the Pages workflow; a successful local build alone does not establish a successful hosted deployment.
+Next is M8 or M9 in the plan's order, **after the M16 checklist and explicit approval**. Approved GitHub pushes trigger the Pages workflow; a successful local build alone does not establish a successful hosted deployment.

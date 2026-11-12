@@ -30,8 +30,11 @@ import { FOOTSTEP_NOISE_METRES, FOOTSTEP_SECONDS, JAM_RANGE, JAM_SECONDS, NOISY_
 import { firstFit } from './inventory';
 import { BAG_SIZE } from './tuning';
 import type { Noise } from './monsters';
+import { STARTER_WEAPON, attackSpeedScaleOf, canSwapHands, damageScaleOf, damageTaken, maxHealthOf, shieldBlock, speedScaleOf, statsOf, stealthOf, weaponIn } from './equipment';
+import type { Equipment } from './equipment';
+import { BLOCK_ARC_DEGREES, BLOCK_SPEED, BOLT_DAMAGE, MELEE_ARC_DEGREES, MELEE_NOISE_METRES } from './tuning';
+import { lineClear } from './monsters';
 import { nearestCell } from './monsters';
-import { PLAYER_HEALTH } from './tuning';
 import { PLAYER_HALF_WIDTH } from '../simulation/player';
 import type { ChalkStroke } from './chalk';
 
@@ -108,6 +111,9 @@ export type GeneratedRun = {
   // and whether it is being laid (T5); the gate jam in progress and gates jammed per plan (T6).
   footstep: number; thread: Point2[][]; threadLeft: number; laying: boolean;
   jam: { gate: string; seconds: number } | null; jams: { gate: string; request: number }[];
+  // M16: worn gear, which hand's weapon is in use (Q), seconds until the next swing, whether
+  // the shield is raised (right mouse) and the last swing (for the held-weapon animation).
+  equipment: Equipment; activeHand: 'main' | 'off'; attackCooldown: number; blocking: boolean; swing: { tick: number; hit: number } | null;
 };
 export const hasRelic = (bag: readonly GridItem[]) => bag.some((entry) => entry.item === RELIC_ITEM);
 // Replace the bag, keeping `carrying` in step with it.
@@ -115,10 +121,13 @@ export const withBag = (run: GeneratedRun, bag: GridItem[]): GeneratedRun => ({ 
 // Dead by any cause: crushed by a gate or killed by a trap or monster.
 export const isDead = (run: GeneratedRun) => run.crushedBy !== null || run.killedBy !== null;
 // starterKit (T5): add a free thread spool if the bag has none and has room.
-export type RunStart = { runNumber?: number; bag?: readonly GridItem[]; starterKit?: boolean };
+export type RunStart = { runNumber?: number; bag?: readonly GridItem[]; starterKit?: boolean; equipment?: Equipment };
 export function createGeneratedRun(world: GeneratedWorld, rules: RuleToggles = ALL_RULES_ON, start: RunStart = {}): GeneratedRun {
   const runNumber = start.runNumber ?? 1;
   const bag = (start.bag ?? []).map((entry) => ({ ...entry }));
+  const equipment: Equipment = structuredClone(start.equipment ?? {});
+  // M16 starter gear: an empty main hand gets the free Rusty Shortsword.
+  if (start.starterKit && !equipment.mainHand) equipment.mainHand = { uid: `r${runNumber}.rusty`, item: STARTER_WEAPON, x: 0, y: 0, rotated: false, roll: { rarity: 'common', bonuses: [] } };
   if (start.starterKit && !bag.some((entry) => entry.item === THREAD_ITEM)) {
     const spot = firstFit(bag, BAG_SIZE, THREAD_ITEM, `r${runNumber}.spool`);
     if (spot) bag.push(spot);
@@ -128,11 +137,12 @@ export function createGeneratedRun(world: GeneratedWorld, rules: RuleToggles = A
     tick: 0, shiftTicks: 0, frozen: false, teleports: 0, events: [],
     status: 'ready', carrying: hasRelic(bag), runTicks: 0, autoTicks: 0,
     rules: { ...rules }, chalk: [], chalkLeft: CHALK_INK_METRES, activeStroke: null, bells: 0, sounds: [], nextSoundId: 1,
-    health: PLAYER_HEALTH, killedBy: null, traps: createTrapStates(world.traps),
+    health: maxHealthOf(equipment), killedBy: null, traps: createTrapStates(world.traps),
     monsters: world.monsters.map((monster) => ({ ...monster, path: [...monster.path] })), monsterRng: monsterRngSeed(world.maze), noise: [],
     bolts: [], boltsLeft: CROSSBOW_BOLTS, reload: 0, nextBoltId: 1,
     bag, containers: forRun(world.containers, runNumber), openContainer: null, runNumber, nextSack: 1,
-    footstep: 0, thread: [], threadLeft: THREAD_METRES, laying: false, jam: null, jams: [] };
+    footstep: 0, thread: [], threadLeft: THREAD_METRES, laying: false, jam: null, jams: [],
+    equipment, activeHand: 'main', attackCooldown: 0, blocking: false, swing: null };
 }
 
 // T3: queue a positioned sound if sound is enabled. Returns the updated sound fields.
@@ -189,11 +199,58 @@ export function requestGeneratedRunShift(world: GeneratedWorld, run: GeneratedRu
 // M11 crossbow (left mouse button with the chalk away): one bolt along the view direction.
 export function fireCrossbow(run: GeneratedRun): GeneratedRun {
   if (isDead(run) || isRunOver(run.status) || run.boltsLeft <= 0 || run.reload > 0) return run;
-  const bolt = newBolt(run.nextBoltId, run.player.x, run.player.z, run.player.yaw);
-  const next = { ...run, bolts: [...run.bolts, bolt], boltsLeft: run.boltsLeft - 1, reload: CROSSBOW_RELOAD, nextBoltId: run.nextBoltId + 1,
+  const stats = statsOf(run.equipment);
+  const bolt = newBolt(run.nextBoltId, run.player.x, run.player.z, run.player.yaw, Math.round(BOLT_DAMAGE * (weaponIn(run.equipment, 'main').spec.kind === 'crossbow' ? damageScaleOf(stats) : 1)));
+  const next = { ...run, bolts: [...run.bolts, bolt], boltsLeft: run.boltsLeft - 1, reload: CROSSBOW_RELOAD / attackSpeedScaleOf(stats), nextBoltId: run.nextBoltId + 1,
     events: addRunEvent(run, 'shot', `bolt ${bolt.id} fired (${run.boltsLeft - 1} left)`) };
   return withSound(next, 'shot', run.player.x, run.player.z);
 }
+// M16: left mouse with the chalk away uses the weapon in hand: the crossbow fires a bolt; a
+// melee weapon (or fists) swings, hitting every monster in front within reach and in sight.
+export function activeWeapon(run: GeneratedRun) {
+  return weaponIn(run.equipment, run.activeHand === 'off' && canSwapHands(run.equipment) ? 'off' : 'main');
+}
+export function attackGeneratedRun(world: GeneratedWorld, run: GeneratedRun): GeneratedRun {
+  if (isDead(run) || isRunOver(run.status)) return run;
+  const weapon = activeWeapon(run).spec;
+  if (weapon.kind === 'crossbow') return fireCrossbow(run);
+  if (run.attackCooldown > 0) return run;
+  const stats = statsOf(run.equipment);
+  const damage = Math.round(weapon.damage * damageScaleOf(stats));
+  const facing = { x: -Math.sin(run.player.yaw), z: -Math.cos(run.player.yaw) };
+  const solids = [...world.solids, ...layoutGateColliders(world.maze, run.shift.openness)];
+  let next: GeneratedRun = { ...run, attackCooldown: weapon.cooldown / attackSpeedScaleOf(stats), swing: { tick: run.tick, hit: 0 } };
+  let hits = 0;
+  if (run.rules.monsters) next.monsters.forEach((monster, index) => {
+    if (monster.mode === 'dead') return;
+    const to = { x: monster.x - run.player.x, z: monster.z - run.player.z };
+    const distance = Math.hypot(to.x, to.z);
+    if (distance > weapon.reach + MONSTER_STATS[monster.kind].half) return;
+    const cos = distance < 1e-6 ? 1 : (facing.x * to.x + facing.z * to.z) / distance;
+    if (cos < Math.cos((MELEE_ARC_DEGREES / 2) * Math.PI / 180) || !lineClear(run.player, monster, solids)) return;
+    const result = hurtMonster(next.monsters[index], damage, false, 'melee');
+    next = { ...next, monsters: next.monsters.map((item, i) => (i === index ? result.monster : item)) };
+    next = noteMonsterHit(world, next, result.hit, result.monster);
+    hits++;
+  });
+  next = { ...next, swing: { tick: run.tick, hit: hits }, noise: [...next.noise, { x: run.player.x, z: run.player.z, radius: MELEE_NOISE_METRES }].slice(-NOISE_LIMIT) };
+  return withSound(next, hits ? 'meleeHit' : 'swing', run.player.x, run.player.z);
+}
+// Q: switch to the off-hand weapon and back.
+export const swapHands = (run: GeneratedRun): GeneratedRun =>
+  canSwapHands(run.equipment) ? { ...run, activeHand: run.activeHand === 'main' ? 'off' : 'main', attackCooldown: Math.max(run.attackCooldown, 0.3) } : run;
+// Right mouse: raise or lower the shield (only with a shield in the off hand).
+export const setBlocking = (run: GeneratedRun, held: boolean): GeneratedRun => {
+  const blocking = held && shieldBlock(run.equipment) > 0 && !isDead(run) && !isRunOver(run.status);
+  return blocking === run.blocking ? run : { ...run, blocking };
+};
+// Changing gear keeps current health within the new maximum, and drops a stale off-hand choice.
+export function withEquipment(run: GeneratedRun, equipment: Equipment): GeneratedRun {
+  const health = Math.min(run.health, maxHealthOf(equipment));
+  const activeHand = run.activeHand === 'off' && !canSwapHands(equipment) ? 'main' : run.activeHand;
+  return { ...run, equipment, health: health > 0 || isDead(run) ? health : 1, activeHand, blocking: run.blocking && shieldBlock(equipment) > 0 };
+}
+
 // Abandon ends a started or unstarted run with nothing secured.
 export function abandonGeneratedRun(run: GeneratedRun): GeneratedRun {
   if (isRunOver(run.status)) return run;
@@ -273,7 +330,8 @@ export function stepGeneratedRun(world: GeneratedWorld, previous: GeneratedRun, 
     return isRunOver(run.status) ? dead : { ...dead, status: 'failed' as const,
       events: addRunEvent(dead, 'run', `failed after ${(run.runTicks * FIXED_DT).toFixed(1)}s${run.carrying ? ', relic lost' : ''}`) };
   }
-  const player = stepPlayer({ ...contact.player, yaw }, intent, [...world.solids, ...layoutGateColliders(maze, shift.openness)], dt);
+  const speed = speedScaleOf(statsOf(run.equipment)) * (run.blocking && shieldBlock(run.equipment) > 0 ? BLOCK_SPEED : 1);
+  const player = stepPlayer({ ...contact.player, yaw }, intent, [...world.solids, ...layoutGateColliders(maze, shift.openness)], dt, speed);
   const atHome = insideRect(player, world.plaza);
   const room = atHome ? maze.start : maze.cells.find((cell) => inCellRoom(player, cell.id, maze))?.id ?? null;
   const visited = [...run.visited];
@@ -318,7 +376,7 @@ function walkEffects(run: GeneratedRun, from: PlayerState, dt: number): Generate
     const footstep = run.footstep + dt;
     if (footstep >= FOOTSTEP_SECONDS - 1e-9) {
       const noisy = noisyCount(run.bag);
-      next = { ...next, footstep: 0, noise: [...next.noise, { x: run.player.x, z: run.player.z, radius: FOOTSTEP_NOISE_METRES + NOISY_ITEM_NOISE_METRES * noisy }].slice(-NOISE_LIMIT) };
+      next = { ...next, footstep: 0, noise: [...next.noise, { x: run.player.x, z: run.player.z, radius: (FOOTSTEP_NOISE_METRES + NOISY_ITEM_NOISE_METRES * noisy) * (1 - stealthOf(statsOf(run.equipment))) }].slice(-NOISE_LIMIT) };
       if (noisy) next = withSound(next, 'jingle', run.player.x, run.player.z);
     } else next = { ...next, footstep };
   }
@@ -373,8 +431,18 @@ export function jamGate(world: GeneratedWorld, run: GeneratedRun, uid: string): 
 }
 
 // Player damage from any source; at 0 the run fails once with the cause.
-function hurtPlayer(run: GeneratedRun, amount: number, lethal: boolean, cause: string): GeneratedRun {
+// M16: armour (and trap resistance) reduce non-lethal damage; a raised shield takes its block
+// share off hits from the front.
+function hurtPlayer(run: GeneratedRun, raw: number, lethal: boolean, cause: string, source: { kind: 'monster' | 'trap'; from?: Point2 } = { kind: 'trap' }): GeneratedRun {
   if (isDead(run) || isRunOver(run.status)) return run;
+  let amount = lethal ? raw : damageTaken(raw, statsOf(run.equipment), source.kind);
+  const block = shieldBlock(run.equipment);
+  if (!lethal && run.blocking && block > 0 && source.from) {
+    const facing = { x: -Math.sin(run.player.yaw), z: -Math.cos(run.player.yaw) };
+    const to = { x: source.from.x - run.player.x, z: source.from.z - run.player.z };
+    const cos = (facing.x * to.x + facing.z * to.z) / Math.max(1e-9, Math.hypot(to.x, to.z));
+    if (cos >= Math.cos((BLOCK_ARC_DEGREES / 2) * Math.PI / 180)) amount = Math.round(amount * (1 - block / 100));
+  }
   const health = lethal ? 0 : Math.max(0, run.health - amount);
   let next = withSound({ ...run, health, events: addRunEvent(run, 'hurt', `${cause} ${lethal ? 'killed you' : `-${amount}`} (${health} left)`) },
     'hurt', run.player.x, run.player.z);
@@ -413,7 +481,7 @@ function leaveRemains(world: GeneratedWorld, run: GeneratedRun, monster: string,
 function applyCombat(world: GeneratedWorld, run: GeneratedRun, before: GeneratedRun, frozen: boolean, dt: number): GeneratedRun {
   if (isRunOver(run.status) && run.status !== 'failed') return run;
   const solids = [...world.solids, ...layoutGateColliders(world.maze, run.shift.openness)];
-  let next: GeneratedRun = { ...run, reload: Math.max(0, run.reload - dt) };
+  let next: GeneratedRun = { ...run, reload: Math.max(0, run.reload - dt), attackCooldown: Math.max(0, run.attackCooldown - dt) };
   if (next.bolts.length) {
     const flight = stepBolts(next.bolts, next.monsters, solids, dt, next.rules.monsters);
     next = { ...next, bolts: flight.bolts, monsters: flight.monsters };
@@ -433,7 +501,10 @@ function applyCombat(world: GeneratedWorld, run: GeneratedRun, before: Generated
     const monster = outcome.monsters.find((item) => item.id === hit.monster)!;
     next = noteMonsterHit(world, next, hit, monster);
   }
-  for (const attack of outcome.attacks) next = hurtPlayer(next, attack.amount, false, MONSTER_NAMES[attack.kind]);
+  for (const attack of outcome.attacks) {
+    const from = outcome.monsters.find((monster) => monster.id === attack.monster);
+    next = hurtPlayer(next, attack.amount, false, MONSTER_NAMES[attack.kind], { kind: 'monster', from });
+  }
   return next;
 }
 

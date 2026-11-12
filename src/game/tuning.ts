@@ -123,3 +123,30 @@ export const JAM_SECONDS = 6;
 export const JAM_RANGE = 3;
 // T8: death traces kept per seed, most recent seeds first.
 export const TRACE_SEEDS_KEPT = 20;
+
+// M16 equipment and stats.
+export const BASE_MAX_HEALTH = 100;
+export const STAT_CAP = { stealth: 60, trapResist: 60, moveSpeed: 40, attackSpeed: 60 } as const;
+// Bonus stats per rarity, value multipliers and how strongly bonus values scale.
+export const RARITY_BONUS_COUNT = { common: 0, uncommon: 1, rare: 2, epic: 3, legendary: 4 } as const;
+export const RARITY_VALUE_MULTIPLIER = { common: 1, uncommon: 1.8, rare: 3, epic: 5, legendary: 9 } as const;
+export const RARITY_BONUS_SCALE = { common: 1, uncommon: 1, rare: 1.25, epic: 1.5, legendary: 2 } as const;
+// [min, max] of a bonus stat before the rarity scale.
+export const BONUS_RANGES = {
+  maxHealth: [4, 10], armor: [4, 12], moveSpeed: [2, 5], damage: [3, 8], attackSpeed: [3, 8], stealth: [5, 12], trapResist: [5, 12],
+} as const;
+// Share of rolled loot items that are gear.
+export const GEAR_SHARE = 0.35;
+export const FISTS = { damage: 8, reach: 1.4, cooldown: 0.6 } as const;
+export const MELEE_ARC_DEGREES = 90;
+export const MELEE_NOISE_METRES = 10;
+export const WARDEN_MELEE_STUN = 0.8;
+export const BLOCK_ARC_DEGREES = 120;
+export const BLOCK_SPEED = 0.6;
+
+// M16 stage 2: traders.
+export const TRADER_MARKUP = 1.5;
+export const TRADER_STOCK_SIZE = 6;
+export const TRADER_GRID = { width: 8, height: 6 } as const;
+// Stock rarity weights (common, uncommon, rare, epic).
+export const TRADER_RARITY_WEIGHTS = [60, 32, 8, 0] as const;

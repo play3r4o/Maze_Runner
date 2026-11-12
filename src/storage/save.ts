@@ -1,17 +1,23 @@
 // M8 local save (browser local storage). The only storage code; game rules never touch it.
-// Format 2: { format, runs, bag, stash, inRun, traces }. Format 1 (no traces) is upgraded. Unknown, corrupt or newer saves are
+// Format 4: { format, runs, bag, stash, inRun, traces, equipment, gold, market }. Formats 1–3 are upgraded. Unknown, corrupt or newer saves are
 // reported once and replaced with an empty profile, so the game always starts.
 import { gridValid } from '../game/inventory';
 import type { GridItem } from '../game/inventory';
 import { BAG_SIZE, STASH_SIZE, TRACE_SEEDS_KEPT } from '../game/tuning';
 import type { ChalkStroke } from '../game/chalk';
+import { SLOTS, slotAccepts } from '../game/equipment';
+import type { Equipment } from '../game/equipment';
+import type { Market } from '../game/traders';
+import { TRADERS } from '../game/traders';
 
 export const SAVE_KEY = 'shifting-labyrinth.save';
-export const SAVE_FORMAT = 2;
+export const SAVE_FORMAT = 4;
 // T8: where the runner last died on a seed (and with which generator), with that run's chalk.
 export type Trace = { seed: number; version: string; x: number; z: number; chalk: ChalkStroke[] };
-export type Profile = { format: number; runs: number; bag: GridItem[]; stash: GridItem[]; inRun: boolean; traces: Trace[] };
-export const emptyProfile = (): Profile => ({ format: SAVE_FORMAT, runs: 0, bag: [], stash: [], inRun: false, traces: [] });
+export type Profile = { format: number; runs: number; bag: GridItem[]; stash: GridItem[]; inRun: boolean; traces: Trace[]; equipment: Equipment;
+  // M16: gold from trading, and the traders' current stock (rolled again after each run).
+  gold: number; market: Market | null };
+export const emptyProfile = (): Profile => ({ format: SAVE_FORMAT, runs: 0, bag: [], stash: [], inRun: false, traces: [], equipment: {}, gold: 0, market: null });
 
 type Store = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
 const storage = (): Store | null => { try { return window.localStorage; } catch { return null; } };
@@ -30,14 +36,21 @@ export function parseProfile(text: string | null): { profile: Profile; notice: s
   const traces = d.format === 1 ? [] : d.traces;
   const isTrace = (t: unknown) => typeof t === 'object' && t !== null && Number.isInteger((t as Trace).seed) && typeof (t as Trace).version === 'string'
     && Number.isFinite((t as Trace).x) && Number.isFinite((t as Trace).z) && Array.isArray((t as Trace).chalk);
-  if ((d.format !== 1 && d.format !== SAVE_FORMAT) || !Array.isArray(traces) || !traces.every(isTrace) || !Number.isInteger(d.runs) || (d.runs as number) < 0 || !Array.isArray(d.bag) || !Array.isArray(d.stash)
+  const equipment = (d.format >= 3 ? d.equipment : {}) as Equipment;
+  const gold = d.format >= 4 ? d.gold : 0;
+  const marketOk = (m: unknown): m is Market => typeof m === 'object' && m !== null && Number.isInteger((m as Market).refresh)
+    && TRADERS.every((trader) => Array.isArray((m as Market).stock?.[trader.id]) && (m as Market).stock[trader.id].every(isGridItem));
+  const equipmentOk = typeof equipment === 'object' && equipment !== null && Object.entries(equipment).every(([slot, item]) =>
+    (SLOTS as readonly string[]).includes(slot) && isGridItem(item) && slotAccepts(slot === 'mainHand' ? {} : equipment, slot as never, item));
+  if (![1, 2, 3, 4].includes(d.format) || !equipmentOk || !Number.isInteger(gold) || (gold as number) < 0 || !Array.isArray(traces) || !traces.every(isTrace) || !Number.isInteger(d.runs) || (d.runs as number) < 0 || !Array.isArray(d.bag) || !Array.isArray(d.stash)
     || !d.bag.every(isGridItem) || !d.stash.every(isGridItem) || !gridValid(d.bag, BAG_SIZE) || !gridValid(d.stash, STASH_SIZE)
-    || new Set([...d.bag, ...d.stash].map((entry) => entry.uid)).size !== d.bag.length + d.stash.length) {
+    || new Set([...d.bag, ...d.stash, ...Object.values(equipment)].map((entry) => entry.uid)).size !== d.bag.length + d.stash.length + Object.keys(equipment).length) {
     return { profile: emptyProfile(), notice: 'Your save was damaged and was reset.' };
   }
-  const profile: Profile = { format: SAVE_FORMAT, runs: d.runs as number, bag: d.bag, stash: d.stash, inRun: d.inRun === true, traces: traces as Trace[] };
+  const profile: Profile = { format: SAVE_FORMAT, runs: d.runs as number, bag: d.bag, stash: d.stash, inRun: d.inRun === true, traces: traces as Trace[], equipment,
+    gold: gold as number, market: marketOk(d.market) ? d.market : null };
   // A run that never finished (page closed or reloaded) counts as abandoned: the bag is gone.
-  if (profile.inRun) return { profile: { ...profile, inRun: false, bag: [] }, notice: 'Your last expedition was never finished. Whatever you carried is lost.' };
+  if (profile.inRun) return { profile: { ...profile, inRun: false, bag: [], equipment: {} }, notice: 'Your last expedition was never finished. Whatever you carried is lost.' };
   return { profile, notice: null };
 }
 export function loadProfile(store: Store | null = storage()): { profile: Profile; notice: string | null } {
@@ -49,9 +62,10 @@ export function saveProfile(profile: Profile, store: Store | null = storage()): 
 export function clearProfile(store: Store | null = storage()) { try { store?.removeItem(SAVE_KEY); } catch { /* ignore */ } }
 
 // Profile transitions around a run.
-export const startedRun = (profile: Profile, runNumber: number): Profile => ({ ...profile, runs: Math.max(profile.runs, runNumber), bag: [], inRun: true });
-export const finishedRun = (profile: Profile, extracted: boolean, bag: readonly GridItem[]): Profile =>
-  ({ ...profile, bag: extracted ? bag.map((entry) => ({ ...entry })) : [], inRun: false });
+export const startedRun = (profile: Profile, runNumber: number): Profile => ({ ...profile, runs: Math.max(profile.runs, runNumber), bag: [], equipment: {}, inRun: true });
+// Extraction keeps the bag and worn gear; death and abandon lose both.
+export const finishedRun = (profile: Profile, extracted: boolean, bag: readonly GridItem[], equipment: Equipment = {}): Profile =>
+  ({ ...profile, bag: extracted ? structuredClone([...bag]) : [], equipment: extracted ? structuredClone(equipment) : {}, inRun: false });
 
 // T8: dying replaces this seed's trace (most recent seeds kept).
 export const withTrace = (profile: Profile, trace: Trace): Profile => ({ ...profile,

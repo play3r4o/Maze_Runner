@@ -2,7 +2,9 @@
 // container and the bag (drag, rotate, right-click), and drop bag items into a sack at the
 // player's feet. The maze keeps running while a container is open; these are applied
 // between simulation steps like other player actions.
-import { addRunEvent, isDead, isRunOver, withBag } from './generatedRun';
+import { addRunEvent, isDead, isRunOver, withBag, withEquipment } from './generatedRun';
+import { defaultSlot, equipItem, isTwoHanded, slotAccepts, unequipItem } from './equipment';
+import type { Equipment, Slot } from './equipment';
 import type { GeneratedRun } from './generatedRun';
 import { firstFit, findItem, fits, moveBetween, quickMove, withoutItem } from './inventory';
 import type { GridItem } from './inventory';
@@ -96,3 +98,34 @@ export function dropFromBag(run: GeneratedRun, uid: string): GeneratedRun {
 }
 // Whether a spot is free for an item in a grid (for drag previews).
 export const spotFree = (items: readonly GridItem[], size: { width: number; height: number }, entry: GridItem) => fits(items, size, entry);
+
+// M16: where right-click puts gear: a free matching slot first (a one-handed weapon goes to
+// the off hand if the main hand is taken), otherwise replace the usual slot.
+export function smartSlot(equipment: Equipment, entry: GridItem): Slot | null {
+  const slot = defaultSlot(entry);
+  if (slot === 'mainHand' && equipment.mainHand && !equipment.offHand && !isTwoHanded(entry) && slotAccepts(equipment, 'offHand', entry)) return 'offHand';
+  return slot;
+}
+const canEquipNow = (run: GeneratedRun, from: GridName) => canAct(run) || (run.status === 'ready' && from === 'bag');
+// Equip from the bag or the open container.
+export function lootEquip(run: GeneratedRun, from: GridName, uid: string, slot?: Slot): GeneratedRun {
+  if (!canEquipNow(run, from)) return run;
+  const source = grids(run, from);
+  const entry = source ? findItem(source.items, uid) : null;
+  if (!source || !entry) return run;
+  const target = slot ?? smartSlot(run.equipment, entry);
+  if (!target) return run;
+  const result = equipItem(run.equipment, source.items, source.size, uid, target);
+  if (!result) return run;
+  const next = withEquipment(store(run, from, result.source), result.equipment);
+  return { ...next, events: addRunEvent(next, 'loot', `equipped ${itemDef(entry.item).name}`) };
+}
+// Take gear off into the bag or the open container (at a spot, or the first free one).
+export function lootUnequip(run: GeneratedRun, slot: Slot, to: GridName, target?: { x: number; y: number; rotated: boolean }): GeneratedRun {
+  if (!canEquipNow(run, to)) return run;
+  const dest = grids(run, to);
+  if (!dest) return run;
+  const result = unequipItem(run.equipment, slot, dest.items, dest.size, target);
+  if (!result) return run;
+  return withEquipment(store(run, to, result.dest), result.equipment);
+}

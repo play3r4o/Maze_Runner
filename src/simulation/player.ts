@@ -29,9 +29,11 @@ export function stepPlayer(
   intent: MoveIntent,
   walls: readonly WallRect[],
   dtSeconds: number,
+  // M16: gear and blocking change walking speed.
+  speedScale = 1,
 ): PlayerState {
   const length = Math.max(1, Math.hypot(intent.forward, intent.strafe));
-  const distance = PLAYER_SPEED * Math.max(0, dtSeconds);
+  const distance = PLAYER_SPEED * Math.max(0, speedScale) * Math.max(0, dtSeconds);
   const forward = intent.forward / length;
   const strafe = intent.strafe / length;
   const dx = (strafe * Math.cos(player.yaw) - forward * Math.sin(player.yaw)) * distance;

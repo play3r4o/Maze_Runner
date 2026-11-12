@@ -12,7 +12,7 @@ import type { WallRect } from '../simulation/player';
 import { PLAYER_HALF_WIDTH } from '../simulation/player';
 import { BOLT_DAMAGE, BOLT_RANGE, BOLT_SPEED, MONSTERS_PER_RING, MONSTER_HEARING, MONSTER_REACH, MONSTER_SEARCH_WAIT,
   MONSTER_SIGHT, MONSTER_STATS, NIGHT_MONSTER_SPEED, WARDEN_BOLT_STUN, WARDEN_COUNT, WARDEN_RESPAWN_SECONDS,
-  WARDEN_STEP_SECONDS, WARDEN_TRAP_STUN } from './tuning';
+  WARDEN_STEP_SECONDS, WARDEN_TRAP_STUN, WARDEN_MELEE_STUN } from './tuning';
 import type { Point2, TrapSpec } from './traps';
 
 export type MonsterKind = 'husk' | 'skitter' | 'warden';
@@ -31,7 +31,7 @@ export type Monster = {
 };
 // A noise monsters may hear; without a radius it carries the default hearing distance.
 export type Noise = Point2 & { radius?: number };
-export type Bolt = { id: number; x: number; z: number; dx: number; dz: number; travelled: number };
+export type Bolt = { id: number; x: number; z: number; dx: number; dz: number; travelled: number; damage?: number };
 export const isUnkillable = (kind: MonsterKind) => kind === 'warden';
 // What kills a warden.
 export const WARDEN_KILLERS = new Set(['boulder', 'pit', 'gate']);
@@ -151,7 +151,7 @@ export function hurtMonster(monster: Monster, amount: number, lethal: boolean, c
       return { monster: { ...monster, mode: 'dead', path: [], goal: null, respawn: WARDEN_RESPAWN_SECONDS, cause },
         hit: { monster: monster.id, kind: monster.kind, cause, killed: true, stunned: false } };
     }
-    const stun = Math.max(monster.stun, cause === 'bolt' ? WARDEN_BOLT_STUN : WARDEN_TRAP_STUN);
+    const stun = Math.max(monster.stun, cause === 'bolt' ? WARDEN_BOLT_STUN : cause === 'melee' ? WARDEN_MELEE_STUN : WARDEN_TRAP_STUN);
     return { monster: { ...monster, stun }, hit: { monster: monster.id, kind: monster.kind, cause, killed: false, stunned: true } };
   }
   const health = lethal ? 0 : Math.max(0, monster.health - amount);
@@ -161,9 +161,9 @@ export function hurtMonster(monster: Monster, amount: number, lethal: boolean, c
 }
 
 // --- Bolts ------------------------------------------------------------------------------
-export function newBolt(id: number, x: number, z: number, yaw: number): Bolt {
+export function newBolt(id: number, x: number, z: number, yaw: number, damage = BOLT_DAMAGE): Bolt {
   const dx = -Math.sin(yaw), dz = -Math.cos(yaw);
-  return { id, x: x + dx * 0.4, z: z + dz * 0.4, dx, dz, travelled: 0 };
+  return { id, x: x + dx * 0.4, z: z + dz * 0.4, dx, dz, travelled: 0, ...(damage !== BOLT_DAMAGE ? { damage } : {}) };
 }
 // Swept flight: each step the bolt stops at the first monster or stone in its path.
 export function stepBolts(bolts: readonly Bolt[], monsters: readonly Monster[], solids: readonly Rect[], dt: number, targets: boolean) {
@@ -187,7 +187,7 @@ export function stepBolts(bolts: readonly Bolt[], monsters: readonly Monster[], 
     });
     const x = bolt.x + mx * best, z = bolt.z + mz * best;
     if (target >= 0) {
-      const outcome = hurtMonster(current[target], BOLT_DAMAGE, false, 'bolt');
+      const outcome = hurtMonster(current[target], bolt.damage ?? BOLT_DAMAGE, false, 'bolt');
       current = current.map((monster, i) => (i === target ? outcome.monster : monster));
       hits.push({ ...outcome.hit, x, z });
     } else if (wall) impacts.push({ x, z });

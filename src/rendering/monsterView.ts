@@ -1,11 +1,11 @@
 import { BoxGeometry, CylinderGeometry, Group, Mesh, MeshBasicMaterial, MeshStandardMaterial, SphereGeometry } from 'three';
-import type { BufferGeometry, Camera, Material, Scene } from 'three';
+import type { BufferGeometry, Material, Scene } from 'three';
 import type { Bolt, Monster } from '../game/monsters';
 
 // M10 monsters and M11 bolts from primitive shapes. Presentation only.
 // Husk: a stooped, grey-green figure. Skitter: a low dark body on thin legs.
 // Warden: a towering, near-black hulk with ember eyes. Dead monsters lie still.
-export function createMonsterView(scene: Scene, camera: Camera, initial: readonly Monster[]) {
+export function createMonsterView(scene: Scene, initial: readonly Monster[]) {
   const group = new Group();
   scene.add(group);
   const geometries: BufferGeometry[] = [];
@@ -17,7 +17,6 @@ export function createMonsterView(scene: Scene, camera: Camera, initial: readonl
   const wardenHide = mat(new MeshStandardMaterial({ color: '#1b1717', roughness: 0.9 }));
   const ember = mat(new MeshBasicMaterial({ color: '#ff6a2a' }));
   const pale = mat(new MeshBasicMaterial({ color: '#d9e3b0' }));
-  const wood = mat(new MeshStandardMaterial({ color: '#6b4a2b', roughness: 0.8 }));
   const steel = mat(new MeshStandardMaterial({ color: '#9aa1a0', metalness: 0.7, roughness: 0.3 }));
   const part = (g: BufferGeometry, m: Material, x: number, y: number, z: number) => {
     const mesh = new Mesh(g, m); mesh.position.set(x, y, z); return mesh;
@@ -62,20 +61,8 @@ export function createMonsterView(scene: Scene, camera: Camera, initial: readonl
   shaft.rotateX(Math.PI / 2);
   const boltMeshes: Mesh[] = [];
 
-  // A simple crossbow held at the bottom right of the view while the chalk is away.
-  const crossbow = new Group();
-  crossbow.add(part(geo(new BoxGeometry(0.06, 0.06, 0.5)), wood, 0, 0, 0));
-  const limbs = part(geo(new BoxGeometry(0.5, 0.03, 0.04)), steel, 0, 0.02, -0.22);
-  crossbow.add(limbs);
-  const loaded = part(geo(new CylinderGeometry(0.01, 0.01, 0.4, 5)), steel, 0, 0.05, -0.1);
-  loaded.rotation.x = Math.PI / 2;
-  crossbow.add(loaded);
-  crossbow.scale.setScalar(0.6);
-  crossbow.position.set(0.3, -0.26, -0.8);
-  camera.add(crossbow);
-
   return {
-    update(monsters: readonly Monster[], bolts: readonly Bolt[], visible: boolean, time: number, bow: { shown: boolean; ready: boolean; recoil: number }) {
+    update(monsters: readonly Monster[], bolts: readonly Bolt[], visible: boolean, time: number) {
       monsters.forEach((monster, i) => {
         const body = bodies[i];
         if (!body) return;
@@ -100,12 +87,8 @@ export function createMonsterView(scene: Scene, camera: Camera, initial: readonl
         mesh.position.set(bolt.x, 1.45, bolt.z);
         mesh.rotation.y = Math.atan2(-bolt.dx, -bolt.dz);
       });
-      crossbow.visible = bow.shown;
-      loaded.visible = bow.ready;
-      crossbow.position.z = -0.8 + 0.05 * bow.recoil;
     },
     dispose() {
-      camera.remove(crossbow);
       scene.remove(group);
       for (const g of geometries) g.dispose();
       for (const m of materials) m.dispose();

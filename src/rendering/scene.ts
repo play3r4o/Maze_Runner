@@ -15,6 +15,8 @@ import { createAudio } from './audio';
 import { createTrapView } from './trapView';
 import { createMonsterView } from './monsterView';
 import { createContainerView } from './containerView';
+import { createHeldView } from './heldView';
+import type { HeldState } from './heldView';
 import type { Container } from '../game/loot';
 import type { Bolt, Monster } from '../game/monsters';
 import type { TrapState } from '../game/traps';
@@ -26,7 +28,7 @@ import type { MazeOpenness } from '../simulation/maze';
 export type ExpeditionView = { carried: boolean; beams: boolean; night: number; chalk: readonly ChalkStroke[];
   openness: MazeOpenness; sounds: readonly SoundEvent[]; traps: readonly TrapState[]; time: number;
   monsters: readonly Monster[]; bolts: readonly Bolt[]; monstersOn: boolean; containers: readonly Container[]; relicHome: boolean;
-  thread: readonly (readonly { x: number; z: number }[])[]; trace: { x: number; z: number; chalk: readonly ChalkStroke[] } | null; bow: { shown: boolean; ready: boolean; recoil: number } };
+  thread: readonly (readonly { x: number; z: number }[])[]; trace: { x: number; z: number; chalk: readonly ChalkStroke[] } | null; held: HeldState };
 
 export type SceneMode = 'room' | 'junction' | 'maze' | 'generated';
 export function createScene(canvas: HTMLCanvasElement, mode: SceneMode, generated?: GeneratedWorld) {
@@ -69,8 +71,9 @@ export function createScene(canvas: HTMLCanvasElement, mode: SceneMode, generate
   const audio = mode === 'generated' ? createAudio(scene, camera) : null;
   const trapView = mode === 'generated' && generated ? createTrapView(scene, generated.traps) : null;
   if (mode === 'generated') scene.add(camera); // so the held crossbow renders
-  const monsterView = mode === 'generated' && generated ? createMonsterView(scene, camera, generated.monsters) : null;
+  const monsterView = mode === 'generated' && generated ? createMonsterView(scene, generated.monsters) : null;
   const containerView = mode === 'generated' ? createContainerView(scene) : null;
+  const heldView = mode === 'generated' ? createHeldView(camera) : null;
   const dayBackground = new Color('#a8b3b0'), nightBackground = new Color('#27302f');
   const mazeView = mode === 'maze' ? createMazeView(scene)
     : mode === 'generated' && generated ? createMazeView(scene, generated.maze, generated.walls, generated.relic) : null;
@@ -146,7 +149,8 @@ export function createScene(canvas: HTMLCanvasElement, mode: SceneMode, generate
         mazeView?.setChalk(expedition.chalk, expedition.openness);
         audio?.update(expedition.sounds);
         trapView?.update(expedition.traps, expedition.time);
-        monsterView?.update(expedition.monsters, expedition.bolts, expedition.monstersOn, expedition.time, expedition.bow);
+        monsterView?.update(expedition.monsters, expedition.bolts, expedition.monstersOn, expedition.time);
+        heldView?.update(expedition.held);
         // Night (T2): dim the light and darken the sky over the fade. Presentation only.
         const night = expedition.night;
         sky.intensity = 2.5 - 1.7 * night; sun.intensity = 2 - 1.6 * night;
@@ -175,6 +179,7 @@ export function createScene(canvas: HTMLCanvasElement, mode: SceneMode, generate
       trapView?.dispose();
       monsterView?.dispose();
       containerView?.dispose();
+      heldView?.dispose();
       for (const mesh of wallMeshes) mesh.geometry.dispose();
       floor.geometry.dispose();
       grid.geometry.dispose();

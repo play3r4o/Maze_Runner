@@ -7,7 +7,9 @@ import { WARNING_SECONDS } from '../simulation/shift';
 import { HAND_BUILT_MAZE, MAZE_GATE_IDS } from '../simulation/maze';
 import type { MazeRun } from '../game/mazeRun';
 import { isRunOver } from '../game/generatedRun';
-import { CHALK_INK_METRES, PLAYER_HEALTH } from '../game/tuning';
+import { CHALK_INK_METRES } from '../game/tuning';
+import { maxHealthOf } from '../game/equipment';
+import { activeWeapon } from '../game/generatedRun';
 
 // Result-screen wording for deaths other than gate crushes.
 const DEATH_TEXT: Record<string, string> = {"boulder": "A rolling boulder flattened you", "pit": "The floor opened and you fell", "spears": "Spears from the walls ran you through", "floorSpikes": "Spikes burst from the floor beneath you", "darts": "Darts from the walls brought you down", "blade": "A swinging blade cut you down", "husk": "A husk caught you and tore you down", "skitter": "A skitter swarmed over you", "warden": "The Warden found you"};
@@ -26,7 +28,7 @@ export function createHud(root: HTMLElement, scene: SceneMode, generated?: Gener
   const startTitle = isGenerated ? 'Loot the maze. Get out alive.' : isMaze ? 'Find your way home.' : isJunction ? 'The walls can move.' : 'A place to begin.';
   root.innerHTML = `
     <header class="prototype-header">
-      <span class="eyebrow">DEVELOPMENT BUILD / ${isGenerated ? 'M8 · LOOT' : isMaze ? 'M3 · GRAPH DIAGNOSTICS' : isJunction ? 'M1 · PUSH &amp; CRUSH' : 'M0'}</span>
+      <span class="eyebrow">DEVELOPMENT BUILD / ${isGenerated ? 'M16 · GEAR' : isMaze ? 'M3 · GRAPH DIAGNOSTICS' : isJunction ? 'M1 · PUSH &amp; CRUSH' : 'M0'}</span>
       <p class="wordmark">Shifting Labyrinth<span>Working title</span></p>
     </header>
     <div class="session-status" role="status" aria-live="polite">
@@ -37,7 +39,7 @@ export function createHud(root: HTMLElement, scene: SceneMode, generated?: Gener
       <div class="pause-panel">
         <p class="eyebrow">MILESTONE ${isGenerated ? '10–12 · DANGER' : isMaze ? '03 · GRAPH DIAGNOSTICS' : isJunction ? '01 · SINGLE JUNCTION' : '00'}</p>
         <h1 id="panel-title">${startTitle}</h1>
-        <p class="panel-description">${isGenerated ? `Loot this ${generated.columns}×${generated.rows} maze (seed ${generated.seed}) and get back out: open chests and remains with E, drag what you want into your bag (Tab), and step back into Sanctuary to keep it. Die and the bag is lost. The richest prize, the Heart of the Maze, waits in the outer ring under the blue beam; the gold beam marks home. In Sanctuary before leaving, Tab opens your stash. Warned shifts open one stone gate and close another every 45 seconds, faster while you carry the relic. A bell from Sanctuary tolls as time runs on; after the third, night falls and the maze shifts constantly. Listen for grinding stone. Press C to take out the chalk, then hold the left mouse button to draw or write on floors, walls and gates (limited chalk per run); C puts it away. Closing stone pushes you and crushes you if you no longer fit. Hidden pressure plates set off boulders, spears, spikes, pits and darts; blades swing in some corridors. You have 100 health. Husks and skitters hunt by sight and sound; shoot them with the crossbow (left mouse while the chalk is away, limited bolts). The Warden cannot be killed by bolts, only staggered: lure it into a boulder's path, over an open pit or into a closing gate. Every room always keeps some route home.` : isMaze ? 'Leave the warm Sanctuary marker, find three colored landmarks, then return home. G swaps two gate shortcuts. The 8-meter stone passages push and crush; permanent corridors offer detours. Learn the routes as you explore.' : isJunction ? 'Moving stone pushes you toward the opposite wall. Escape the 8-meter passage before the gap becomes too narrow to fit, or take the outer loop. Press G to shift.' : 'One room. Four walls. The foundation for a changing maze.'}</p>
+        <p class="panel-description">${isGenerated ? `Loot this ${generated.columns}×${generated.rows} maze (seed ${generated.seed}) and get back out: open chests and remains with E, drag what you want into your bag (Tab), and step back into Sanctuary to keep it. Die and the bag is lost. The richest prize, the Heart of the Maze, waits in the outer ring under the blue beam; the gold beam marks home. In Sanctuary before leaving, Tab opens your stash. Gear you find (weapons, shields, armour, gloves, boots, amulets, rings) can be worn from the Tab screen: drag it onto a slot or right-click it. Left mouse attacks, right mouse blocks with a shield, Q swaps to an off-hand weapon. Worn gear is lost if you die. Warned shifts open one stone gate and close another every 45 seconds, faster while you carry the relic. A bell from Sanctuary tolls as time runs on; after the third, night falls and the maze shifts constantly. Listen for grinding stone. Press C to take out the chalk, then hold the left mouse button to draw or write on floors, walls and gates (limited chalk per run); C puts it away. Closing stone pushes you and crushes you if you no longer fit. Hidden pressure plates set off boulders, spears, spikes, pits and darts; blades swing in some corridors. You have 100 health. Husks and skitters hunt by sight and sound; shoot them with the crossbow (left mouse while the chalk is away, limited bolts). The Warden cannot be killed by bolts, only staggered: lure it into a boulder's path, over an open pit or into a closing gate. Every room always keeps some route home.` : isMaze ? 'Leave the warm Sanctuary marker, find three colored landmarks, then return home. G swaps two gate shortcuts. The 8-meter stone passages push and crush; permanent corridors offer detours. Learn the routes as you explore.' : isJunction ? 'Moving stone pushes you toward the opposite wall. Escape the 8-meter passage before the gap becomes too narrow to fit, or take the outer loop. Press G to shift.' : 'One room. Four walls. The foundation for a changing maze.'}</p>
         <div class="control-list" aria-label="Controls">
           <p><span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span><span>Move</span></p>
           <p><span class="control-name">Mouse</span><span>Look around</span></p>
@@ -83,7 +85,7 @@ export function createHud(root: HTMLElement, scene: SceneMode, generated?: Gener
       <span class="diagnostics-label">${hasNavigation ? 'MAZE' : isJunction ? 'JUNCTION' : 'ROOM'} TEST <span class="separator">/</span> POSITION</span>
       <span>X <output data-testid="position-x">0.00</output></span>
       <span>Z <output data-testid="position-z">${hasGates || isGenerated ? '0.00' : '8.00'}</output></span>
-      <span class="footer-controls">WASD · MOVE ${isGenerated ? '<span class="separator">/</span> E · OPEN <span class="separator">/</span> TAB · BAG <span class="separator">/</span> T · THREAD <span class="separator">/</span> LMB · SHOOT <span class="separator">/</span> C + LMB · DRAW' : hasGates ? '<span class="separator">/</span> G · SHIFT' : ''} <span class="separator">/</span> ESC · PAUSE</span>
+      <span class="footer-controls">WASD · MOVE ${isGenerated ? '<span class="separator">/</span> E · OPEN <span class="separator">/</span> TAB · BAG <span class="separator">/</span> T · THREAD <span class="separator">/</span> LMB · ATTACK <span class="separator">/</span> RMB · BLOCK <span class="separator">/</span> Q · SWAP <span class="separator">/</span> C + LMB · DRAW' : hasGates ? '<span class="separator">/</span> G · SHIFT' : ''} <span class="separator">/</span> ESC · PAUSE</span>
     </footer>
   `;
 
@@ -236,12 +238,15 @@ export function createHud(root: HTMLElement, scene: SceneMode, generated?: Gener
       // Health shows at once (not throttled) so a hit is felt immediately.
       if (health!.textContent !== String(run.health)) {
         health!.textContent = String(run.health);
-        healthFill!.style.width = `${(100 * run.health) / PLAYER_HEALTH}%`;
+        healthFill!.style.width = `${(100 * run.health) / maxHealthOf(run.equipment)}%`;
         healthFill!.dataset.low = String(run.health <= 35);
       }
       const value = run.bag.reduce((sum, entry) => sum + itemDef(entry.item).value, 0);
       bagSummary!.textContent = run.bag.length ? `bag ${run.bag.length} item${run.bag.length === 1 ? '' : 's'} · ${value}g` : 'bag empty';
-      bolts!.textContent = `${run.boltsLeft} bolt${run.boltsLeft === 1 ? '' : 's'}`;
+      // M16: the weapon in hand (bolts only for the crossbow).
+      const weapon = activeWeapon(run);
+      const weaponName = weapon.item ? itemDef(weapon.item.item).name : 'Fists';
+      bolts!.textContent = weapon.spec.kind === 'crossbow' ? `${weaponName} · ${run.boltsLeft} bolt${run.boltsLeft === 1 ? '' : 's'}` : weaponName;
       chalkLeft!.textContent = run.rules.chalk ? `${Math.round((run.chalkLeft / CHALK_INK_METRES) * 100)}% chalk` : 'no chalk';
       // Visual equivalent of the bell (T3): name the strikes for a few seconds after they ring.
       const bell = [...run.events].reverse().find((event) => event.kind === 'bell');

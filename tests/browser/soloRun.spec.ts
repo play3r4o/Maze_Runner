@@ -23,7 +23,7 @@ test('leave (automatic countdown starts), loot the relic from its reliquary, com
   test.setTimeout(180_000);
   const errors = watchErrors(page);
   await installBrowserClock(page); await page.goto('/?seed=41&off=monsters');
-  await expect(page).toHaveTitle('Shifting Labyrinth · M8');
+  await expect(page).toHaveTitle('Shifting Labyrinth · M16');
   await expect(page.locator('#panel-title')).toHaveText('Loot the maze. Get out alive.');
   await page.getByRole('button', { name: 'F2 · Debug map' }).click();
   await startRunning(page, 'Start exploring');

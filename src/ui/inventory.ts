@@ -1,32 +1,66 @@
-// M8 bag, loot and stash screens: grids of cells with items dragged between them.
-// Presentation and input only; every move is decided by the game rules (handlers).
+// M8 bag, loot and stash screens, and the M16 character panel: grids of cells and equipment
+// slots, with items dragged between them. Presentation and input only; every move is
+// decided by the game rules (handlers).
 import { canRotate, fits, footprint } from '../game/inventory';
 import type { GridItem, GridSize } from '../game/inventory';
-import { RARITY_COLORS, itemDef } from '../game/items';
+import { PERCENT_STATS, RARITY_COLORS, STAT_NAMES, itemDef, itemRarity, itemValue } from '../game/items';
+import type { StatKey } from '../game/items';
+import { SLOTS, SLOT_NAMES, slotAccepts } from '../game/equipment';
+import type { Equipment, Slot, Stats } from '../game/equipment';
 
-export type GridKey = 'bag' | 'container' | 'stash';
+export type GridKey = 'bag' | 'container' | 'stash' | 'trader';
 export type InventoryView = {
-  left: { key: 'container' | 'stash'; title: string; size: GridSize; items: readonly GridItem[] } | null;
+  left: { key: 'container' | 'stash' | 'trader'; title: string; size: GridSize; items: readonly GridItem[]; prices?: Record<string, number>; note?: string } | null;
+  // M16 base screen: the stash beside a trader, tabs, gold, and whether the character panel shows.
+  second?: { key: 'stash'; title: string; size: GridSize; items: readonly GridItem[] } | null;
+  tabs?: { id: string; label: string; active: boolean }[]; gold?: number; showCharacter?: boolean;
   bag: readonly GridItem[]; bagSize: GridSize;
   canDrop: boolean; hint: string;
+  // M16 character: worn gear, totals and a line about the weapon in hand.
+  equipment: Equipment; stats: Stats; maxHealth: number; weapon: string;
 };
 export type InventoryHandlers = {
   move(from: GridKey, uid: string, to: GridKey, target: { x: number; y: number; rotated: boolean }): void;
   quick(from: GridKey, uid: string): void;
   drop(uid: string): void;
+  equip(from: GridKey, uid: string, slot: Slot): void;
+  unequip(slot: Slot, to: GridKey, target?: { x: number; y: number; rotated: boolean }): void;
+  tab?(id: string): void;
   close(): void;
 };
 const CELL = 46;
+const signed = (value: number, percent: boolean) => `${value > 0 ? '+' : ''}${value}${percent ? '%' : ''}`;
+
+// Item details for tooltips: rarity, slot, base stats, rolled bonuses, weapon numbers, value.
+export function describeItem(entry: GridItem): string {
+  const def = itemDef(entry.item);
+  const rarity = itemRarity(entry);
+  const lines = [`<strong style="color:${RARITY_COLORS[rarity]}">${def.name}</strong>`];
+  if (def.gear) {
+    const gear = def.gear;
+    lines.push(`<span>${rarity} ${gear.twoHanded ? 'two-handed ' : ''}${gear.slot}</span>`);
+    if (gear.weapon) lines.push(gear.weapon.kind === 'crossbow' ? `<b>Bolts ${gear.weapon.damage} damage · 16 per run</b>` : `<b>${gear.weapon.damage} damage · ${gear.weapon.reach} m reach · ${gear.weapon.cooldown}s</b>`);
+    if (gear.block) lines.push(`<b>Blocks ${gear.block}% from the front (right mouse)</b>`);
+    for (const [key, value] of Object.entries(gear.stats)) lines.push(`<b>${STAT_NAMES[key as StatKey]} ${signed(value as number, PERCENT_STATS.has(key as StatKey))}</b>`);
+    for (const bonus of entry.roll?.bonuses ?? []) lines.push(`<b class="bonus">${STAT_NAMES[bonus.stat]} ${signed(bonus.value, PERCENT_STATS.has(bonus.stat))}</b>`);
+  } else lines.push(`<span>${rarity} ${def.category} · ${def.width}×${def.height}</span>`);
+  lines.push(`<span>${itemValue(entry)} gold</span>`, `<em>${def.description}</em>`);
+  return lines.join('');
+}
 
 export function createInventoryUI(host: HTMLElement, handlers: InventoryHandlers) {
   const root = document.createElement('div');
   root.className = 'inventory';
-  root.dataset.testid = 'inventory';
   root.setAttribute('data-testid', 'inventory');
   root.hidden = true;
   root.innerHTML = `
     <div class="inventory-panels">
-      <section class="inventory-panel" data-panel="left"><h2 data-testid="inventory-left-title"></h2><div class="inventory-grid" data-grid="left"></div></section>
+      <section class="inventory-panel" data-panel="left"><div class="base-tabs" data-testid="base-tabs" hidden></div><h2 data-testid="inventory-left-title"></h2>
+        <p class="trader-note" data-testid="trader-note" hidden></p><div class="inventory-grid" data-grid="left"></div></section>
+      <section class="inventory-panel" data-panel="second" hidden><h2 data-testid="inventory-second-title"></h2><div class="inventory-grid" data-grid="second"></div></section>
+      <section class="inventory-panel character" data-panel="character"><h2>Character</h2>
+        <div class="character-slots">${SLOTS.map((slot) => `<div class="character-slot" data-slot="${slot}" data-testid="slot-${slot}"><small>${SLOT_NAMES[slot]}</small></div>`).join('')}</div>
+        <dl class="character-stats" data-testid="character-stats"></dl></section>
       <section class="inventory-panel" data-panel="bag"><h2>Bag <span data-testid="inventory-bag-summary"></span></h2><div class="inventory-grid" data-grid="bag" data-testid="grid-bag"></div>
         <div class="inventory-drop" data-testid="inventory-drop">Drop here to leave it on the floor</div></section>
     </div>
@@ -34,60 +68,67 @@ export function createInventoryUI(host: HTMLElement, handlers: InventoryHandlers
     <button type="button" class="inventory-close" data-testid="inventory-close">Close <kbd>Tab</kbd></button>
     <div class="inventory-tooltip" data-testid="inventory-tooltip" hidden></div>`;
   host.append(root);
-  const leftPanel = root.querySelector<HTMLElement>('[data-panel="left"]')!;
-  const leftTitle = root.querySelector<HTMLElement>('[data-testid="inventory-left-title"]')!;
-  const leftGrid = root.querySelector<HTMLElement>('[data-grid="left"]')!;
-  const bagGrid = root.querySelector<HTMLElement>('[data-grid="bag"]')!;
-  const bagSummary = root.querySelector<HTMLElement>('[data-testid="inventory-bag-summary"]')!;
-  const dropZone = root.querySelector<HTMLElement>('[data-testid="inventory-drop"]')!;
-  const hint = root.querySelector<HTMLElement>('[data-testid="inventory-hint"]')!;
-  const tooltip = root.querySelector<HTMLElement>('[data-testid="inventory-tooltip"]')!;
-  root.querySelector('[data-testid="inventory-close"]')!.addEventListener('click', () => handlers.close());
+  const q = <T extends HTMLElement>(selector: string) => root.querySelector<T>(selector)!;
+  const leftPanel = q('[data-panel="left"]'), leftTitle = q('[data-testid="inventory-left-title"]'), leftGrid = q('[data-grid="left"]');
+  const secondPanel = q('[data-panel="second"]'), secondTitle = q('[data-testid="inventory-second-title"]'), secondGrid = q('[data-grid="second"]');
+  const tabs = q('[data-testid="base-tabs"]'), traderNote = q('[data-testid="trader-note"]'), characterPanel = q('[data-panel="character"]');
+  const bagGrid = q('[data-grid="bag"]'), bagSummary = q('[data-testid="inventory-bag-summary"]'), dropZone = q('[data-testid="inventory-drop"]');
+  const hint = q('[data-testid="inventory-hint"]'), tooltip = q('[data-testid="inventory-tooltip"]'), statsList = q('[data-testid="character-stats"]');
+  const slotEls = new Map(SLOTS.map((slot) => [slot, q(`[data-slot="${slot}"]`)]));
+  q('[data-testid="inventory-close"]').addEventListener('click', () => handlers.close());
 
   let view: InventoryView | null = null;
   let hovered: string | null = null;
   let signature = '';
-  type Drag = { uid: string; from: GridKey; item: string; rotated: boolean; grabX: number; grabY: number; ghost: HTMLElement; source: HTMLElement };
+  type Source = { kind: 'grid'; key: GridKey } | { kind: 'slot'; slot: Slot };
+  type Drag = { uid: string; source: Source; item: string; rotated: boolean; grabX: number; grabY: number; ghost: HTMLElement; el: HTMLElement };
   let drag: Drag | null = null;
 
-  const gridOf = (key: GridKey) => key === 'bag' ? { el: bagGrid, size: view!.bagSize, items: view!.bag }
-    : view!.left && view!.left.key === key ? { el: leftGrid, size: view!.left.size, items: view!.left.items } : null;
-  const keyOfGrid = (el: HTMLElement): GridKey => el === bagGrid ? 'bag' : view!.left!.key;
+  const gridOf = (key: GridKey) => key === 'bag' ? { size: view!.bagSize, items: view!.bag }
+    : view!.left && view!.left.key === key ? { size: view!.left.size, items: view!.left.items }
+    : view!.second && view!.second.key === key ? { size: view!.second.size, items: view!.second.items } : null;
+  const keyOfGrid = (el: HTMLElement): GridKey => el === bagGrid ? 'bag' : el === secondGrid ? view!.second!.key : view!.left!.key;
 
-  function itemElement(entry: GridItem, from: GridKey) {
+  function itemElement(entry: GridItem, source: Source, w: number, h: number) {
     const def = itemDef(entry.item);
-    const { w, h } = footprint(entry);
     const el = document.createElement('div');
     el.className = 'inventory-item';
-    el.dataset.testid = 'inv-item';
     el.setAttribute('data-testid', 'inv-item');
-    el.dataset.uid = entry.uid; el.dataset.item = entry.item; el.dataset.grid = from; el.dataset.rarity = def.rarity;
-    el.style.left = `${entry.x * CELL}px`; el.style.top = `${entry.y * CELL}px`;
-    el.style.width = `${w * CELL - 4}px`; el.style.height = `${h * CELL - 4}px`;
-    el.style.setProperty('--rarity', RARITY_COLORS[def.rarity]);
-    el.innerHTML = `<span>${def.name}</span>`;
-    el.addEventListener('pointerdown', (event) => startDrag(event, entry, from, el));
-    el.addEventListener('contextmenu', (event) => { event.preventDefault(); if (!drag) handlers.quick(from, entry.uid); });
-    el.addEventListener('pointerenter', () => { hovered = from === 'bag' ? entry.uid : null; showTooltip(entry, el); });
+    el.dataset.uid = entry.uid; el.dataset.item = entry.item; el.dataset.rarity = itemRarity(entry);
+    el.dataset.grid = source.kind === 'grid' ? source.key : 'equipment';
+    el.style.width = `${w}px`; el.style.height = `${h}px`;
+    el.style.setProperty('--rarity', RARITY_COLORS[itemRarity(entry)]);
+    const price = source.kind === 'grid' && source.key === 'trader' ? view?.left?.prices?.[entry.uid] : undefined;
+    el.innerHTML = `<span>${def.name}</span>${price !== undefined ? `<em class="price" data-testid="price">${price}g</em>` : ''}`;
+    el.addEventListener('pointerdown', (event) => startDrag(event, entry, source, el));
+    el.addEventListener('contextmenu', (event) => {
+      event.preventDefault();
+      if (drag) return;
+      if (source.kind === 'grid') handlers.quick(source.key, entry.uid); else handlers.unequip(source.slot, 'bag');
+    });
+    el.addEventListener('pointerenter', () => { hovered = source.kind === 'grid' && source.key === 'bag' ? entry.uid : null; showTooltip(entry, el); });
     el.addEventListener('pointerleave', () => { hovered = null; tooltip.hidden = true; });
     return el;
   }
   function fill(el: HTMLElement, size: GridSize, items: readonly GridItem[], key: GridKey) {
     el.style.width = `${size.width * CELL}px`; el.style.height = `${size.height * CELL}px`;
     el.dataset.key = key;
-    el.replaceChildren(...items.map((entry) => itemElement(entry, key)));
+    el.replaceChildren(...items.map((entry) => {
+      const { w, h } = footprint(entry);
+      const item = itemElement(entry, { kind: 'grid', key }, w * CELL - 4, h * CELL - 4);
+      item.style.left = `${entry.x * CELL}px`; item.style.top = `${entry.y * CELL}px`;
+      return item;
+    }));
   }
   function showTooltip(entry: GridItem, el: HTMLElement) {
     if (drag) return;
-    const def = itemDef(entry.item);
-    tooltip.innerHTML = `<strong style="color:${RARITY_COLORS[def.rarity]}">${def.name}</strong>
-      <span>${def.rarity} ${def.category} · ${def.width}×${def.height}</span><span>${def.value} gold</span><em>${def.description}</em>`;
-    const r = el.getBoundingClientRect(), host = root.getBoundingClientRect();
-    tooltip.style.left = `${r.right - host.left + 8}px`; tooltip.style.top = `${r.top - host.top}px`;
+    tooltip.innerHTML = describeItem(entry);
+    const r = el.getBoundingClientRect(), box = root.getBoundingClientRect();
+    tooltip.style.left = `${Math.min(r.right - box.left + 8, box.width - 250)}px`; tooltip.style.top = `${r.top - box.top}px`;
     tooltip.hidden = false;
   }
 
-  function startDrag(event: PointerEvent, entry: GridItem, from: GridKey, el: HTMLElement) {
+  function startDrag(event: PointerEvent, entry: GridItem, source: Source, el: HTMLElement) {
     if (event.button !== 0 || drag) return;
     event.preventDefault();
     tooltip.hidden = true;
@@ -97,53 +138,61 @@ export function createInventoryUI(host: HTMLElement, handlers: InventoryHandlers
     ghost.removeAttribute('data-testid');
     root.append(ghost);
     el.classList.add('inventory-dragging');
-    drag = { uid: entry.uid, from, item: entry.item, rotated: entry.rotated, ghost, source: el,
-      grabX: Math.min(Math.floor((event.clientX - r.left) / CELL), footprint(entry).w - 1),
-      grabY: Math.min(Math.floor((event.clientY - r.top) / CELL), footprint(entry).h - 1) };
+    const { w, h } = footprint(entry);
+    const grab = source.kind === 'grid'
+      ? { grabX: Math.min(Math.floor((event.clientX - r.left) / CELL), w - 1), grabY: Math.min(Math.floor((event.clientY - r.top) / CELL), h - 1) }
+      : { grabX: 0, grabY: 0 };
+    drag = { uid: entry.uid, source, item: entry.item, rotated: source.kind === 'grid' ? entry.rotated : false, ghost, el, ...grab };
     moveGhost(event.clientX, event.clientY);
   }
-  // Which grid and cell the dragged item's top-left would land on.
-  function targetAt(clientX: number, clientY: number, grab: { grabX: number; grabY: number } = drag!) {
-    for (const el of [bagGrid, leftGrid]) {
+  const inside = (el: HTMLElement, x: number, y: number) => { const r = el.getBoundingClientRect(); return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom; };
+  function gridTarget(clientX: number, clientY: number, grab: { grabX: number; grabY: number }) {
+    for (const el of [bagGrid, leftGrid, secondGrid]) {
       if (el === leftGrid && !view?.left) continue;
+      if (el === secondGrid && !view?.second) continue;
+      if (!inside(el, clientX, clientY)) continue;
       const r = el.getBoundingClientRect();
-      if (clientX < r.left || clientX > r.right || clientY < r.top || clientY > r.bottom) continue;
-      const key = keyOfGrid(el);
-      return { key, el, x: Math.floor((clientX - r.left) / CELL) - grab.grabX, y: Math.floor((clientY - r.top) / CELL) - grab.grabY };
+      return { key: keyOfGrid(el), x: Math.floor((clientX - r.left) / CELL) - grab.grabX, y: Math.floor((clientY - r.top) / CELL) - grab.grabY };
     }
     return null;
   }
+  const slotTarget = (clientX: number, clientY: number) => SLOTS.find((slot) => inside(slotEls.get(slot)!, clientX, clientY)) ?? null;
+  const overDrop = (current: Drag, clientX: number, clientY: number) =>
+    Boolean(view?.canDrop) && current.source.kind === 'grid' && current.source.key === 'bag' && !dropZone.hidden && inside(dropZone, clientX, clientY);
+
   function moveGhost(clientX: number, clientY: number) {
     if (!drag) return;
-    const host = root.getBoundingClientRect();
+    const box = root.getBoundingClientRect();
     const { w, h } = footprint({ item: drag.item, rotated: drag.rotated });
     drag.ghost.style.width = `${w * CELL - 4}px`; drag.ghost.style.height = `${h * CELL - 4}px`;
-    drag.ghost.style.left = `${clientX - host.left - drag.grabX * CELL - CELL / 2}px`;
-    drag.ghost.style.top = `${clientY - host.top - drag.grabY * CELL - CELL / 2}px`;
-    const target = targetAt(clientX, clientY);
+    drag.ghost.style.left = `${clientX - box.left - drag.grabX * CELL - CELL / 2}px`;
+    drag.ghost.style.top = `${clientY - box.top - drag.grabY * CELL - CELL / 2}px`;
+    const target = gridTarget(clientX, clientY, drag);
+    const slot = slotTarget(clientX, clientY);
     let ok = false;
-    if (target) {
-      const grid = gridOf(target.key)!;
-      ok = fits(grid.items, grid.size, { uid: drag.uid, item: drag.item, x: target.x, y: target.y, rotated: drag.rotated });
-    }
-    drag.ghost.dataset.valid = String(ok || (!target && overDrop(clientX, clientY)));
+    const fromTrader = drag.source.kind === 'grid' && drag.source.key === 'trader';
+    if (target && (target.key === 'trader' || fromTrader)) ok = target.key !== 'trader' || !fromTrader;
+    else if (target) { const grid = gridOf(target.key)!; ok = fits(grid.items, grid.size, { uid: drag.uid, item: drag.item, x: target.x, y: target.y, rotated: drag.rotated }); }
+    else if (slot) ok = drag.source.kind === 'grid' && (slot === 'mainHand' ? itemDef(drag.item).gear?.slot === 'weapon' : slotAccepts(view!.equipment, slot, drag));
+    else ok = overDrop(drag, clientX, clientY);
+    drag.ghost.dataset.valid = String(ok);
+    for (const [key, el] of slotEls) el.dataset.target = String(key === slot && ok);
   }
-  const overDrop = (clientX: number, clientY: number) => (drag ? overDropFor(drag, clientX, clientY) : false);
-  const overDropFor = (current: { from: GridKey }, clientX: number, clientY: number) => {
-    if (!view?.canDrop || current.from !== 'bag') return false;
-    const r = dropZone.getBoundingClientRect();
-    return clientX >= r.left && clientX <= r.right && clientY >= r.top && clientY <= r.bottom;
-  };
   function endDrag(clientX: number, clientY: number) {
     if (!drag) return;
     const current = drag;
     drag = null;
     current.ghost.remove();
-    current.source.classList.remove('inventory-dragging');
-    const target = targetAt(clientX, clientY, current);
-    if (target) handlers.move(current.from, current.uid, target.key, { x: target.x, y: target.y, rotated: current.rotated });
-    else if (overDropFor(current, clientX, clientY)) handlers.drop(current.uid);
-    signature = ''; // redraw
+    current.el.classList.remove('inventory-dragging');
+    for (const el of slotEls.values()) el.dataset.target = 'false';
+    const target = gridTarget(clientX, clientY, current);
+    const slot = slotTarget(clientX, clientY);
+    if (current.source.kind === 'grid') {
+      if (target) handlers.move(current.source.key, current.uid, target.key, { x: target.x, y: target.y, rotated: current.rotated });
+      else if (slot) handlers.equip(current.source.key, current.uid, slot);
+      else if (overDrop(current, clientX, clientY)) handlers.drop(current.uid);
+    } else if (target) handlers.unequip(current.source.slot, target.key, { x: target.x, y: target.y, rotated: current.rotated });
+    signature = '';
     if (view) render(view);
   }
   const onMove = (event: PointerEvent) => moveGhost(event.clientX, event.clientY);
@@ -151,17 +200,54 @@ export function createInventoryUI(host: HTMLElement, handlers: InventoryHandlers
   window.addEventListener('pointermove', onMove);
   window.addEventListener('pointerup', onUp);
 
+  function renderCharacter(next: InventoryView) {
+    for (const slot of SLOTS) {
+      const el = slotEls.get(slot)!;
+      const entry = next.equipment[slot];
+      const blocked = slot === 'offHand' && Boolean(next.equipment.mainHand && itemDef(next.equipment.mainHand.item).gear?.twoHanded);
+      el.dataset.blocked = String(blocked);
+      el.replaceChildren(Object.assign(document.createElement('small'), { textContent: blocked ? 'Off hand (two-handed)' : SLOT_NAMES[slot] }),
+        ...(entry ? [itemElement(entry, { kind: 'slot', slot }, 84, 84)] : []));
+    }
+    const s = next.stats;
+    const armorCut = Math.round((Math.max(0, s.armor) / (Math.max(0, s.armor) + 100)) * 100);
+    const rows: [string, string][] = [
+      ['Weapon', next.weapon], ['Max health', String(next.maxHealth)], ['Armour', `${s.armor} (−${armorCut}% damage)`],
+      ['Move speed', signed(s.moveSpeed, true)], ['Damage', signed(s.damage, true)], ['Attack speed', signed(s.attackSpeed, true)],
+      ['Stealth', signed(s.stealth, true)], ['Trap resistance', signed(s.trapResist, true)],
+    ];
+    statsList.replaceChildren(...rows.flatMap(([name, value]) => {
+      const dd = document.createElement('dd');
+      dd.textContent = value; dd.dataset.stat = name;
+      return [Object.assign(document.createElement('dt'), { textContent: name }), dd];
+    }));
+  }
   function render(next: InventoryView) {
     view = next;
     if (drag) return;
-    const sig = JSON.stringify([next.left?.key, next.left?.title, next.left?.items, next.bag, next.canDrop, next.hint]);
+    const sig = JSON.stringify([next.left, next.second, next.tabs, next.gold, next.showCharacter, next.bag, next.canDrop, next.hint, next.equipment, next.maxHealth, next.weapon]);
     if (sig === signature) return;
     signature = sig;
     leftPanel.hidden = !next.left;
     if (next.left) { leftTitle.textContent = next.left.title; fill(leftGrid, next.left.size, next.left.items, next.left.key); }
+    traderNote.hidden = !next.left?.note;
+    traderNote.textContent = next.left?.note ?? '';
+    secondPanel.hidden = !next.second;
+    if (next.second) { secondTitle.textContent = next.second.title; fill(secondGrid, next.second.size, next.second.items, next.second.key); }
+    characterPanel.hidden = next.showCharacter === false;
+    tabs.hidden = !next.tabs;
+    tabs.replaceChildren(...(next.tabs ?? []).map((tab) => {
+      const button = document.createElement('button');
+      button.type = 'button'; button.textContent = tab.label; button.dataset.tab = tab.id; button.dataset.active = String(tab.active);
+      button.setAttribute('data-testid', `tab-${tab.id}`);
+      button.addEventListener('click', () => handlers.tab?.(tab.id));
+      return button;
+    }), ...(next.gold !== undefined ? [Object.assign(document.createElement('span'), { className: 'base-gold', textContent: `${next.gold} gold` })] : []));
+    tabs.querySelector('.base-gold')?.setAttribute('data-testid', 'gold');
     fill(bagGrid, next.bagSize, next.bag, 'bag');
+    renderCharacter(next);
     const used = next.bag.reduce((sum, entry) => { const f = footprint(entry); return sum + f.w * f.h; }, 0);
-    const value = next.bag.reduce((sum, entry) => sum + itemDef(entry.item).value, 0);
+    const value = next.bag.reduce((sum, entry) => sum + itemValue(entry), 0);
     bagSummary.textContent = `${used}/${next.bagSize.width * next.bagSize.height} · ${value} gold`;
     dropZone.hidden = !next.canDrop;
     hint.textContent = next.hint;
@@ -172,13 +258,13 @@ export function createInventoryUI(host: HTMLElement, handlers: InventoryHandlers
     get hoveredBagItem() { return hovered; },
     open(next: InventoryView) { root.hidden = false; signature = ''; render(next); },
     close() {
-      if (drag) { drag.ghost.remove(); drag.source.classList.remove('inventory-dragging'); drag = null; }
+      if (drag) { drag.ghost.remove(); drag.el.classList.remove('inventory-dragging'); drag = null; }
       root.hidden = true; tooltip.hidden = true; hovered = null;
     },
     render,
     // R while dragging: a quarter turn (non-square items only).
     rotate() {
-      if (!drag || !canRotate(drag.item)) return;
+      if (!drag || drag.source.kind !== 'grid' || !canRotate(drag.item)) return;
       drag.rotated = !drag.rotated;
       [drag.grabX, drag.grabY] = [drag.grabY, drag.grabX];
       const r = drag.ghost.getBoundingClientRect();

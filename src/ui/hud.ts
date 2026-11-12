@@ -33,12 +33,12 @@ export function createHud(root: HTMLElement, scene: SceneMode, generated?: Gener
       <div class="pause-panel">
         <p class="eyebrow">MILESTONE ${isGenerated ? '07b · PRESSURE' : isMaze ? '03 · GRAPH DIAGNOSTICS' : isJunction ? '01 · SINGLE JUNCTION' : '00'}</p>
         <h1 id="panel-title">${startTitle}</h1>
-        <p class="panel-description">${isGenerated ? `A relic waits in the outer ring of this ${generated.columns}×${generated.rows} maze (seed ${generated.seed}): follow the blue beam, take it with E, then carry it back to Sanctuary under the gold beam. Warned shifts open one stone gate and close another every 45 seconds, faster while you carry the relic. A bell from Sanctuary tolls as time runs on; after the third, night falls and the maze shifts constantly. Listen for grinding stone. Hold C and look around to draw or write in chalk on floors, walls and gates (limited chalk per run). Closing stone pushes you and crushes you if you no longer fit. Every room always keeps some route home.` : isMaze ? 'Leave the warm Sanctuary marker, find three colored landmarks, then return home. G swaps two gate shortcuts. The 8-meter stone passages push and crush; permanent corridors offer detours. Learn the routes as you explore.' : isJunction ? 'Moving stone pushes you toward the opposite wall. Escape the 8-meter passage before the gap becomes too narrow to fit, or take the outer loop. Press G to shift.' : 'One room. Four walls. The foundation for a changing maze.'}</p>
+        <p class="panel-description">${isGenerated ? `A relic waits in the outer ring of this ${generated.columns}×${generated.rows} maze (seed ${generated.seed}): follow the blue beam, take it with E, then carry it back to Sanctuary under the gold beam. Warned shifts open one stone gate and close another every 45 seconds, faster while you carry the relic. A bell from Sanctuary tolls as time runs on; after the third, night falls and the maze shifts constantly. Listen for grinding stone. Press C to take out the chalk, then hold the left mouse button to draw or write on floors, walls and gates (limited chalk per run); C puts it away. Closing stone pushes you and crushes you if you no longer fit. Every room always keeps some route home.` : isMaze ? 'Leave the warm Sanctuary marker, find three colored landmarks, then return home. G swaps two gate shortcuts. The 8-meter stone passages push and crush; permanent corridors offer detours. Learn the routes as you explore.' : isJunction ? 'Moving stone pushes you toward the opposite wall. Escape the 8-meter passage before the gap becomes too narrow to fit, or take the outer loop. Press G to shift.' : 'One room. Four walls. The foundation for a changing maze.'}</p>
         <div class="control-list" aria-label="Controls">
           <p><span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span><span>Move</span></p>
           <p><span class="control-name">Mouse</span><span>Look around</span></p>
           <p><span><kbd>Esc</kbd></span><span>Pause &amp; release cursor</span></p>
-          ${isGenerated ? '<p><span><kbd>E</kbd></span><span>Take the relic</span></p><p><span><kbd>C</kbd></span><span>Hold to draw with chalk</span></p><p><span><kbd>G</kbd></span><span>Force a shift (debug)</span></p>'
+          ${isGenerated ? '<p><span><kbd>E</kbd></span><span>Take the relic</span></p><p><span><kbd>C</kbd></span><span>Chalk in hand / away · left mouse draws</span></p><p><span><kbd>G</kbd></span><span>Force a shift (debug)</span></p>'
             : hasGates ? '<p><span><kbd>G</kbd></span><span>Request a shift</span></p>' : ''}
           ${hasNavigation ? '<p><span><kbd>F2</kbd></span><span>Developer debug map</span></p>' : ''}
         </div>
@@ -71,12 +71,13 @@ export function createHud(root: HTMLElement, scene: SceneMode, generated?: Gener
         <p class="shift-phase" data-testid="shift-phase">Maze still</p>
         <p class="shift-notice" data-testid="shift-notice" role="status"></p>
       </aside>
-      <p class="interact-prompt" data-testid="interact-prompt" hidden><kbd>E</kbd> Take the relic</p>` : ''}
+      <p class="interact-prompt" data-testid="interact-prompt" hidden><kbd>E</kbd> Take the relic</p>
+      <p class="chalk-mode" data-testid="chalk-mode" hidden>Chalk out · hold left mouse to draw · <kbd>C</kbd> put away</p>` : ''}
     <footer class="diagnostics">
       <span class="diagnostics-label">${hasNavigation ? 'MAZE' : isJunction ? 'JUNCTION' : 'ROOM'} TEST <span class="separator">/</span> POSITION</span>
       <span>X <output data-testid="position-x">0.00</output></span>
       <span>Z <output data-testid="position-z">${hasGates || isGenerated ? '0.00' : '8.00'}</output></span>
-      <span class="footer-controls">WASD · MOVE ${isGenerated ? '<span class="separator">/</span> E · TAKE <span class="separator">/</span> HOLD C · DRAW' : hasGates ? '<span class="separator">/</span> G · SHIFT' : ''} <span class="separator">/</span> ESC · PAUSE</span>
+      <span class="footer-controls">WASD · MOVE ${isGenerated ? '<span class="separator">/</span> E · TAKE <span class="separator">/</span> C + LMB · DRAW' : hasGates ? '<span class="separator">/</span> G · SHIFT' : ''} <span class="separator">/</span> ESC · PAUSE</span>
     </footer>
   `;
 
@@ -113,6 +114,7 @@ export function createHud(root: HTMLElement, scene: SceneMode, generated?: Gener
   const runTime = isGenerated ? element<HTMLElement>('[data-testid="run-time"]') : null;
   const prompt = isGenerated ? element<HTMLElement>('[data-testid="interact-prompt"]') : null;
   const chalkLeft = isGenerated ? element<HTMLElement>('[data-testid="chalk-left"]') : null;
+  const chalkMode = isGenerated ? element<HTMLElement>('[data-testid="chalk-mode"]') : null;
   const volume = isGenerated ? element<HTMLInputElement>('[data-testid="volume"]') : null;
   const mute = isGenerated ? element<HTMLInputElement>('[data-testid="mute"]') : null;
   const retrySeed = isGenerated ? element<HTMLButtonElement>('[data-action="retry-seed"]') : null;
@@ -197,8 +199,11 @@ export function createHud(root: HTMLElement, scene: SceneMode, generated?: Gener
         returnStatus.dataset.complete = String(run.returned);
       }
     },
-    updateGenerated(run: GeneratedRun, timestamp: number, inReach: boolean) {
+    updateGenerated(run: GeneratedRun, timestamp: number, inReach: boolean, chalkOut: boolean) {
       if (prompt && prompt.hidden === inReach) prompt.hidden = !inReach;
+      // Chalk in hand: indicator and a ring crosshair.
+      if (chalkMode && chalkMode.hidden === chalkOut) chalkMode.hidden = !chalkOut;
+      if ((root.dataset.chalk === 'out') !== chalkOut) { if (chalkOut) root.dataset.chalk = 'out'; else delete root.dataset.chalk; }
       if (!ringLabel || timestamp - lastJunctionUpdate < 100) return;
       lastJunctionUpdate = timestamp;
       ringLabel.textContent = run.ring === 'sanctuary' ? 'Sanctuary' : `${run.ring[0].toUpperCase()}${run.ring.slice(1)} ring`;

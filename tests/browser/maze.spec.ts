@@ -71,7 +71,8 @@ test('visit three landmarks, close the old shortcut, take a detour and return ho
   expect(errors).toEqual([]);
 });
 test('maze pushing pauses, resumes, crushes and Retry clears navigation and gates', async ({ page }) => {
-  test.setTimeout(90_000);
+  // 90 s was too tight on slow CI runners (repeated timeouts, 2026-11-11/12).
+  test.setTimeout(180_000);
   const errors = watchErrors(page); await start(page);
   await walk(page, 'KeyW', 1500); await page.keyboard.press('KeyG'); await page.clock.runFor(5600);
   await expect(page.getByTestId('shift-phase')).toHaveText('Being pushed · escape');

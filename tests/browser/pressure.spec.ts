@@ -23,10 +23,11 @@ async function look(page: Page, dx: number, dy: number) {
   await page.evaluate(([x, y]) => document.dispatchEvent(new MouseEvent('mousemove', { movementX: x, movementY: y })), [dx, dy]);
   await page.clock.runFor(50);
 }
+// Chalk is a toggle (C) and the left mouse button draws while it is out.
 async function drawWhileMoving(page: Page, moves: [number, number][]) {
-  await page.keyboard.down('KeyC');
+  await page.mouse.down();
   for (const [dx, dy] of moves) for (let i = 0; i < 10; i++) await look(page, dx / 10, dy / 10);
-  await page.keyboard.up('KeyC');
+  await page.mouse.up();
   await page.clock.runFor(100);
 }
 const world = buildGeneratedWorld(generateMaze(41));
@@ -48,8 +49,15 @@ test('free-draw chalk strokes, rule switches in the address, and positional soun
   await startRunning(page, 'Start exploring');
   await freezeBrowserClock(page);
   await expect.poll(() => html(page, 'audioState')).toBe('running');
-  // Free-draw chalk: look down, hold C and move the mouse; release; draw a second stroke.
+  // Free-draw chalk: with the chalk away, the mouse button draws nothing.
   await look(page, 0, 500);
+  await drawWhileMoving(page, [[60, 0]]);
+  await expect(page.getByTestId('debug-chalk-stroke')).toHaveCount(0);
+  await expect(page.getByTestId('chalk-mode')).toBeHidden();
+  // C takes it out; hold the left button and move; release; draw a second stroke.
+  await page.keyboard.press('KeyC'); await page.clock.runFor(200);
+  await expect(page.getByTestId('chalk-mode')).toBeVisible();
+  await expect(page.getByTestId('hud')).toHaveAttribute('data-chalk', 'out');
   await drawWhileMoving(page, [[60, 0], [0, 40], [-60, 0]]);
   await look(page, 0, 120);
   await drawWhileMoving(page, [[0, -40]]);
@@ -57,16 +65,25 @@ test('free-draw chalk strokes, rule switches in the address, and positional soun
   const left = Number((await page.getByTestId('chalk-left').textContent())!.replace('% chalk', ''));
   expect(left).toBeLessThan(100);
   expect(left).toBeGreaterThan(80);
+  // C again puts it away.
+  await page.keyboard.press('KeyC'); await page.clock.runFor(200);
+  await expect(page.getByTestId('chalk-mode')).toBeHidden();
+  await drawWhileMoving(page, [[0, 40]]);
+  await expect(page.getByTestId('debug-chalk-stroke')).toHaveCount(2);
   // A forced shift is heard: warnings at both gates, then grinding.
-  const before = Number(await html(page, 'soundsPlayed'));
+  // The simulation queues them deterministically; headless audio playback timing varies, so
+  // require at least one to have actually played.
+  const queued = Number(await html(page, 'soundsQueued')), played = Number(await html(page, 'soundsPlayed'));
   await page.keyboard.press('KeyG'); await page.clock.runFor(4000);
-  await expect.poll(async () => Number(await html(page, 'soundsPlayed'))).toBeGreaterThanOrEqual(before + 3);
+  await expect.poll(async () => Number(await html(page, 'soundsQueued'))).toBeGreaterThanOrEqual(queued + 4);
+  await expect.poll(async () => Number(await html(page, 'soundsPlayed')), { timeout: 10_000 }).toBeGreaterThan(played);
   // Switch chalk off: C does nothing, the address remembers it, the HUD says so.
   await pause(page);
   await page.locator('[data-rule="chalk"]').uncheck();
   await expect(page).toHaveURL(/[?&]off=chalk(&|$)/);
   await page.getByTestId('mute').check();
   await startRunning(page, 'Resume exploring');
+  await page.keyboard.press('KeyC');
   await drawWhileMoving(page, [[50, 0]]);
   await expect(page.getByTestId('chalk-left')).toHaveText('no chalk');
   await expect(page.getByTestId('debug-chalk-stroke')).toHaveCount(2);

@@ -12,8 +12,10 @@ export class BrowserInput {
   private pitch = 0;
   private shiftRequested = false;
   private interactRequested = false;
-  // Held, not pressed: chalk draws while C is down.
-  private chalkHeld = false;
+  // Chalk (developer request 2026-11-12): C takes the chalk out or puts it away; while it is
+  // out, holding the left mouse button draws.
+  private chalkOut = false;
+  private mouseDown = false;
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -39,7 +41,7 @@ export class BrowserInput {
         if (!event.repeat) this.interactRequested = true;
       } else if (event.code === 'KeyC') {
         event.preventDefault();
-        this.chalkHeld = true;
+        if (!event.repeat) this.chalkOut = !this.chalkOut;
       } else if (event.code === 'KeyV' && this.onDebugAction) {
         event.preventDefault();
         if (!event.repeat) this.onDebugAction('probe');
@@ -51,7 +53,6 @@ export class BrowserInput {
 
     document.addEventListener('keyup', (event) => {
       this.keys.delete(event.code);
-      if (event.code === 'KeyC') this.chalkHeld = false;
       if (this.active && MOVEMENT_KEYS.has(event.code)) event.preventDefault();
     }, options);
 
@@ -61,11 +62,18 @@ export class BrowserInput {
       this.pitch = Math.max(-MAX_PITCH, Math.min(MAX_PITCH, this.pitch - event.movementY * SENSITIVITY));
     }, options);
 
+    document.addEventListener('mousedown', (event) => {
+      if (this.active && event.button === 0) this.mouseDown = true;
+    }, options);
+    document.addEventListener('mouseup', (event) => {
+      if (event.button === 0) this.mouseDown = false;
+    }, options);
+
     document.addEventListener('pointerlockchange', () => {
       this.keys.clear();
       this.shiftRequested = false;
       this.interactRequested = false;
-      this.chalkHeld = false;
+      this.mouseDown = false;
       this.active = document.pointerLockElement === canvas && !document.hidden;
       this.onModeChange(this.active);
     }, options);
@@ -97,7 +105,7 @@ export class BrowserInput {
     this.keys.clear();
     this.shiftRequested = false;
     this.interactRequested = false;
-    this.chalkHeld = false;
+    this.mouseDown = false;
     this.onModeChange(false, message);
     if (document.pointerLockElement === this.canvas) document.exitPointerLock();
   }
@@ -114,8 +122,16 @@ export class BrowserInput {
     };
   }
 
+  // True while the chalk is out and the left mouse button is held.
   isChalkHeld(): boolean {
-    return this.active && this.chalkHeld;
+    return this.active && this.chalkOut && this.mouseDown;
+  }
+  isChalkOut(): boolean {
+    return this.chalkOut;
+  }
+  // A new run starts with the chalk put away.
+  putChalkAway() {
+    this.chalkOut = false;
   }
 
   consumeInteractRequest(): boolean {

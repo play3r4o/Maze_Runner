@@ -176,6 +176,7 @@ function startRoom() {
   const resetGeneratedRun = () => {
     generatedRun = createGeneratedRun(world!, generatedRun?.rules ?? initialRules);
     scene.audio?.reset();
+    input.putChalkAway();
     input.resetLook();
     stepper.reset();
     hud.resetAttempt();
@@ -310,12 +311,13 @@ function startRoom() {
       if (scene.audio) {
         document.documentElement.dataset.audioState = scene.audio.state;
         document.documentElement.dataset.soundsPlayed = String(scene.audio.played);
+        document.documentElement.dataset.soundsQueued = String((live?.nextSoundId ?? 1) - 1);
       }
     }
     hud.updatePosition(player, timestamp);
     if (mode === 'junction') hud.updateJunction(run.junction, timestamp, run.pushedBy);
     if (mode === 'maze') hud.updateMaze(mazeRun, timestamp);
-    if (generatedRun) hud.updateGenerated(generatedRun, timestamp, relicInReach(world!, generatedRun));
+    if (generatedRun) hud.updateGenerated(generatedRun, timestamp, relicInReach(world!, generatedRun), input.isChalkOut());
     debug?.update(debugView(), timestamp);
     frameId = requestAnimationFrame(frame);
   }

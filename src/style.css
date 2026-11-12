@@ -40,6 +40,9 @@ kbd { font: 11px ui-monospace, monospace; min-width: 23px; height: 23px; padding
 .panel-hint { color: #a9b7ad; font-size: 10px; line-height: 1.65; margin: 13px 0 0; }
 .crosshair { position: absolute; top: 50%; left: 50%; width: 4px; height: 4px; transform: translate(-50%, -50%); border-radius: 50%; background: #f4f3df; box-shadow: 0 0 2px #17201a; display: none; }
 [data-state='running'] .crosshair { display: block; }
+[data-chalk='out'] .crosshair { width: 12px; height: 12px; background: transparent; border: 2px solid #f4f3df; box-sizing: border-box; }
+.chalk-mode { position: fixed; left: 50%; top: 62%; transform: translateX(-50%); margin: 0; padding: 5px 10px; border-radius: 4px; background: #10201acc; color: #eee5cc; font-size: 12px; pointer-events: none; }
+.chalk-mode[hidden], [data-state='paused'] .chalk-mode { display: none; }
 .diagnostics { display: flex; align-items: center; gap: 18px; position: absolute; bottom: 24px; left: 32px; right: 32px; background: #192923eb; border: 1px solid #c9d6ca26; border-radius: 3px; padding: 12px 15px; font-size: 10px; color: #bdcbbd; z-index: 2; }
 .diagnostics output { color: #f1eddd; display: inline-block; min-width: 6ch; font-variant-numeric: tabular-nums; }
 .diagnostics-label { font-size: 9px; letter-spacing: 0.07em; }

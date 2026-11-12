@@ -5,7 +5,12 @@ export default defineConfig({
   fullyParallel: true,
   // Software WebGL competes for the small GitHub runner's CPU; serialize there.
   workers: process.env.CI ? 1 : 2,
-  retries: 0,
+  // The GitHub runner (software WebGL, sometimes without apt browser libraries) is slow and
+  // uneven: browser contexts have taken over 30 s to start. On CI, allow 60 s per test by
+  // default and retry a failed test once. A real failure still fails twice; a pass on retry is
+  // reported as "flaky" in the log.
+  retries: process.env.CI ? 1 : 0,
+  timeout: process.env.CI ? 60_000 : 30_000,
   reporter: 'list',
   use: {
     baseURL: 'http://127.0.0.1:4174',

@@ -1,7 +1,7 @@
 import { RARITY_VALUE_MULTIPLIER } from './tuning';
 // M8 item catalogue. Plain data, so later milestones (equipment, traders) can extend it:
 // add fields such as an equipment slot without changing grids or containers.
-export type ItemCategory = 'valuable' | 'material' | 'provision' | 'relic' | 'tool' | 'gear';
+export type ItemCategory = 'valuable' | 'material' | 'provision' | 'relic' | 'tool' | 'gear' | 'consumable';
 export type Rarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
 export type ItemDef = {
   id: string; name: string;
@@ -30,7 +30,7 @@ export const RARITY_COLORS: Record<Rarity, string> = {
 };
 export const RARITIES: readonly Rarity[] = ['common', 'uncommon', 'rare', 'epic', 'legendary'];
 // Unrest by category (plan T1): provisions 0, materials 1, relics 3, valuables 0.
-const UNREST: Record<ItemCategory, number> = { provision: 0, material: 1, relic: 3, valuable: 0, tool: 0, gear: 0 };
+const UNREST: Record<ItemCategory, number> = { provision: 0, material: 1, relic: 3, valuable: 0, tool: 0, gear: 0, consumable: 0 };
 
 const item = (id: string, name: string, size: [number, number], category: ItemCategory, rarity: Rarity, value: number,
   description: string, noisy = false): ItemDef =>
@@ -81,6 +81,10 @@ export const ITEMS: readonly ItemDef[] = [
   item('quicksilverVial', 'Quicksilver Vial', [1, 1], 'material', 'rare', 55, 'It moves on its own inside the glass.'),
   item('stoneIdol', 'Stone Idol', [2, 2], 'relic', 'epic', 140, 'A squat figure with too many eyes. The walls seem to notice it.'),
   item('gildedMask', 'Gilded Mask', [2, 3], 'relic', 'epic', 170, 'A golden face, calm and wrong.'),
+  // M17 consumables: used with number keys 1–3.
+  item('bandage', 'Bandage', [1, 1], 'consumable', 'common', 12, 'Press 1. Three seconds of careful wrapping: +35 health. A hit spoils it.'),
+  item('healingPotion', 'Healing Potion', [1, 2], 'consumable', 'uncommon', 30, 'Press 2. Drink in a second, then +50 health over five seconds.'),
+  item('torch', 'Torch', [1, 2], 'consumable', 'common', 8, 'Press 3. Light for two minutes, but monsters see you from further away.'),
   // Starter kit (T5): a free spool each run if the bag has room. Never found in chests.
   item('threadSpool', 'Thread Spool', [1, 1], 'tool', 'common', 2, '150 metres of strong thread. Press T to start or stop laying it.'),
   item('heartOfMaze', 'Heart of the Maze', [2, 2], 'relic', 'legendary', 400, 'Warm, and faintly beating. The maze wants it back.'),
@@ -93,6 +97,7 @@ export const itemDef = (id: string): ItemDef => {
 };
 export const RELIC_ITEM = 'heartOfMaze';
 export const THREAD_ITEM = 'threadSpool';
+export const CONSUMABLE_KEYS: Record<1 | 2 | 3, string> = { 1: 'bandage', 2: 'healingPotion', 3: 'torch' };
 export const noisyCount = (bag: readonly { item: string }[]) => bag.filter((entry) => itemDef(entry.item).noisy).length;
 export const bagUnrest = (bag: readonly { item: string }[]) => bag.reduce((sum, entry) => sum + itemDef(entry.item).unrest, 0);
 

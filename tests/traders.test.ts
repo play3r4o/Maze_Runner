@@ -35,7 +35,7 @@ describe('M16 traders', () => {
       const stock = rollStock(trader.id, refresh);
       expect(stock.length).toBeGreaterThan(0);
       for (const entry of stock) {
-        expect(trader.id === 'quartermaster' ? entry.item === 'threadSpool' : traderBuys(trader.id, entry)).toBe(true);
+        expect(trader.id === 'quartermaster' ? ['threadSpool', 'bandage', 'healingPotion', 'torch'].includes(entry.item) : traderBuys(trader.id, entry)).toBe(true);
         expect(['epic', 'legendary']).not.toContain(entry.roll?.rarity);
       }
     }

@@ -2,7 +2,8 @@
 // container and the bag (drag, rotate, right-click), and drop bag items into a sack at the
 // player's feet. The maze keeps running while a container is open; these are applied
 // between simulation steps like other player actions.
-import { addRunEvent, isDead, isRunOver, withBag, withEquipment } from './generatedRun';
+import { addRunEvent, hurtPlayer, isDead, isRunOver, withBag, withEquipment, withSound } from './generatedRun';
+import { MIMIC } from './tuning';
 import { defaultSlot, equipItem, isTwoHanded, slotAccepts, unequipItem } from './equipment';
 import type { Equipment, Slot } from './equipment';
 import type { GeneratedRun } from './generatedRun';
@@ -30,6 +31,16 @@ export function interactGeneratedRun(run: GeneratedRun): GeneratedRun {
   if (run.openContainer) return { ...run, openContainer: null };
   const container = containerInReach(run);
   if (!container) return run;
+  // M17: a mimic bites and wakes; its chest is gone and it carries the loot until killed.
+  const mimic = container.mimic && run.rules.monsters ? run.monsters.find((m) => m.container === container.id && m.mode === 'dormant') : undefined;
+  if (mimic) {
+    let next: GeneratedRun = { ...run, containers: run.containers.filter((item) => item.id !== container.id),
+      monsters: run.monsters.map((m) => (m.id === mimic.id ? { ...m, mode: 'chase' as const, loot: container.items.map((item) => ({ ...item })), lastSeen: { x: run.player.x, z: run.player.z }, cooldown: 0.8 } : m)),
+      events: addRunEvent(run, 'monster', `${mimic.id} mimic woke in ${container.cell}`) };
+    next = withSound(next, 'mimicSnap', container.x, container.z);
+    next = hurtPlayer(next, MIMIC.bite, false, 'mimic', { kind: 'monster', from: container });
+    return next;
+  }
   return { ...run, openContainer: container.id, containers: run.containers.map((item) => (item.id === container.id ? { ...item, opened: true } : item)),
     events: container.opened ? run.events : addRunEvent(run, 'loot', `opened ${container.kind} ${container.id} in ${container.cell} (${container.items.length} items)`) };
 }

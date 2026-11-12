@@ -19,7 +19,7 @@ import { ALL_RULES_ON, RULE_KEYS, autoShiftTicks, isNight, nextBellTick, nightFa
 import type { RuleKey, RuleToggles } from './game/pressure';
 import { CROSSBOW_RELOAD, dailySeed } from './game/tuning';
 import { closeLoot, containerInReach, dropFromBag, interactGeneratedRun, lootMove, lootQuickMove, openContainerOf } from './game/looting';
-import { activeWeapon, attackGeneratedRun, hasSpool, jamGate, jamTarget, setBlocking, swapHands, toggleThread, withBag, withEquipment } from './game/generatedRun';
+import { useConsumable, activeWeapon, attackGeneratedRun, hasSpool, jamGate, jamTarget, setBlocking, swapHands, toggleThread, withBag, withEquipment } from './game/generatedRun';
 import { equipItem, isGear, maxHealthOf, statsOf, unequipItem } from './game/equipment';
 import { lootEquip, lootUnequip, smartSlot } from './game/looting';
 import { TRADERS, buyFrom, buyPrice, marketFor, sellTo, traderBuys } from './game/traders';
@@ -44,7 +44,7 @@ const requestedScene = params.get('scene');
 // M0 room, M1 junction and M2/M3 hand-built maze stay reachable for regression checks.
 const mode: SceneMode = requestedScene === 'room' ? 'room' : requestedScene === 'junction' ? 'junction'
   : requestedScene === 'maze' ? 'maze' : 'generated';
-document.title = `Shifting Labyrinth · ${{ generated: 'M16', maze: 'M3', junction: 'M1', room: 'M0' }[mode]}`;
+document.title = `Shifting Labyrinth · ${{ generated: 'M17', maze: 'M3', junction: 'M1', room: 'M0' }[mode]}`;
 canvas.setAttribute('aria-label', { generated: 'First-person shifting seeded maze', maze: 'First-person hand-built maze',
   junction: 'First-person shifting junction', room: 'First-person gray room' }[mode]);
 
@@ -181,6 +181,8 @@ function startRoom() {
       if (input.consumeJamRequest() && next.bag.length) next = jamGate(world, next, next.bag[next.bag.length - 1].uid);
       next = setBlocking(next, input.isBlockHeld());
       if (input.consumeSwapRequest()) next = swapHands(next);
+      const use = input.consumeUseRequest();
+      if (use) next = useConsumable(next, use);
       if (input.consumeFireRequest()) next = attackGeneratedRun(world, { ...next, player: { ...next.player, yaw: state.yaw } });
       if (shiftRequested) {
         next = requestGeneratedRunShift(world, next);
@@ -519,10 +521,10 @@ function startRoom() {
       scene.render(player, state.yaw, state.pitch, run.junction, gates, live && world ? {
         carried: live.carrying, beams: live.rules.beams, night: nightFactor(live.rules, live.runTicks), chalk: live.chalk,
         openness: live.shift.openness, sounds: live.sounds, traps: live.traps, time: live.tick / 60,
-        monsters: live.monsters, bolts: live.bolts, monstersOn: live.rules.monsters,
+        monsters: live.monsters, bolts: live.bolts, globs: live.globs, monstersOn: live.rules.monsters,
         thread: live.thread, trace: activeTrace,
         containers: live.containers, relicHome: live.containers.some((c) => c.kind === 'reliquary' && c.items.length > 0),
-        held: heldState(live) } : undefined);
+        held: heldState(live), torch: live.torch > 0 } : undefined);
       // Read-only audio diagnostics for tests and bug reports.
       if (scene.audio) {
         document.documentElement.dataset.audioState = scene.audio.state;

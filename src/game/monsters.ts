@@ -12,11 +12,15 @@ import type { WallRect } from '../simulation/player';
 import { PLAYER_HALF_WIDTH } from '../simulation/player';
 import { BOLT_DAMAGE, BOLT_RANGE, BOLT_SPEED, MONSTERS_PER_RING, MONSTER_HEARING, MONSTER_REACH, MONSTER_SEARCH_WAIT,
   MONSTER_SIGHT, MONSTER_STATS, NIGHT_MONSTER_SPEED, WARDEN_BOLT_STUN, WARDEN_COUNT, WARDEN_RESPAWN_SECONDS,
-  WARDEN_STEP_SECONDS, WARDEN_TRAP_STUN, WARDEN_MELEE_STUN } from './tuning';
+  WARDEN_STEP_SECONDS, WARDEN_TRAP_STUN, WARDEN_MELEE_STUN, TORCH } from './tuning';
+const TORCH_SIGHT_BONUS = TORCH.sightBonus;
 import type { Point2, TrapSpec } from './traps';
+import type { GridItem } from './inventory';
+import type { Container } from './loot';
+import { BRUTE, RAM, SPITTER } from './tuning';
 
-export type MonsterKind = 'husk' | 'skitter' | 'warden';
-export type MonsterMode = 'patrol' | 'investigate' | 'chase' | 'search' | 'dead';
+export type MonsterKind = 'husk' | 'skitter' | 'warden' | 'spitter' | 'brute' | 'mimic' | 'ram';
+export type MonsterMode = 'patrol' | 'investigate' | 'chase' | 'search' | 'dead' | 'dormant';
 type HomeRing = Exclude<Ring, 'sanctuary'>;
 export type Monster = {
   id: string; kind: MonsterKind; home: HomeRing[];
@@ -28,7 +32,12 @@ export type Monster = {
   wait: number; stun: number; cooldown: number; stepTimer: number;
   // Warden only: seconds until it returns (0 while alive). Cause of the last death.
   respawn: number; cause: string | null;
+  // M17: seconds left of a brute's or the Ram's wind-up; the Ram's charge in progress; a
+  // mimic's chest and the loot it guards.
+  windup?: number; charge?: { dx: number; dz: number; travelled: number } | null; container?: string; loot?: GridItem[];
 };
+// M17 spitter globs.
+export type Glob = { id: number; x: number; z: number; dx: number; dz: number; travelled: number };
 // A noise monsters may hear; without a radius it carries the default hearing distance.
 export type Noise = Point2 & { radius?: number };
 export type Bolt = { id: number; x: number; z: number; dx: number; dz: number; travelled: number; damage?: number };
@@ -122,7 +131,7 @@ function freshMonster(id: string, kind: MonsterKind, home: HomeRing[], cell: str
 }
 // Seeded: never in Sanctuary, the cells just outside its entrances, the relic room or a room
 // with a trap; one monster per cell.
-export function spawnMonsters(maze: GeneratedMaze, relicCell: string, traps: readonly TrapSpec[]): Monster[] {
+export function spawnMonsters(maze: GeneratedMaze, relicCell: string, traps: readonly TrapSpec[], containers: readonly Container[] = []): Monster[] {
   const rng = createRng((maze.seed ^ 0x68e31da4) >>> 0);
   const entranceCells = new Set(maze.entrances.flatMap((id) => maze.edges.filter((edge) => edge.id === id)).flatMap((edge) => [edge.a, edge.b]));
   const used = new Set([relicCell, ...entranceCells, ...traps.filter((trap) => trap.edge === null).map((trap) => trap.cell)]);
@@ -138,6 +147,14 @@ export function spawnMonsters(maze: GeneratedMaze, relicCell: string, traps: rea
     for (const kind of ['husk', 'skitter'] as const) for (let n = 0; n < MONSTERS_PER_RING[ring][kind]; n++) place(kind, ring, [ring]);
   }
   for (let n = 0; n < WARDEN_COUNT; n++) place('warden', 'outer', ['outer', 'middle']);
+  // M17 (placed after the M10 monsters so their seeded spots do not change).
+  for (const ring of ['inner', 'middle', 'outer'] as const) {
+    for (const kind of ['spitter', 'brute'] as const) for (let n = 0; n < MONSTERS_PER_RING[ring][kind]; n++) place(kind, ring, [ring]);
+  }
+  place('ram', 'outer', ['outer']);
+  for (const chest of containers.filter((container) => container.mimic)) {
+    monsters.push({ ...freshMonster(`m${monsters.length + 1}`, 'mimic', ['outer'], chest.cell, maze), x: chest.x, z: chest.z, mode: 'dormant', container: chest.id });
+  }
   return monsters;
 }
 
@@ -145,7 +162,10 @@ export function spawnMonsters(maze: GeneratedMaze, relicCell: string, traps: rea
 export type MonsterHit = { monster: string; kind: MonsterKind; cause: string; killed: boolean; stunned: boolean };
 // Apply damage from a bolt or a trap. Wardens are only staggered, unless the cause kills them.
 export function hurtMonster(monster: Monster, amount: number, lethal: boolean, cause: string): { monster: Monster; hit: MonsterHit } {
-  if (monster.mode === 'dead') return { monster, hit: { monster: monster.id, kind: monster.kind, cause, killed: false, stunned: false } };
+  if (monster.mode === 'dead' || monster.mode === 'dormant') return { monster, hit: { monster: monster.id, kind: monster.kind, cause, killed: false, stunned: false } };
+  // M17: brutes are armoured; the Ram shrugs off weapons unless stunned after a failed charge.
+  if (!lethal && monster.kind === 'brute') amount = Math.round(amount * BRUTE.damageTaken);
+  if (!lethal && monster.kind === 'ram') amount = Math.round(amount * (monster.stun > 0 ? RAM.stunnedDamage : RAM.armouredDamage));
   if (isUnkillable(monster.kind)) {
     if (WARDEN_KILLERS.has(cause)) {
       return { monster: { ...monster, mode: 'dead', path: [], goal: null, respawn: WARDEN_RESPAWN_SECONDS, cause },
@@ -180,7 +200,7 @@ export function stepBolts(bolts: readonly Bolt[], monsters: readonly Monster[], 
       if (t !== null && t < best) { best = t; wall = true; }
     }
     if (targets) current.forEach((monster, i) => {
-      if (monster.mode === 'dead') return;
+      if (monster.mode === 'dead' || monster.mode === 'dormant') return;
       const half = MONSTER_STATS[monster.kind].half;
       const t = segmentHit(bolt.x, bolt.z, mx, mz, { minX: monster.x - half, maxX: monster.x + half, minZ: monster.z - half, maxZ: monster.z + half });
       if (t !== null && t <= best) { best = t; target = i; wall = false; }
@@ -200,14 +220,16 @@ export function stepBolts(bolts: readonly Bolt[], monsters: readonly Monster[], 
 export type MonsterContext = {
   maze: GeneratedMaze; solids: readonly WallRect[]; plaza: Rect;
   before: MazeOpenness; openness: MazeOpenness;
-  player: { x: number; z: number; alive: boolean; safe: boolean };
+  player: { x: number; z: number; alive: boolean; safe: boolean; lit?: boolean };
   noises: readonly Noise[]; night: boolean; dt: number;
 };
-export type MonsterSound = { kind: 'growl' | 'roar' | 'wardenStep'; x: number; z: number; monster: MonsterKind };
+export type MonsterSound = { kind: 'growl' | 'roar' | 'wardenStep' | 'spit' | 'windup' | 'ramBellow' | 'hoof' | 'ramImpact'; x: number; z: number; monster: MonsterKind };
 export type MonsterOutcome = {
   monsters: Monster[]; rng: number;
-  attacks: { monster: string; kind: MonsterKind; amount: number }[];
+  attacks: { monster: string; kind: MonsterKind; amount: number; push?: Point2 }[];
   hits: MonsterHit[]; sounds: MonsterSound[]; notes: string[];
+  // M17: globs spat this step (origin and direction).
+  spits: { monster: string; x: number; z: number; dx: number; dz: number }[];
 };
 
 export function stepMonsters(monsters: readonly Monster[], rngState: number, ctx: MonsterContext): MonsterOutcome {
@@ -222,11 +244,13 @@ export function stepMonsters(monsters: readonly Monster[], rngState: number, ctx
   const hits: MonsterHit[] = [];
   const sounds: MonsterSound[] = [];
   const notes: string[] = [];
+  const spits: MonsterOutcome['spits'] = [];
   const cellsOf = (rings: HomeRing[]) => maze.cells.filter((cell) => rings.includes(maze.rings[cell.id] as HomeRing)).map((cell) => cell.id);
 
   const next = monsters.map((original) => {
     let m: Monster = { ...original, path: [...original.path] };
     const stats = MONSTER_STATS[m.kind];
+    if (m.mode === 'dormant') return m;
     if (m.mode === 'dead') {
       if (m.kind !== 'warden' || m.respawn <= 0) return m;
       const respawn = Math.max(0, m.respawn - dt);
@@ -247,10 +271,42 @@ export function stepMonsters(monsters: readonly Monster[], rngState: number, ctx
     }
     m.cooldown = Math.max(0, m.cooldown - dt);
     if (m.stun > 0) { m.stun = Math.max(0, m.stun - dt); return m; }
+    // M17 Ram: a charge in progress runs straight until it hits the player, stone or its limit.
+    if (m.kind === 'ram' && m.charge) {
+      const step = RAM.chargeSpeed * dt;
+      const moved = moveBody(m.x, m.z, stats.half, m.charge.dx * step, m.charge.dz * step, solids);
+      const blocked = overlaps(moved.x, moved.z, stats.half, ctx.plaza);
+      const actual = blocked ? 0 : Math.hypot(moved.x - m.x, moved.z - m.z);
+      if (!blocked) { m.x = moved.x; m.z = moved.z; }
+      m.charge = { ...m.charge, travelled: m.charge.travelled + actual };
+      m.stepTimer -= dt;
+      if (m.stepTimer <= 0) { m.stepTimer = 0.18; sounds.push({ kind: 'hoof', x: m.x, z: m.z, monster: m.kind }); }
+      if (player.alive && Math.hypot(player.x - m.x, player.z - m.z) <= stats.half + PLAYER_HALF_WIDTH + 0.3) {
+        attacks.push({ monster: m.id, kind: m.kind, amount: stats.damage, push: { x: m.charge.dx * RAM.push, z: m.charge.dz * RAM.push } });
+        m.charge = null; m.cooldown = stats.attackEvery;
+      } else if (actual < step * 0.5) {
+        m.charge = null; m.stun = RAM.stun; m.cooldown = stats.attackEvery;
+        sounds.push({ kind: 'ramImpact', x: m.x, z: m.z, monster: m.kind });
+        notes.push(`${m.id} ram hit stone and is stunned`);
+      } else if (m.charge.travelled >= RAM.chargeMax) { m.charge = null; m.cooldown = stats.attackEvery; }
+      return m;
+    }
+    if (m.kind === 'ram' && (m.windup ?? 0) > 0) {
+      m.windup = Math.max(0, m.windup! - dt);
+      const aim = m.lastSeen ?? player;
+      m.yaw = Math.atan2(-(aim.x - m.x), -(aim.z - m.z)) + 0;
+      if (m.windup === 0) {
+        const length = Math.hypot(aim.x - m.x, aim.z - m.z) || 1;
+        m.charge = { dx: (aim.x - m.x) / length, dz: (aim.z - m.z) / length, travelled: 0 };
+      }
+      return m;
+    }
 
     const speed = (m.mode === 'chase' ? stats.chase : stats.patrol) * (ctx.night ? NIGHT_MONSTER_SPEED : 1);
     const distance = Math.hypot(player.x - m.x, player.z - m.z);
-    const sees = player.alive && !player.safe && distance <= MONSTER_SIGHT && lineClear(m, player, solids);
+    // M17: a lit torch makes the player visible from further away.
+    const sight = MONSTER_SIGHT * (player.lit ? 1 + TORCH_SIGHT_BONUS : 1);
+    const sees = player.alive && !player.safe && distance <= sight && lineClear(m, player, solids);
     const setGoal = (goal: string | null, mode: MonsterMode) => {
       m.mode = mode; m.goal = goal; m.wait = 0;
       const from = nearestCell(maze, m.x, m.z);
@@ -274,7 +330,34 @@ export function stepMonsters(monsters: readonly Monster[], rngState: number, ctx
     }
 
     let target: Point2 | null = null;
-    if (m.mode === 'chase') {
+    if (m.mode === 'chase' && m.kind === 'ram') {
+      // The Ram lowers its head (1 s), then charges where it last saw the player.
+      if (sees && m.cooldown <= 0 && distance <= RAM.chargeRange) {
+        m.windup = RAM.windup; m.lastSeen = { x: player.x, z: player.z };
+        sounds.push({ kind: 'ramBellow', x: m.x, z: m.z, monster: m.kind });
+      } else if (distance > 3) target = player;
+    } else if (m.mode === 'chase' && m.kind === 'spitter') {
+      // Keeps 5–10 m away and spits with a clear line.
+      m.yaw = Math.atan2(-(player.x - m.x), -(player.z - m.z)) + 0;
+      if (distance < SPITTER.min) target = { x: m.x - (player.x - m.x), z: m.z - (player.z - m.z) };
+      else if (distance > SPITTER.max) target = player;
+      if (sees && m.cooldown <= 0) {
+        const length = distance || 1;
+        spits.push({ monster: m.id, x: m.x, z: m.z, dx: (player.x - m.x) / length, dz: (player.z - m.z) / length });
+        sounds.push({ kind: 'spit', x: m.x, z: m.z, monster: m.kind });
+        m.cooldown = stats.attackEvery;
+      }
+    } else if (m.mode === 'chase' && m.kind === 'brute' && ((m.windup ?? 0) > 0 || distance <= stats.half + PLAYER_HALF_WIDTH + MONSTER_REACH)) {
+      // Brutes stop and wind up before each blow; stepping out of reach makes it miss.
+      m.yaw = Math.atan2(-(player.x - m.x), -(player.z - m.z)) + 0;
+      if ((m.windup ?? 0) > 0) {
+        m.windup = Math.max(0, m.windup! - dt);
+        if (m.windup === 0) {
+          if (player.alive && distance <= stats.half + PLAYER_HALF_WIDTH + MONSTER_REACH + 0.4) attacks.push({ monster: m.id, kind: m.kind, amount: stats.damage });
+          m.cooldown = stats.attackEvery;
+        }
+      } else if (m.cooldown <= 0) { m.windup = BRUTE.windup; sounds.push({ kind: 'windup', x: m.x, z: m.z, monster: m.kind }); }
+    } else if (m.mode === 'chase') {
       const reach = stats.half + PLAYER_HALF_WIDTH + MONSTER_REACH;
       if (distance <= reach) {
         if (m.cooldown <= 0 && player.alive) { attacks.push({ monster: m.id, kind: m.kind, amount: stats.damage }); m.cooldown = stats.attackEvery; }
@@ -310,5 +393,5 @@ export function stepMonsters(monsters: readonly Monster[], rngState: number, ctx
     }
     return m;
   });
-  return { monsters: next, rng, attacks, hits, sounds, notes };
+  return { monsters: next, rng, attacks, hits, sounds, notes, spits };
 }

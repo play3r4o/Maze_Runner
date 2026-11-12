@@ -15,7 +15,7 @@ export const TRADERS: readonly { id: TraderId; name: string; buysText: string }[
   { id: 'weaponsmith', name: 'Weaponsmith', buysText: 'Buys weapons and shields.' },
   { id: 'armourer', name: 'Armourer', buysText: 'Buys chest armour, gloves and boots.' },
   { id: 'jeweller', name: 'Jeweller', buysText: 'Buys amulets, rings, coins, gems, valuables and relics.' },
-  { id: 'quartermaster', name: 'Quartermaster', buysText: 'Buys materials and provisions. Sells thread.' },
+  { id: 'quartermaster', name: 'Quartermaster', buysText: 'Buys materials, provisions and consumables. Sells bandages, potions, torches and thread.' },
 ];
 export type Market = { refresh: number; stock: Record<TraderId, GridItem[]> };
 export type Wallet = { gold: number; stash: GridItem[]; bag: GridItem[]; equipment: Equipment; market: Market };
@@ -24,7 +24,7 @@ const deals: Record<TraderId, (def: ItemDef) => boolean> = {
   weaponsmith: (def) => def.gear?.slot === 'weapon' || def.gear?.slot === 'shield',
   armourer: (def) => def.gear?.slot === 'chest' || def.gear?.slot === 'gloves' || def.gear?.slot === 'boots',
   jeweller: (def) => def.gear?.slot === 'amulet' || def.gear?.slot === 'ring' || def.category === 'valuable' || def.category === 'relic',
-  quartermaster: (def) => def.category === 'material' || def.category === 'provision' || def.category === 'tool',
+  quartermaster: (def) => def.category === 'material' || def.category === 'provision' || def.category === 'tool' || def.category === 'consumable',
 };
 // Whether a trader will buy this item (worthless items, like the starter sword, never sell).
 export const traderBuys = (trader: TraderId, entry: { item: string }) => deals[trader](itemDef(entry.item)) && itemValue(entry) > 0;
@@ -41,7 +41,10 @@ export function rollStock(trader: TraderId, refresh: number): GridItem[] {
     const spot = firstFit(items, TRADER_GRID, item, uid);
     if (spot) items.push(roll ? { ...spot, roll } : spot);
   };
-  if (trader === 'quartermaster') { for (let n = 0; n < 3; n++) add(THREAD_ITEM); return items; }
+  if (trader === 'quartermaster') {
+    for (const [item, count] of [['bandage', 3], ['healingPotion', 2], ['torch', 2], [THREAD_ITEM, 3]] as const) for (let n = 0; n < count; n++) add(item);
+    return items;
+  }
   const kinds = FINDABLE_GEAR.filter((def) => deals[trader](def));
   for (let n = 0; n < TRADER_STOCK_SIZE; n++) {
     let roll = rng.next() * TRADER_RARITY_WEIGHTS.reduce((sum: number, w) => sum + w, 0);

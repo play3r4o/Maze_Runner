@@ -11,6 +11,7 @@
 - The developer then confirmed “all works perfect. Go next”: M1 push-before-crush is human accepted, and M2 is approved. M3 and later remain unapproved.
 - The next instruction “all works, go next” accepts M2 and authorizes M3 graph validation/diagnostics. M4 and later remain unapproved.
 - On 2026-11-11, after the M3 Retry fix deployed (run 43005063616, commit `97d3ad9`), the developer replied “accepted, go next”: M3 is human accepted and M4 seeded generation is approved. M5 and later remain unapproved.
+- M17, 2026-11-12 22:09: asked what's next, “let's do 1 and 1”, confirmed as healing and consumables plus more enemies and bosses. Approved as M17 (survival kit and new threats). M16 was not explicitly accepted; the developer moved on. Contract: `milestones/M17.md`.
 - M8 verdict, 2026-11-12 20:11: “it's good.” M8 is human accepted.
 - M16, 2026-11-12 20:11: “Let's add a character inventory that you can equip stuff and also you can find those in the maze. Like weapon slot, second weapon/shield slot, chest, gloves, amulet, ring, shoes. All those should give you some stats and make you stronger in the maze. Then you should have traders where you can return certain items and sell them for gold and with that gold you can buy other items from them. Once again exactly like Dark and Darker.” Approved as M16 (equipment, stats and traders). Contract: `milestones/M16.md`.
 - M8, 2026-11-12 16:21: “let's postpone the co-op for the moment as I have no one to test it with. Let's create the game first and later deal with the coop. Guess M8 is next with the idea that a lot of item things will be added later as well as weapons, armors, shoes and so on as well as some traders at the base. A bit like Dark and Darker type of inventory and trading to traders.” M8 approved, widened to a grid inventory; co-op (M9, M13) postponed. The developer chose that the world keeps running while looting and that entering Sanctuary extracts. Contract: `milestones/M8.md`.
@@ -38,7 +39,8 @@
 | M7b (added 2026-11-11) | Human accepted 2026-11-12 (chalk toggle deployed in run 43211237014) |
 | M9 (scheduled after M7b) | Postponed 2026-11-12 (no second tester yet) |
 | M8 (widened: grid inventory) | Human accepted 2026-11-12 (deployed in run 43256834841) |
-| M16 Equipment, stats and traders | Implemented; human acceptance pending |
+| M16 Equipment, stats and traders | Deployed; no explicit verdict (developer moved on 2026-11-12) |
+| M17 Survival kit and new threats | Implemented; human acceptance pending |
 | M10 + M12 (with minimal M11 crossbow) | Human accepted 2026-11-12 (deployed in run 43227058037) |
 | M10–M12 | Not started |
 | M13 (co-op PvE) | Conditional, not started |
@@ -355,3 +357,12 @@ Stop for the rules-on versus rules-off comparison. M8 and M9 remain unapproved. 
 - Stage 1 build: full local browser suite, all 33 scenarios pass (29.1 min). Final build with stage 2: all 34 pass (27.8 min); unit 1445. Visual check: trader tab with prices beside the stash; on a 1280×800 window the panels wrap, so the screen now scrolls from the top instead of clipping it.
 - Commit `062b85a`: GitHub Actions run 43291280956 succeeded and deployed (25m 44s): 33 passed, 1 flaky (the M8 mid-run reload scenario waited in vain for the Resume button on its first attempt after a reload with a resumed clock, then passed on retry; to watch). Test at `https://play3r4o.github.io/Maze_Runner/?v=062b85a`. This note is committed locally for the next checkpoint.
 - Human acceptance pending: see the [M16 checklist](milestones/M16.md#human-acceptance-checklist-after-stage-2).
+
+### M17: survival kit and new threats — 2026-11-12
+
+- Stage 1: Bandage (1: 3 s at half speed, +35, a hit spoils it and keeps it), Healing Potion (2: 1 s to drink, +50 over 5 s, not stopped by hits), Torch (3: 120 s of light carried with the camera, monsters see 50 % further, 3 again puts it out). First matching item by row; one at a time; not before leaving. Consumables in loot as common and uncommon rolls; the Quartermaster sells 3 bandages, 2 potions, 2 torches (and thread) and buys them. HUD belt and progress bar. Reports format 10.
+- Stage 2: spitter (keeps 5–10 m, spits a 9 m/s glob for 15 every 2.5 s with a clear line, backs off; globs stop at stone, shields block from the front), brute (30 % less damage, 0.8 s wind-up you can step out of, hits 35, drops a rare-or-better gear piece), mimic (one outer chest; E bites for 25 and wakes it; it carries the chest's loot and drops it; with monsters off it is a plain chest), the Ram (outer ring, 600 health; lowers its head 1 s then charges at 9 m/s; hitting you costs 50 and shoves 2.5 m; hitting stone or a gate stuns it 4 s with double damage taken; otherwise weapons do a fifth; dies to traps; drops an epic or legendary piece and two valuables; never returns). New sounds and primitive models with visible tells (brute rears, the Ram lowers its head). Report format 11 with globs. New monsters are spawned after the M10 ones so earlier seeded spots are unchanged.
+- Test changes: the trap-in-a-run test runs with monsters off; report sessions where the player was killed may have a body under a gate that finished after death (now accepted as for crushed bodies); placement test counts the new kinds.
+- Unit: 1460 tests pass (6 consumable, 9 threat tests new). Browser: new consumable scenario (keys, belt, progress, healing to 75 then 100, torch) and threat scenario (all new kinds on the map; a mimic bites and wakes). Visual check: spitter, brute, mimic and Ram in a corridor.
+- Full local browser suite: 35 of 36 passed (32.3 min). The M10 crossbow scenario failed because spitter globs shared the bolt-number counter (the first shot became bolt 2) and a new spitter nearby hurt the player. Globs now take ids from the tick, and that M10 scenario switches the M17 kinds off; it and the threat scenario pass again; unit 1460.
+- Human acceptance pending: see the [M17 checklist](milestones/M17.md#human-acceptance-checklist-after-stage-2).

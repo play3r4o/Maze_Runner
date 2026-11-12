@@ -46,7 +46,8 @@ function reportWith(index: number, patch: Partial<Monster>, at: { x: number; z: 
   // M16: the crossbow is an item now; equip one.
   const run: GeneratedRun = { ...base, status: 'out', leftSanctuary: true, player: at, cell: null, ring: 'outer',
     equipment: { mainHand: { uid: 't.bow', item: 'crossbow', x: 0, y: 0, rotated: false, roll: { rarity: 'common', bonuses: [] } } },
-    monsters: base.monsters.map((monster, i) => (i === index ? { ...monster, ...patch } : monster)) };
+    // M17 kinds lie dead here so these M10 scenarios stay as they were.
+    monsters: base.monsters.map((monster, i) => (i === index ? { ...monster, ...patch } : ['spitter', 'brute', 'ram'].includes(monster.kind) ? { ...monster, mode: 'dead' as const } : monster)) };
   return JSON.stringify(createRunReport(world, run));
 }
 

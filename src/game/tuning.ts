@@ -63,7 +63,7 @@ export const BLADE_HIT_COOLDOWN = 1.2;
 
 // M10 monsters (widened). Killable husks and skitters per ring; unkillable wardens.
 export const MONSTERS_PER_RING = {
-  inner: { husk: 1, skitter: 0 }, middle: { husk: 2, skitter: 2 }, outer: { husk: 2, skitter: 3 },
+  inner: { husk: 1, skitter: 0, spitter: 0, brute: 0 }, middle: { husk: 2, skitter: 2, spitter: 1, brute: 1 }, outer: { husk: 2, skitter: 3, spitter: 2, brute: 1 },
 } as const;
 export const WARDEN_COUNT = 1;
 // Speeds in m/s (the player walks at 3). damage per hit, attackEvery in seconds between hits.
@@ -72,7 +72,16 @@ export const MONSTER_STATS = {
   skitter: { health: 25, half: 0.3, patrol: 1.8, chase: 3.6, damage: 8, attackEvery: 0.7 },
   // The warden has no health: only a boulder, a pit or a closing gate kills it.
   warden: { health: 1, half: 0.6, patrol: 1.4, chase: 2.6, damage: 45, attackEvery: 1.5 },
+  // M17. Spitters attack only with globs; mimics wait as chests; the Ram attacks only by charging.
+  spitter: { health: 40, half: 0.35, patrol: 1.3, chase: 2.2, damage: 15, attackEvery: 2.5 },
+  brute: { health: 160, half: 0.6, patrol: 0.9, chase: 1.6, damage: 35, attackEvery: 1.8 },
+  mimic: { health: 60, half: 0.45, patrol: 0.8, chase: 3.2, damage: 12, attackEvery: 0.9 },
+  ram: { health: 600, half: 0.8, patrol: 1.6, chase: 2.0, damage: 50, attackEvery: 3 },
 } as const;
+export const SPITTER = { min: 5, max: 10, globSpeed: 9, globRange: 25 } as const;
+export const BRUTE = { windup: 0.8, damageTaken: 0.7 } as const;
+export const MIMIC = { bite: 25 } as const;
+export const RAM = { windup: 1, chargeSpeed: 9, chargeRange: 18, chargeMax: 20, stun: 4, push: 2.5, stunnedDamage: 2, armouredDamage: 0.2 } as const;
 export const MONSTER_SIGHT = 20; // metres, needs a clear line
 export const MONSTER_HEARING = 22; // metres, through stone
 export const MONSTER_REACH = 0.5; // gap between bodies at which a monster hits
@@ -150,3 +159,8 @@ export const TRADER_STOCK_SIZE = 6;
 export const TRADER_GRID = { width: 8, height: 6 } as const;
 // Stock rarity weights (common, uncommon, rare, epic).
 export const TRADER_RARITY_WEIGHTS = [60, 32, 8, 0] as const;
+
+// M17 consumables (number keys 1–3).
+export const BANDAGE = { seconds: 3, heal: 35, speed: 0.5 } as const;
+export const POTION = { seconds: 1, heal: 50, overSeconds: 5 } as const;
+export const TORCH = { seconds: 120, sightBonus: 0.5 } as const;

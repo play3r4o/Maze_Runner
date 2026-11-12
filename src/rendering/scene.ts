@@ -1,4 +1,4 @@
-import {
+import { PointLight,
   BoxGeometry, CanvasTexture, Color, DirectionalLight, DoubleSide, GridHelper, HemisphereLight,
   Mesh, MeshBasicMaterial, MeshStandardMaterial, PerspectiveCamera, PlaneGeometry, Scene, SRGBColorSpace, WebGLRenderer,
 } from 'three';
@@ -18,7 +18,7 @@ import { createContainerView } from './containerView';
 import { createHeldView } from './heldView';
 import type { HeldState } from './heldView';
 import type { Container } from '../game/loot';
-import type { Bolt, Monster } from '../game/monsters';
+import type { Bolt, Glob, Monster } from '../game/monsters';
 import type { TrapState } from '../game/traps';
 import type { SoundEvent } from '../game/pressure';
 import type { ChalkStroke } from '../game/chalk';
@@ -27,8 +27,8 @@ import type { MazeOpenness } from '../simulation/maze';
 // Per-frame expedition state the view presents (generated maze only).
 export type ExpeditionView = { carried: boolean; beams: boolean; night: number; chalk: readonly ChalkStroke[];
   openness: MazeOpenness; sounds: readonly SoundEvent[]; traps: readonly TrapState[]; time: number;
-  monsters: readonly Monster[]; bolts: readonly Bolt[]; monstersOn: boolean; containers: readonly Container[]; relicHome: boolean;
-  thread: readonly (readonly { x: number; z: number }[])[]; trace: { x: number; z: number; chalk: readonly ChalkStroke[] } | null; held: HeldState };
+  monsters: readonly Monster[]; bolts: readonly Bolt[]; globs: readonly Glob[]; monstersOn: boolean; containers: readonly Container[]; relicHome: boolean;
+  thread: readonly (readonly { x: number; z: number }[])[]; trace: { x: number; z: number; chalk: readonly ChalkStroke[] } | null; held: HeldState; torch: boolean };
 
 export type SceneMode = 'room' | 'junction' | 'maze' | 'generated';
 export function createScene(canvas: HTMLCanvasElement, mode: SceneMode, generated?: GeneratedWorld) {
@@ -74,6 +74,11 @@ export function createScene(canvas: HTMLCanvasElement, mode: SceneMode, generate
   const monsterView = mode === 'generated' && generated ? createMonsterView(scene, generated.monsters) : null;
   const containerView = mode === 'generated' ? createContainerView(scene) : null;
   const heldView = mode === 'generated' ? createHeldView(camera) : null;
+  // M17: a warm flickering light carried with the camera while a torch burns.
+  const torchLight = new PointLight('#ffb35c', 14, 16, 1.6);
+  torchLight.position.set(0.25, -0.1, -0.3);
+  torchLight.visible = false;
+  camera.add(torchLight);
   const dayBackground = new Color('#a8b3b0'), nightBackground = new Color('#27302f');
   const mazeView = mode === 'maze' ? createMazeView(scene)
     : mode === 'generated' && generated ? createMazeView(scene, generated.maze, generated.walls, generated.relic) : null;
@@ -150,7 +155,10 @@ export function createScene(canvas: HTMLCanvasElement, mode: SceneMode, generate
         audio?.update(expedition.sounds);
         trapView?.update(expedition.traps, expedition.time);
         monsterView?.update(expedition.monsters, expedition.bolts, expedition.monstersOn, expedition.time);
+        monsterView?.updateGlobs(expedition.globs);
         heldView?.update(expedition.held);
+        torchLight.visible = expedition.torch;
+        if (expedition.torch) torchLight.intensity = 14 + 3 * Math.sin(performance.now() / 70) + 2 * Math.sin(performance.now() / 23);
         // Night (T2): dim the light and darken the sky over the fade. Presentation only.
         const night = expedition.night;
         sky.intensity = 2.5 - 1.7 * night; sun.intensity = 2 - 1.6 * night;

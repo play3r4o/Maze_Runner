@@ -36,7 +36,8 @@ export function autoShiftTicks(rules: RuleToggles, bag: readonly { item: string 
 
 // T3: what the simulation tells the audio module. Positions are world metres; ids only grow.
 export type SoundKind = 'shiftWarning' | 'gateGrind' | 'bellToll' | 'trapClick' | 'trapFire' | 'bladeSwish' | 'hurt'
-  | 'shot' | 'boltHit' | 'monsterHurt' | 'monsterDie' | 'growl' | 'roar' | 'wardenStep' | 'jingle' | 'gateJam' | 'swing' | 'meleeHit';
+  | 'shot' | 'boltHit' | 'monsterHurt' | 'monsterDie' | 'growl' | 'roar' | 'wardenStep' | 'jingle' | 'gateJam' | 'swing' | 'meleeHit' | 'bandage' | 'drink' | 'torchLight'
+  | 'spit' | 'splat' | 'windup' | 'ramBellow' | 'hoof' | 'ramImpact' | 'mimicSnap';
 // Sounds monsters hear (M10), whether or not sound is switched on for the player. Gates are
 // not among them, so the maze alone never sends monsters hunting.
 export const LOUD_SOUNDS = new Set<SoundKind>(['trapClick', 'trapFire', 'hurt', 'shot', 'boltHit']);

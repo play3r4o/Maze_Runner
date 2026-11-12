@@ -8,7 +8,8 @@ import type { SoundEvent, SoundKind } from '../game/pressure';
 const MAX_VOICES = 12;
 // How far each kind carries: distance at which it is at full volume (inverse distance falloff).
 const REF_DISTANCE: Record<SoundKind, number> = { shiftWarning: 8, gateGrind: 8, bellToll: 40, trapClick: 4, trapFire: 10, bladeSwish: 5, hurt: 3,
-  shot: 3, boltHit: 4, monsterHurt: 5, monsterDie: 7, growl: 6, roar: 16, wardenStep: 9, jingle: 2, gateJam: 8, swing: 3, meleeHit: 4 };
+  shot: 3, boltHit: 4, monsterHurt: 5, monsterDie: 7, growl: 6, roar: 16, wardenStep: 9, jingle: 2, gateJam: 8, swing: 3, meleeHit: 4, bandage: 2, drink: 2, torchLight: 3,
+  spit: 5, splat: 3, windup: 6, ramBellow: 18, hoof: 10, ramImpact: 14, mimicSnap: 4 };
 
 export function createAudio(scene: Scene, camera: Camera) {
   const listener = new AudioListener();
@@ -88,9 +89,22 @@ export function createAudio(scene: Scene, camera: Camera) {
     const tone = Math.sign(Math.sin(2 * Math.PI * f * t)) * 0.5 + Math.sin(2 * Math.PI * f * 2 * t) * 0.3;
     return gain * (tone * (1 - rough) + (Math.random() * 2 - 1) * rough) * envelope(t, seconds, 0.05);
   });
-  const growlBuffers: Record<string, AudioBuffer> = { husk: voice(0.9, 70, 5, 0.5, 0.35), skitter: voice(0.5, 900, 23, 0.6, 0.2), warden: voice(1.8, 45, 3, 0.4, 0.6) };
-  const hurtMonsterBuffers: Record<string, AudioBuffer> = { husk: voice(0.3, 110, 9, 0.4, 0.4), skitter: voice(0.25, 1300, 30, 0.5, 0.25), warden: voice(0.5, 60, 6, 0.4, 0.5) };
-  const dieBuffers: Record<string, AudioBuffer> = { husk: voice(1.2, 90, 2, 0.5, 0.4), skitter: voice(0.6, 1100, 12, 0.6, 0.25), warden: voice(2.5, 38, 1.5, 0.45, 0.7) };
+  const growlBuffers: Record<string, AudioBuffer> = { husk: voice(0.9, 70, 5, 0.5, 0.35), skitter: voice(0.5, 900, 23, 0.6, 0.2), warden: voice(1.8, 45, 3, 0.4, 0.6),
+    spitter: voice(0.6, 300, 14, 0.7, 0.25), brute: voice(1.2, 55, 4, 0.45, 0.5), mimic: voice(0.5, 160, 18, 0.6, 0.35), ram: voice(1.6, 40, 2, 0.5, 0.6) };
+  const hurtMonsterBuffers: Record<string, AudioBuffer> = { husk: voice(0.3, 110, 9, 0.4, 0.4), skitter: voice(0.25, 1300, 30, 0.5, 0.25), warden: voice(0.5, 60, 6, 0.4, 0.5),
+    spitter: voice(0.3, 420, 20, 0.5, 0.3), brute: voice(0.4, 80, 7, 0.4, 0.45), mimic: voice(0.3, 220, 25, 0.5, 0.35), ram: voice(0.5, 50, 5, 0.4, 0.55) };
+  const dieBuffers: Record<string, AudioBuffer> = { husk: voice(1.2, 90, 2, 0.5, 0.4), skitter: voice(0.6, 1100, 12, 0.6, 0.25), warden: voice(2.5, 38, 1.5, 0.45, 0.7),
+    spitter: voice(0.8, 350, 6, 0.6, 0.3), brute: voice(1.5, 60, 2, 0.5, 0.5), mimic: voice(0.8, 180, 9, 0.6, 0.4), ram: voice(2.5, 35, 1.2, 0.5, 0.7) };
+  // M17 threat sounds.
+  const extraBuffers: Record<string, AudioBuffer> = {
+    spit: buffer(0.3, (t) => (Math.random() * 2 - 1) * 0.4 * Math.exp(-t * 12) + 0.3 * Math.sin(2 * Math.PI * 240 * t) * Math.exp(-t * 20)),
+    splat: buffer(0.3, (t) => (Math.random() * 2 - 1) * 0.5 * Math.exp(-t * 14)),
+    windup: voice(0.8, 70, 2, 0.5, 0.45),
+    ramBellow: voice(1.4, 50, 2.5, 0.35, 0.7),
+    hoof: buffer(0.15, (t) => 0.8 * Math.sin(2 * Math.PI * 60 * t) * Math.exp(-t * 30) + (Math.random() * 2 - 1) * 0.2 * Math.exp(-t * 50)),
+    ramImpact: buffer(0.9, (t) => (Math.random() * 2 - 1) * 0.8 * Math.exp(-t * 5) + 0.7 * Math.sin(2 * Math.PI * 45 * t) * Math.exp(-t * 4)),
+    mimicSnap: buffer(0.35, (t) => (t < 0.05 ? (Math.random() * 2 - 1) * 0.9 : 0) + 0.5 * Math.sin(2 * Math.PI * 130 * t) * Math.exp(-t * 15)),
+  };
   const stepBuffer = buffer(0.25, (t) => 0.9 * Math.sin(2 * Math.PI * 48 * t) * Math.exp(-t * 16) + (Math.random() * 2 - 1) * 0.15 * Math.exp(-t * 40));
   function combatBuffer(sound: SoundEvent): AudioBuffer {
     const kind = sound.monster ?? 'husk';
@@ -107,11 +121,15 @@ export function createAudio(scene: Scene, camera: Camera) {
   // M16: a blade whoosh, and a dull hit when it connects.
   const swingBuffer = buffer(0.22, (t) => (Math.random() * 2 - 1) * 0.35 * Math.sin(Math.PI * t / 0.22));
   const meleeHitBuffer = buffer(0.25, (t) => (Math.random() * 2 - 1) * 0.3 * Math.sin(Math.PI * Math.min(1, t / 0.12)) * Math.exp(-t * 6) + 0.6 * Math.sin(2 * Math.PI * 90 * t) * Math.exp(-(Math.max(0, t - 0.1)) * 25) * (t > 0.1 ? 1 : 0));
+  // M17: cloth rustle, a gulp, a torch catching.
+  const bandageBuffer = buffer(0.8, (t) => (Math.random() * 2 - 1) * 0.12 * (0.6 + 0.4 * Math.sin(2 * Math.PI * 6 * t)) * Math.sin(Math.PI * t / 0.8));
+  const drinkBuffer = buffer(0.5, (t) => 0.3 * Math.sin(2 * Math.PI * (180 + 120 * Math.sin(2 * Math.PI * 4 * t)) * t) * Math.sin(Math.PI * t / 0.5));
+  const torchBuffer = buffer(0.7, (t) => (Math.random() * 2 - 1) * 0.35 * Math.exp(-t * 4) * Math.min(1, t * 30));
   const jamBuffer = buffer(0.6, (t) => (Math.random() * 2 - 1) * 0.7 * Math.exp(-t * 7) + 0.4 * Math.sin(2 * Math.PI * 70 * t) * Math.exp(-t * 5));
 
   function play(sound: SoundEvent) {
     if (voices.size >= MAX_VOICES) return;
-    const data = sound.kind === 'swing' ? swingBuffer : sound.kind === 'meleeHit' ? meleeHitBuffer : sound.kind === 'jingle' ? jingleBuffer : sound.kind === 'gateJam' ? jamBuffer : COMBAT.has(sound.kind) ? combatBuffer(sound) : sound.kind === 'shiftWarning' ? warningBuffer : sound.kind === 'gateGrind' ? grind(sound.seconds ?? 1)
+    const data = extraBuffers[sound.kind] ? extraBuffers[sound.kind] : sound.kind === 'bandage' ? bandageBuffer : sound.kind === 'drink' ? drinkBuffer : sound.kind === 'torchLight' ? torchBuffer : sound.kind === 'swing' ? swingBuffer : sound.kind === 'meleeHit' ? meleeHitBuffer : sound.kind === 'jingle' ? jingleBuffer : sound.kind === 'gateJam' ? jamBuffer : COMBAT.has(sound.kind) ? combatBuffer(sound) : sound.kind === 'shiftWarning' ? warningBuffer : sound.kind === 'gateGrind' ? grind(sound.seconds ?? 1)
       : sound.kind === 'bellToll' ? bell(sound.strikes ?? 1) : sound.kind === 'trapClick' ? clickBuffer
         : sound.kind === 'bladeSwish' ? swishBuffer : sound.kind === 'hurt' ? hurtBuffer : trapBuffer(sound);
     const holder = new Object3D();

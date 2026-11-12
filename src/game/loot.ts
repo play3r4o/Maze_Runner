@@ -14,6 +14,8 @@ export type ContainerKind = keyof typeof CONTAINER_SIZES;
 export type Container = {
   id: string; kind: ContainerKind; cell: string; x: number; z: number;
   width: number; height: number; items: GridItem[]; opened: boolean;
+  // M17: a mimic waits inside (opening it wakes the monster instead).
+  mimic?: boolean;
 };
 type LootRing = Exclude<Ring, 'sanctuary'>;
 export const containerSize = (container: { width: number; height: number }): GridSize => ({ width: container.width, height: container.height });
@@ -77,6 +79,9 @@ export function placeContainers(maze: GeneratedMaze, relic: { cell: string; x: n
         items: rollLoot(maze.seed, id, ring, 'chest', size, id) });
     }
   }
+  // M17: one outer chest is a mimic.
+  const outer = containers.filter((container) => maze.rings[container.cell] === 'outer');
+  if (outer.length) rng.pick(outer).mimic = true;
   const size = CONTAINER_SIZES.reliquary;
   containers.push({ id: 'reliquary', kind: 'reliquary', cell: relic.cell, x: relic.x, z: relic.z, ...size, opened: false,
     items: [{ uid: 'reliquary.1', item: RELIC_ITEM, x: 0, y: 0, rotated: false }] });
@@ -86,3 +91,20 @@ export function placeContainers(maze: GeneratedMaze, relic: { cell: string; x: n
 // Give every item a uid unique to this run (the run counter is part of it).
 export const forRun = (containers: readonly Container[], runNumber: number): Container[] =>
   containers.map((container) => ({ ...container, items: container.items.map((item) => ({ ...item, uid: `r${runNumber}.${item.uid}` })) }));
+
+// M17: what a brute or the Ram drops: rare-or-better gear (the Ram: epic or legendary, plus
+// two rare-or-better valuables).
+export function bossDrop(seed: number, key: string, kind: 'brute' | 'ram', size: GridSize, uidPrefix: string, ring: LootRing): GridItem[] {
+  const rng = createRng((seed ^ hash(`${key}:drop`)) >>> 0);
+  const items: GridItem[] = [];
+  const add = (item: string, roll?: GridItem['roll']) => {
+    const spot = firstFit(items, size, item, `${uidPrefix}.${items.length + 1}`);
+    if (spot) items.push(roll ? { ...spot, roll } : spot);
+  };
+  const rarity = kind === 'ram' ? (rng.next() < 0.3 ? 'legendary' : 'epic') : (rng.next() < 0.25 ? 'epic' : 'rare');
+  const gear = rng.pick(FINDABLE_GEAR);
+  add(gear.id, rollGear(rarity, () => rng.next()));
+  if (kind === 'ram') for (let n = 0; n < 2; n++) add(rng.pick(ITEMS.filter((def) => (def.category === 'valuable' || def.category === 'relic') && (def.rarity === 'rare' || def.rarity === 'epic'))).id);
+  else for (const item of rollLoot(seed, key, ring, 'remains', size, `${uidPrefix}.x`)) add(item.item, item.roll);
+  return items;
+}

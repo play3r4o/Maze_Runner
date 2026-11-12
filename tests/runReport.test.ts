@@ -43,14 +43,15 @@ describe('reports reproduce exact gate state and position', () => {
     expect(copy.shift.completedShifts).toBe(run.shift.completedShifts);
     expect(copy.shift.plan).toEqual(run.shift.plan);
     expect(copy.shift.requests).toBe(run.shift.requests);
-    if (!run.crushedBy) {
+    // A dead body is not pushed by gates that finish after death, so it may overlap stone.
+    if (!run.crushedBy && !run.killedBy) {
       expect(mismatches).toEqual([]);
       expect(copy.player).toEqual(run.player);
-    } else {
-      // A crushed body overlaps stone; it is restored alive in its last room instead.
+    } else if (run.crushedBy || mismatches.length) {
+      // A crushed (or covered) body overlaps stone; it is restored alive in its last room instead.
       expect(mismatches.at(-1)).toContain('overlaps stone');
       expect(copy.crushedBy).toBeNull();
-    }
+    } else expect(copy.player).toEqual(run.player);
     expect([...world.solids, ...layoutGateColliders(world.maze, copy.shift.openness)].some((rect) => overlapsBody(copy.player, rect))).toBe(false);
     expect(copy).toMatchObject({ tick: run.tick, shiftTicks: run.shiftTicks, frozen: run.frozen, visited: run.visited, teleports: run.teleports });
     expect(copy.events.at(-1)).toMatchObject({ kind: 'report' });

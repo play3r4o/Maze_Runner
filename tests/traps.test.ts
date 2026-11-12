@@ -8,6 +8,7 @@ import type { Body, TrapKind, TrapSpec, TrapState } from '../src/game/traps';
 import { buildGeneratedWorld, createGeneratedRun, setRule, stepGeneratedRun } from '../src/game/generatedRun';
 import type { GeneratedRun, GeneratedWorld } from '../src/game/generatedRun';
 import { createRunReport, parseRunReport, reproduceRun } from '../src/game/runReport';
+import { ALL_RULES_ON } from '../src/game/pressure';
 
 const SEEDS = Array.from({ length: 200 }, (_, i) => i * 7919 + 13);
 const centre = (r: { minX: number; maxX: number; minZ: number; maxZ: number }) => ({ x: (r.minX + r.maxX) / 2, z: (r.minZ + r.maxZ) / 2 });
@@ -132,7 +133,7 @@ describe('trap behaviour', () => {
 
 describe('traps in a run', () => {
   const place = (w: GeneratedWorld, trap: TrapSpec, patch: Partial<GeneratedRun> = {}): GeneratedRun =>
-    ({ ...createGeneratedRun(w), status: 'out', player: { ...centre(trap.plate ?? trap.zone), yaw: 0 }, ...patch });
+    ({ ...createGeneratedRun(w, { ...ALL_RULES_ON, monsters: false }), status: 'out', player: { ...centre(trap.plate ?? trap.zone), yaw: 0 }, ...patch });
   const steps = (w: GeneratedWorld, r: GeneratedRun, n: number) => { for (let i = 0; i < n; i++) r = stepGeneratedRun(w, r, { forward: 0, strafe: 0 }, 0, FIXED_DT); return r; };
   test('stepping on spears costs health with sounds and events; switched off, nothing happens', () => {
     const trap = byKind('spears');

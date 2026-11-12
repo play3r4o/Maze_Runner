@@ -45,21 +45,27 @@ function steps(world: GeneratedWorld, run: GeneratedRun, count: number, yaw = 0)
 
 describe('M10 monster placement', () => {
   it('is seeded, keeps out of Sanctuary, entrances, the relic room and trap rooms, one per cell', () => {
-    const per = (ring: 'inner' | 'middle' | 'outer') => MONSTERS_PER_RING[ring].husk + MONSTERS_PER_RING[ring].skitter;
+    const per = (ring: 'inner' | 'middle' | 'outer') => MONSTERS_PER_RING[ring].husk + MONSTERS_PER_RING[ring].skitter + MONSTERS_PER_RING[ring].spitter + MONSTERS_PER_RING[ring].brute;
     for (let seed = 1; seed <= 200; seed++) {
       const world = worldFor(seed);
       const { maze } = world;
-      expect(spawnMonsters(maze, world.relic.cell, world.traps)).toEqual(world.monsters);
+      expect(spawnMonsters(maze, world.relic.cell, world.traps, world.containers)).toEqual(world.monsters);
+      // M17: the mimic sits on its chest; the rest follow the M10 rules.
+      const mimics = world.monsters.filter((monster) => monster.kind === 'mimic');
+      expect(mimics).toHaveLength(1);
+      expect(world.containers.find((c) => c.id === mimics[0].container)).toMatchObject({ mimic: true, x: mimics[0].x, z: mimics[0].z });
+      expect(mimics[0].mode).toBe('dormant');
+      expect(world.monsters.filter((monster) => monster.kind === 'ram').map((monster) => maze.rings[monster.at])).toEqual(['outer']);
       const entrance = new Set(maze.entrances.flatMap((id) => id.split('--')));
       const trapRooms = new Set(world.traps.filter((trap) => trap.edge === null).map((trap) => trap.cell));
-      const cells = world.monsters.map((monster) => monster.at);
+      const cells = world.monsters.filter((monster) => monster.kind !== 'mimic').map((monster) => monster.at);
       expect(new Set(cells).size).toBe(cells.length);
-      for (const monster of world.monsters) {
+      for (const monster of world.monsters.filter((m) => m.kind !== 'mimic')) {
         expect(maze.rings[monster.at]).not.toBe('sanctuary');
         expect(entrance.has(monster.at) || trapRooms.has(monster.at) || monster.at === world.relic.cell).toBe(false);
       }
       for (const ring of ['inner', 'middle', 'outer'] as const) {
-        expect(world.monsters.filter((monster) => monster.kind !== 'warden' && maze.rings[monster.at] === ring)).toHaveLength(per(ring));
+        expect(world.monsters.filter((monster) => !['warden', 'ram', 'mimic'].includes(monster.kind) && maze.rings[monster.at] === ring)).toHaveLength(per(ring));
       }
       const wardens = world.monsters.filter((monster) => monster.kind === 'warden');
       expect(wardens).toHaveLength(1);

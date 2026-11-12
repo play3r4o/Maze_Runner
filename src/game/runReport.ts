@@ -15,7 +15,7 @@ import { strokeLength } from './chalk';
 import type { ChalkStroke } from './chalk';
 import { CHALK_INK_METRES, CHALK_STROKE_LIMIT, PLAYER_HEALTH } from './tuning';
 import type { TrapState } from './traps';
-import type { Bolt, Monster } from './monsters';
+import type { Bolt, Glob, Monster } from './monsters';
 import type { GridItem } from './inventory';
 import { gridValid } from './inventory';
 import type { Container } from './loot';
@@ -26,7 +26,7 @@ import { BAG_SIZE } from './tuning';
 // A bug report is plain JSON. With the same build it rebuilds the maze (seed + config),
 // replays the same shift requests to the same gate poses, and puts the player back.
 // Bump REPORT_FORMAT if fields change meaning.
-export const REPORT_FORMAT = 9;
+export const REPORT_FORMAT = 11;
 export type RunReport = {
   format: number; version: string; seed: number; config: GeneratorConfig; fingerprint: string;
   // Replay inputs.
@@ -46,6 +46,8 @@ export type RunReport = {
   footstep: number; thread: { x: number; z: number }[][]; threadLeft: number; laying: boolean;
   jam: { gate: string; seconds: number } | null; jams: { gate: string; request: number }[];
   equipment: Equipment; activeHand: 'main' | 'off'; attackCooldown: number; blocking: boolean;
+  using: { uid: string; item: string; seconds: number; total: number } | null; regen: { seconds: number; carry: number } | null; torch: number;
+  globs: Glob[];
   // Recorded results, compared after replay.
   expect: { phase: ShiftPhase; revision: number; completedShifts: number; openness: MazeOpenness };
   // Context for a human reader; not used for replay.
@@ -69,6 +71,7 @@ export function createRunReport(world: GeneratedWorld, run: GeneratedRun, contex
     footstep: run.footstep, thread: structuredClone(run.thread), threadLeft: run.threadLeft, laying: run.laying,
     jam: run.jam ? { ...run.jam } : null, jams: structuredClone(run.jams),
     equipment: structuredClone(run.equipment), activeHand: run.activeHand, attackCooldown: run.attackCooldown, blocking: run.blocking,
+    using: run.using ? { ...run.using } : null, regen: run.regen ? { ...run.regen } : null, torch: run.torch, globs: run.globs.map((glob) => ({ ...glob })),
     expect: { phase: run.shift.phase, revision: run.shift.revision, completedShifts: run.shift.completedShifts, openness: { ...run.shift.openness } },
     events: run.events.slice(-20), shiftLog: context.shiftLog ?? [], errors: (context.errors ?? []).slice(-10), note: context.note ?? '',
   };
@@ -121,8 +124,8 @@ export function parseRunReport(text: string): { ok: true; report: RunReport } | 
       && isNumber(trap.seconds) && isObject(trap.hits))) {
     return { ok: false, error: 'Report health or trap state is missing or invalid.' };
   }
-  const isMonster = (m: unknown) => isObject(m) && typeof m.id === 'string' && ['husk', 'skitter', 'warden'].includes(m.kind as string)
-    && ['patrol', 'investigate', 'chase', 'search', 'dead'].includes(m.mode as string) && isNumber(m.x) && isNumber(m.z)
+  const isMonster = (m: unknown) => isObject(m) && typeof m.id === 'string' && ['husk', 'skitter', 'warden', 'spitter', 'brute', 'mimic', 'ram'].includes(m.kind as string)
+    && ['patrol', 'investigate', 'chase', 'search', 'dead', 'dormant'].includes(m.mode as string) && isNumber(m.x) && isNumber(m.z)
     && Array.isArray(m.path) && typeof m.at === 'string';
   if (!Array.isArray(data.monsters) || !data.monsters.every(isMonster) || !isInt(data.monsterRng, 0, MAX_SEED)
     || !Array.isArray(data.bolts) || !isInt(data.boltsLeft, 0, 1000) || !isNumber(data.reload) || !isInt(data.nextBoltId, 1, 1e9)) {
@@ -144,6 +147,11 @@ export function parseRunReport(text: string): { ok: true; report: RunReport } | 
     || !['main', 'off'].includes(data.activeHand as string) || !isNumber(data.attackCooldown) || typeof data.blocking !== 'boolean') {
     return { ok: false, error: 'Report equipment is missing or invalid.' };
   }
+  if (!isNumber(data.torch) || !(data.using === null || (isObject(data.using) && typeof data.using.uid === 'string' && isNumber(data.using.seconds)))
+    || !(data.regen === null || (isObject(data.regen) && isNumber(data.regen.seconds)))) {
+    return { ok: false, error: 'Report consumable state is missing or invalid.' };
+  }
+  if (!Array.isArray(data.globs)) return { ok: false, error: 'Report globs are missing.' };
   const report = {
     events: [], shiftLog: [], errors: [], note: '', frozen: false, cell: null, ring: 'sanctuary', leftSanctuary: false,
     returned: false, teleports: 0, crushedBy: null, killedBy: null, fingerprint: '', ...data,
@@ -208,7 +216,8 @@ export function reproduceRun(world: GeneratedWorld, report: RunReport): { run: G
     bag: structuredClone(report.bag), containers: structuredClone(report.containers), openContainer: report.openContainer, runNumber: report.runNumber, nextSack: report.nextSack,
     footstep: report.footstep, thread: structuredClone(report.thread), threadLeft: report.threadLeft, laying: report.laying,
     jam: report.jam ? { ...report.jam } : null, jams: structuredClone(report.jams),
-    equipment: structuredClone(report.equipment), activeHand: report.activeHand, attackCooldown: report.attackCooldown, blocking: report.blocking, swing: null };
+    equipment: structuredClone(report.equipment), activeHand: report.activeHand, attackCooldown: report.attackCooldown, blocking: report.blocking, swing: null,
+    using: report.using ? { ...report.using } : null, regen: report.regen ? { ...report.regen } : null, torch: report.torch, globs: report.globs.map((glob) => ({ ...glob })) };
   return { mismatches, run: { ...run, events: addRunEvent(run, 'report',
     `reproduced seed ${report.seed}, ${report.requests} requests${mismatches.length ? `; ${mismatches.length} mismatch(es)` : ''}`) } };
 }

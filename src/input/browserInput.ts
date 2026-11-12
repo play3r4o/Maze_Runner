@@ -19,6 +19,8 @@ export class BrowserInput {
   // M16: right mouse raises a shield; Q swaps to the off-hand weapon.
   private rightDown = false;
   private swapRequested = false;
+  // M17: number keys 1–3 use a consumable.
+  private useRequested: 1 | 2 | 3 | null = null;
   // M11 crossbow: a left click while the chalk is away fires once.
   private fireRequested = false;
   // M8: T lays thread, F jams a closing gate.
@@ -67,6 +69,9 @@ export class BrowserInput {
       } else if (event.code === 'KeyE') {
         event.preventDefault();
         if (!event.repeat) this.interactRequested = true;
+      } else if (event.code === 'Digit1' || event.code === 'Digit2' || event.code === 'Digit3') {
+        event.preventDefault();
+        if (!event.repeat) this.useRequested = Number(event.code.slice(5)) as 1 | 2 | 3;
       } else if (event.code === 'KeyQ') {
         event.preventDefault();
         if (!event.repeat) this.swapRequested = true;
@@ -156,6 +161,7 @@ export class BrowserInput {
     this.jamRequested = false;
     this.rightDown = false;
     this.swapRequested = false;
+    this.useRequested = null;
     this.onModeChange(false, message);
     if (document.pointerLockElement === this.canvas) document.exitPointerLock();
   }
@@ -201,6 +207,7 @@ export class BrowserInput {
     void this.start();
   }
 
+  consumeUseRequest(): 1 | 2 | 3 | null { const requested = this.useRequested; this.useRequested = null; return requested; }
   isBlockHeld(): boolean { return this.active && this.rightDown; }
   consumeSwapRequest(): boolean { const requested = this.swapRequested; this.swapRequested = false; return requested; }
   consumeThreadRequest(): boolean { const requested = this.threadRequested; this.threadRequested = false; return requested; }

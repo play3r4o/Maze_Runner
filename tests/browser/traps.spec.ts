@@ -22,7 +22,7 @@ async function standOn(page: Page, cell: string, name: string) {
 test('traps on the map; a plate fires spikes and costs health; switched off they are harmless; a pit kills', async ({ page }) => {
   test.setTimeout(150_000);
   const errors = watchErrors(page);
-  await installBrowserClock(page); await page.goto('/?seed=41');
+  await installBrowserClock(page); await page.goto('/?seed=41&off=monsters');
   await expect(page).toHaveTitle('Shifting Labyrinth · M10–12');
   await page.getByRole('button', { name: 'F2 · Debug map' }).click();
   await expect(page.getByTestId('debug-trap')).toHaveCount(world.traps.length);

@@ -12,12 +12,12 @@ import { debugViewOfMazeRun } from './simulation/mazeDiagnostics';
 import type { DebugView } from './simulation/mazeDiagnostics';
 import type { SceneMode } from './rendering/scene';
 import { MAX_SEED, generateMaze, layoutFingerprint, parseSeed, serializeMaze } from './simulation/mazeGenerator';
-import { abandonGeneratedRun, drawChalk, isDead, setRule, buildGeneratedWorld, createGeneratedRun, interactGeneratedRun, isRunOver, relicInReach,
+import { abandonGeneratedRun, drawChalk, fireCrossbow, isDead, setRule, buildGeneratedWorld, createGeneratedRun, interactGeneratedRun, isRunOver, relicInReach,
   requestGeneratedRunShift, setGeneratedRunFrozen, stepGeneratedRun, teleportGeneratedRun } from './game/generatedRun';
 import { createRunReport, parseRunReport, reproduceRun } from './game/runReport';
 import { ALL_RULES_ON, RULE_KEYS, autoShiftTicks, isNight, nextBellTick, nightFactor, unrestOf } from './game/pressure';
 import type { RuleKey, RuleToggles } from './game/pressure';
-import { dailySeed } from './game/tuning';
+import { CROSSBOW_RELOAD, dailySeed } from './game/tuning';
 import type { RunReport } from './game/runReport';
 import type { GeneratedRun } from './game/generatedRun';
 import type { ShiftLogEntry } from './simulation/generatedShift';
@@ -110,6 +110,7 @@ function startRoom() {
     log: generatedRun.shift.log.map(logLine),
     tools: { tick: generatedRun.tick, frozen: generatedRun.frozen, teleports: generatedRun.teleports, errors: pageErrors.length,
       rules: generatedRun.rules, trapPhases: generatedRun.traps.map((trap) => trap.phase),
+      monsters: generatedRun.rules.monsters ? generatedRun.monsters.map((m) => ({ x: m.x, z: m.z, kind: m.kind, mode: m.mode, stunned: m.stun > 0 })) : [],
       // Chalk strokes for the map, top-down, with gate drawings at their slab's current offset.
       chalk: generatedRun.chalk.map((stroke) => stroke.points.map((point) => { const [x, , z] = shownPoint(world.maze, generatedRun!.shift.openness, stroke, point); return { x, z }; })),
       run: (() => {
@@ -131,6 +132,7 @@ function startRoom() {
       const wasOver = isRunOver(next.status);
       if (input.consumeInteractRequest()) next = interactGeneratedRun(world, next);
       next = drawChalk(world, { ...next, player: { ...next.player, yaw: state.yaw } }, state.pitch, input.isChalkHeld());
+      if (input.consumeFireRequest()) next = fireCrossbow({ ...next, player: { ...next.player, yaw: state.yaw } });
       if (shiftRequested) {
         next = requestGeneratedRunShift(world, next);
         const entry = next.shift.log.at(-1);
@@ -306,7 +308,10 @@ function startRoom() {
       const live = generatedRun;
       scene.render(player, state.yaw, state.pitch, run.junction, gates, live && world ? {
         carried: live.carrying, beams: live.rules.beams, night: nightFactor(live.rules, live.runTicks), chalk: live.chalk,
-        openness: live.shift.openness, sounds: live.sounds, traps: live.traps, time: live.tick / 60 } : undefined);
+        openness: live.shift.openness, sounds: live.sounds, traps: live.traps, time: live.tick / 60,
+        monsters: live.monsters, bolts: live.bolts, monstersOn: live.rules.monsters,
+        bow: { shown: !input.isChalkOut() && !isDead(live) && !isRunOver(live.status), ready: live.boltsLeft > 0 && live.reload <= 0,
+          recoil: live.reload / CROSSBOW_RELOAD } } : undefined);
       // Read-only audio diagnostics for tests and bug reports.
       if (scene.audio) {
         document.documentElement.dataset.audioState = scene.audio.state;

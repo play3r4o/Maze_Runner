@@ -23,7 +23,7 @@ test('freeze holds a shift in place, teleport moves rings, and events record bot
   test.setTimeout(120_000);
   const errors = watchErrors(page);
   const maze = generateMaze(41);
-  await installBrowserClock(page); await page.goto('/?seed=41');
+  await installBrowserClock(page); await page.goto('/?seed=41&off=monsters');
   await expect(page).toHaveTitle('Shifting Labyrinth · M10–12');
   await page.getByRole('button', { name: 'F2 · Debug map' }).click();
   await startRunning(page, 'Start exploring');
@@ -58,7 +58,7 @@ test('freeze holds a shift in place, teleport moves rings, and events record bot
 test('a copied report reloads its seed and reproduces gate state and position exactly', async ({ page }) => {
   test.setTimeout(150_000);
   const errors = watchErrors(page);
-  await installBrowserClock(page); await page.goto('/?seed=41');
+  await installBrowserClock(page); await page.goto('/?seed=41&off=monsters');
   await page.getByRole('button', { name: 'F2 · Debug map' }).click();
   await startRunning(page, 'Start exploring');
   await freezeBrowserClock(page);

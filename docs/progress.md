@@ -34,7 +34,7 @@
 | M7b (added 2026-11-11) | Human accepted 2026-11-12 (chalk toggle deployed in run 43211237014) |
 | M9 (scheduled after M7b) | Not started |
 | M8 | Not started |
-| M10 + M12 (with minimal M11 crossbow) | In progress: stage 1 traps and health |
+| M10 + M12 (with minimal M11 crossbow) | Implemented; human acceptance pending |
 | M10–M12 | Not started |
 | M13 (co-op PvE) | Conditional, not started |
 | M13b (PvP, added 2026-11-11) | Conditional, not started |
@@ -296,3 +296,14 @@ Stop for the rules-on versus rules-off comparison. M8 and M9 remain unapproved. 
 - Found and fixed while testing: a dart volley could fire twice in one step; one seed placed five pits in one ring (now capped per kind); earlier rule tests were disturbed by traps in their walks (those tests now switch traps and monsters off).
 - Unit: 1391 tests pass, including the new trap placement (200 seeds) and behaviour tests.
 - Browser: new traps scenario passes (traps on the map, spike plate 100 → 55 health with events, traps off does nothing, pit death text); generated-maze, M6, M7 and M7b scenarios pass with the new header. Visual check: spikes, blade and a rolling boulder render. No page errors.
+
+### M10 + M12 stage 2: monsters and crossbow — 2026-11-12
+
+- Stage 1 commit `9e80b49`: GitHub Actions run 43219355059 succeeded on the first attempt in 26m 50s and deployed.
+- New `game/monsters.ts`: seeded placement (husks and skitters per ring, one warden in the outer ring), patrol on the open-corridor cell graph without Sanctuary, sight (20 m, clear line), hearing (22 m through stone), investigate, chase, search, contact hits, warden stagger and death only by boulder, pit or gate, return after 45 s far from the player, gate crushing, and an explicit RNG state. Swept bolts. All numbers in `game/tuning.ts`.
+- `game/generatedRun.ts`: monsters, bolts, bolts left, reload and RNG in the run; `fireCrossbow`; a noise list that monsters hear whether or not sound is on; monster attacks through the same health and death path as traps (`killedBy` husk, skitter or warden); hunting monsters are trap bodies. Reports are format 6.
+- Rendering: `rendering/monsterView.ts` (primitive husk, skitter, warden; bob, stagger shake, corpses; bolts; held crossbow). Audio: crossbow, impact, growls per kind, warden roar and footsteps, monster hurt and death. HUD: bolts count, death text per monster, Warden notice, LMB · SHOOT. F2: monster dots by kind and state. Input: left click fires when the chalk is away.
+- Found and fixed while testing: a 5-minute simulation showed monsters wandering onto plates and nearly all dying on their own. Now patrolling monsters step around plates and time the blades; hunting monsters press plates; any monster inside a firing trap is hurt. Monsters going to look at gate sounds were then cut down by blades, so gates no longer draw them. Negative zero in monster yaw broke report round trips; normalised.
+- Unit: 1407 tests pass, 16 of them new monster and crossbow tests (placement over 200 seeds, patrol, sight, hearing, routes, attacks and death, bolts, warden rules and return, traps and gates on monsters, switch off, reports). The gate-crush test and older walk-through browser scenarios now run with monsters off so a monster cannot change their outcome.
+- Browser: new monster scenarios pass (map markers and bolts count; one click kills a charging skitter, health untouched; chalk out draws and does not fire; warden over a pit plate falls with the notice and events). Visual check: husk, warden and skitter read clearly in a corridor; crossbow resized after the first look. No page errors. Full local browser suite: all 27 scenarios pass (27.6 min).
+- Human acceptance pending: see the [M10–12 checklist](milestones/M10-M12.md#human-acceptance-checklist-after-stage-2).

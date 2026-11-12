@@ -60,3 +60,33 @@ export const BLADE_SWING = 1.6;
 export const BLADE_THICKNESS = 0.3;
 export const BLADE_WIDTH = 0.5;
 export const BLADE_HIT_COOLDOWN = 1.2;
+
+// M10 monsters (widened). Killable husks and skitters per ring; unkillable wardens.
+export const MONSTERS_PER_RING = {
+  inner: { husk: 1, skitter: 0 }, middle: { husk: 2, skitter: 2 }, outer: { husk: 2, skitter: 3 },
+} as const;
+export const WARDEN_COUNT = 1;
+// Speeds in m/s (the player walks at 3). damage per hit, attackEvery in seconds between hits.
+export const MONSTER_STATS = {
+  husk: { health: 75, half: 0.4, patrol: 1.1, chase: 1.9, damage: 20, attackEvery: 1.2 },
+  skitter: { health: 25, half: 0.3, patrol: 1.8, chase: 3.6, damage: 8, attackEvery: 0.7 },
+  // The warden has no health: only a boulder, a pit or a closing gate kills it.
+  warden: { health: 1, half: 0.6, patrol: 1.4, chase: 2.6, damage: 45, attackEvery: 1.5 },
+} as const;
+export const MONSTER_SIGHT = 20; // metres, needs a clear line
+export const MONSTER_HEARING = 22; // metres, through stone
+export const MONSTER_REACH = 0.5; // gap between bodies at which a monster hits
+export const MONSTER_SEARCH_WAIT = 3; // seconds looking around at a noise or last sighting
+export const NIGHT_MONSTER_SPEED = 1.15;
+export const WARDEN_RESPAWN_SECONDS = 45;
+export const WARDEN_BOLT_STUN = 1.5;
+export const WARDEN_TRAP_STUN = 0.5;
+export const WARDEN_STEP_SECONDS = 0.55;
+export const NOISE_LIMIT = 16;
+
+// Minimal M11 crossbow: left mouse button while the chalk is away.
+export const CROSSBOW_BOLTS = 16;
+export const CROSSBOW_RELOAD = 0.8;
+export const BOLT_SPEED = 45;
+export const BOLT_RANGE = 40;
+export const BOLT_DAMAGE = 25;

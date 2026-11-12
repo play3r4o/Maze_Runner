@@ -7,7 +7,8 @@ import type { SoundEvent, SoundKind } from '../game/pressure';
 // Audio only presents state; nothing here feeds back into the game.
 const MAX_VOICES = 12;
 // How far each kind carries: distance at which it is at full volume (inverse distance falloff).
-const REF_DISTANCE: Record<SoundKind, number> = { shiftWarning: 8, gateGrind: 8, bellToll: 40, trapClick: 4, trapFire: 10, bladeSwish: 5, hurt: 3 };
+const REF_DISTANCE: Record<SoundKind, number> = { shiftWarning: 8, gateGrind: 8, bellToll: 40, trapClick: 4, trapFire: 10, bladeSwish: 5, hurt: 3,
+  shot: 3, boltHit: 4, monsterHurt: 5, monsterDie: 7, growl: 6, roar: 16, wardenStep: 9 };
 
 export function createAudio(scene: Scene, camera: Camera) {
   const listener = new AudioListener();
@@ -79,10 +80,32 @@ export function createAudio(scene: Scene, camera: Camera) {
     return burst(0.4, 0.6, 0.9); // spears and floor spikes: a sharp metallic burst
   }
   const warningBuffer = warning();
+  // M10/M11: crossbow twang, bolt thud, monster voices and the warden's heavy steps.
+  const shotBuffer = buffer(0.3, (t) => 0.5 * Math.sin(2 * Math.PI * (320 - 500 * t) * t) * Math.exp(-t * 18) + (Math.random() * 2 - 1) * 0.3 * Math.exp(-t * 60));
+  const boltHitBuffer = buffer(0.15, (t) => 0.6 * Math.sin(2 * Math.PI * 140 * t) * Math.exp(-t * 35) + (Math.random() * 2 - 1) * 0.3 * Math.exp(-t * 80));
+  const voice = (seconds: number, base: number, wobble: number, rough: number, gain: number) => buffer(seconds, (t) => {
+    const f = base * (1 + 0.15 * Math.sin(2 * Math.PI * wobble * t));
+    const tone = Math.sign(Math.sin(2 * Math.PI * f * t)) * 0.5 + Math.sin(2 * Math.PI * f * 2 * t) * 0.3;
+    return gain * (tone * (1 - rough) + (Math.random() * 2 - 1) * rough) * envelope(t, seconds, 0.05);
+  });
+  const growlBuffers: Record<string, AudioBuffer> = { husk: voice(0.9, 70, 5, 0.5, 0.35), skitter: voice(0.5, 900, 23, 0.6, 0.2), warden: voice(1.8, 45, 3, 0.4, 0.6) };
+  const hurtMonsterBuffers: Record<string, AudioBuffer> = { husk: voice(0.3, 110, 9, 0.4, 0.4), skitter: voice(0.25, 1300, 30, 0.5, 0.25), warden: voice(0.5, 60, 6, 0.4, 0.5) };
+  const dieBuffers: Record<string, AudioBuffer> = { husk: voice(1.2, 90, 2, 0.5, 0.4), skitter: voice(0.6, 1100, 12, 0.6, 0.25), warden: voice(2.5, 38, 1.5, 0.45, 0.7) };
+  const stepBuffer = buffer(0.25, (t) => 0.9 * Math.sin(2 * Math.PI * 48 * t) * Math.exp(-t * 16) + (Math.random() * 2 - 1) * 0.15 * Math.exp(-t * 40));
+  function combatBuffer(sound: SoundEvent): AudioBuffer {
+    const kind = sound.monster ?? 'husk';
+    if (sound.kind === 'shot') return shotBuffer;
+    if (sound.kind === 'boltHit') return boltHitBuffer;
+    if (sound.kind === 'wardenStep') return stepBuffer;
+    if (sound.kind === 'monsterHurt') return hurtMonsterBuffers[kind];
+    if (sound.kind === 'monsterDie') return dieBuffers[kind];
+    return growlBuffers[sound.kind === 'roar' ? 'warden' : kind];
+  }
+  const COMBAT = new Set(['shot', 'boltHit', 'wardenStep', 'monsterHurt', 'monsterDie', 'growl', 'roar']);
 
   function play(sound: SoundEvent) {
     if (voices.size >= MAX_VOICES) return;
-    const data = sound.kind === 'shiftWarning' ? warningBuffer : sound.kind === 'gateGrind' ? grind(sound.seconds ?? 1)
+    const data = COMBAT.has(sound.kind) ? combatBuffer(sound) : sound.kind === 'shiftWarning' ? warningBuffer : sound.kind === 'gateGrind' ? grind(sound.seconds ?? 1)
       : sound.kind === 'bellToll' ? bell(sound.strikes ?? 1) : sound.kind === 'trapClick' ? clickBuffer
         : sound.kind === 'bladeSwish' ? swishBuffer : sound.kind === 'hurt' ? hurtBuffer : trapBuffer(sound);
     const holder = new Object3D();

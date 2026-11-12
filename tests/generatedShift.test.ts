@@ -8,6 +8,7 @@ import { SHIFT_LOG_LIMIT, advanceGeneratedShift, createGeneratedShift, requestGe
   validateGatePlan } from '../src/simulation/generatedShift';
 import type { GeneratedShift } from '../src/simulation/generatedShift';
 import { buildGeneratedWorld, createGeneratedRun, requestGeneratedRunShift, stepGeneratedRun } from '../src/game/generatedRun';
+import { ALL_RULES_ON } from '../src/game/pressure';
 import type { GeneratedRun, GeneratedWorld } from '../src/game/generatedRun';
 import { overlapsBody } from '../src/simulation/movingWalls';
 
@@ -118,7 +119,7 @@ function advance(world: GeneratedWorld, run: GeneratedRun, seconds: number, inte
 // `fromA` metres from the corridor end at edge.a, or the corridor centre when omitted.
 function standInClosingGate(seed: number, fromA?: number) {
   const world = buildGeneratedWorld(generateMaze(seed));
-  let run = requestGeneratedRunShift(world, createGeneratedRun(world));
+  let run = requestGeneratedRunShift(world, createGeneratedRun(world, { ...ALL_RULES_ON, traps: false, monsters: false }));
   const edge = gateEdges(world.maze).find((edge) => edge.gate === run.shift.plan!.close)!;
   const rect = corridorRect(world.maze as MazeLayout, edge);
   // A test may place the body directly; gameplay code never does.

@@ -25,7 +25,9 @@ export type TrapSpec = {
 export type TrapPhase = 'armed' | 'warning' | 'active' | 'cooldown';
 // `hits` lists bodies already hurt this activation (blades: body → step of last hit).
 export type TrapState = { id: string; phase: TrapPhase; seconds: number; hits: Record<string, number> };
-export type Body = { id: string; x: number; z: number; half: number };
+// `careful` bodies (patrolling monsters, who know the floor) neither press plates nor walk
+// into blades; anything inside a trap that is firing is still hurt.
+export type Body = { id: string; x: number; z: number; half: number; careful?: boolean };
 export type TrapOutcome = {
   states: TrapState[];
   damage: { body: string; amount: number; cause: TrapKind; lethal: boolean }[];
@@ -169,7 +171,7 @@ export function stepTraps(traps: readonly TrapSpec[], states: readonly TrapState
       const blade = bladeRect(trap, time);
       const hits = { ...state.hits };
       for (const body of bodies) {
-        if (!bodyOverlaps(body, blade) || step - (hits[body.id] ?? -Infinity) < BLADE_HIT_COOLDOWN * 60) continue;
+        if (body.careful || !bodyOverlaps(body, blade) || step - (hits[body.id] ?? -Infinity) < BLADE_HIT_COOLDOWN * 60) continue;
         hits[body.id] = step;
         damage.push({ body: body.id, amount: TRAP_DAMAGE.blade, cause: 'blade', lethal: false });
       }
@@ -182,7 +184,7 @@ export function stepTraps(traps: readonly TrapSpec[], states: readonly TrapState
     const before = state.phase === 'active' ? state.seconds : -1;
     seconds += dt;
     if (phase === 'armed') {
-      const by = bodies.find((body) => trap.plate && bodyOverlaps(body, trap.plate));
+      const by = bodies.find((body) => !body.careful && trap.plate && bodyOverlaps(body, trap.plate));
       if (!by) return { ...state, seconds: 0 };
       triggered.push({ trap, by: by.id });
       return { ...state, phase: 'warning' as const, seconds: 0, hits: {} };

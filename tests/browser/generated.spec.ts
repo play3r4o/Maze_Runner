@@ -61,7 +61,7 @@ test('debug map shows the generated graph, rings, gates and a rejected entrance 
   test.setTimeout(90_000);
   const errors = watchErrors(page);
   const maze = generateMaze(1);
-  await installBrowserClock(page); await page.goto('/?seed=1');
+  await installBrowserClock(page); await page.goto('/?seed=1&off=monsters');
   await page.getByRole('button', { name: 'F2 · Debug map' }).click();
   await expect(page.getByTestId('maze-debug')).toBeVisible();
   await expect(page.getByTestId('debug-room')).toHaveCount(121);

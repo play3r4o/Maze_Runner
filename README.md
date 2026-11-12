@@ -1,6 +1,6 @@
 # Shifting Labyrinth
 
-Working title. A browser game project starting with a small, first-person shifting-maze prototype. **M0–M7b are accepted. M10–12 (in progress) adds 100 health and pressure-plate traps; monsters, bosses and a crossbow come next.**
+Working title. A browser game project starting with a small, first-person shifting-maze prototype. **M0–M7b are accepted. M10–12 (awaiting acceptance) adds 100 health, pressure-plate traps, monsters, an unkillable Warden and a crossbow.**
 
 Read [the brief](project_brief.md), [development plan](docs/development_plan.md), [M7b specification](docs/milestones/M7b.md), [M10–12 specification](docs/milestones/M10-M12.md), and [current progress](docs/progress.md).
 
@@ -23,6 +23,8 @@ Click **Start exploring** to capture the mouse. **WASD** moves, **mouse** looks,
 
 **M10–12 traps.** You have 100 health. Slightly darker square plates in corridors and rooms trigger traps when stepped on: a rolling boulder down a long straight corridor, spears from the walls, spikes from the floor, a pit that opens beneath you, dart volleys, and swinging blades that need no plate. Plates glow amber while a trap fires; step off fast. Boulders and pits kill. `?off=traps` or F2 switches them off.
 
+**M10–12 monsters.** Husks (slow, 3 bolts) and skitters (fast, 1 bolt) hunt by sight and sound. Click the **left mouse button** with the chalk away to fire the crossbow (16 bolts per run); shots are loud. The Warden cannot be killed by bolts, only staggered for a moment: lure it into a boulder's path, over an open pit or into a closing gate. It returns about 45 s later. Monsters never enter Sanctuary. `?off=monsters` or F2 switches them off. See the [M10–12 specification](docs/milestones/M10-M12.md).
+
 The default scene is a **seeded 11×11 maze** (M4). The address carries `?seed=N`; the same seed always rebuilds the same layout, and a page opened without a seed picks one and writes it into the address. A central open Sanctuary plaza has one entrance per side. Inner, middle and outer rings each hold one landmark (Amber Spire, Blue Beacon, Rose Pillar); the side panel shows your current ring and the navigation check. Eight stone gates (G1–G8) move when you press **G**: one closed gate opens, then one open gate closes, with the same warning, pushing and crushing rules as the hand-built maze. Each shift is validated first, and the static corridors alone always connect every room, so no shift can strand a region. The F2 panel shows gate states and a shift log with each decision and its reason. See the [M5 specification](docs/milestones/M5.md).
 
 **Debug tools (M6, F2 panel).** Below the map: **Freeze shifts** stops gate motion and shift timers while you keep walking; teleport buttons and clicking any room on the map move you to that room (debug only, counted in the return status); **Events** lists recent shifts, freezes, teleports, visits, ring changes and deaths; the page-error count should stay 0. **Copy report** produces JSON with the seed, shift requests, gate timing and your position. Paste a report into **Bug report text** and **Load report** to rebuild that exact state, even from another seed. See the [M6 specification](docs/milestones/M6.md). In the F2 debug panel, rooms are coloured by ring, and a seed field with **Load seed** and **Random** reloads the page with another seed. The panel also shows the generator version and a layout fingerprint for bug reports. See the [M4 specification](docs/milestones/M4.md).
@@ -39,7 +41,7 @@ The topology revision starts at **0** and usually reaches **2** per complete swa
 
 With the view open, press **V** or click **Probe isolation** to propose blocking Sanctuary's connections in a **dry run**. Read the rejection and inspect the proposed edge IDs/unreachable cells. This cannot move walls, change the revision or alter the run. Escape releases the cursor so you can scroll/expand the connection and validation details. Retry resets revision/attempt history while keeping the panel's visibility for that page.
 
-Follow the [M7b checklist](docs/milestones/M7b.md#human-acceptance-checklist) and compare rules off and on before approving M8. Accepted reference scenes remain available: `?scene=room` for M0, `?scene=junction` for M1 and `?scene=maze` for M2/M3. Teleport, automatic shifting, jumping and sprinting remain deferred.
+Follow the [M10–12 checklist](docs/milestones/M10-M12.md#human-acceptance-checklist-after-stage-2) before approving the next milestone. Accepted reference scenes remain available: `?scene=room` for M0, `?scene=junction` for M1 and `?scene=maze` for M2/M3. Teleport, automatic shifting, jumping and sprinting remain deferred.
 
 ## Check and build
 
@@ -108,4 +110,4 @@ The local npm cache is ignored `.cache/npm` to work inside restricted cloud work
 
 Stop the development server before reinstalling dependencies and restart it afterward. If Vite reports an outdated optimized dependency after an install, restart the server rather than changing application code.
 
-Next is M9 (early two-client synchronization) in the plan's order, or M8 if priorities change, **after the M7b comparison and explicit approval**. Approved GitHub pushes trigger the Pages workflow; a successful local build alone does not establish a successful hosted deployment.
+Next is M8 or M9 in the plan's order, **after the M10–12 checklist and explicit approval**. Approved GitHub pushes trigger the Pages workflow; a successful local build alone does not establish a successful hosted deployment.

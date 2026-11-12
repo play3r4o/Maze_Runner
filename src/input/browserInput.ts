@@ -16,6 +16,8 @@ export class BrowserInput {
   // out, holding the left mouse button draws.
   private chalkOut = false;
   private mouseDown = false;
+  // M11 crossbow: a left click while the chalk is away fires once.
+  private fireRequested = false;
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -63,7 +65,7 @@ export class BrowserInput {
     }, options);
 
     document.addEventListener('mousedown', (event) => {
-      if (this.active && event.button === 0) this.mouseDown = true;
+      if (this.active && event.button === 0) { this.mouseDown = true; if (!this.chalkOut) this.fireRequested = true; }
     }, options);
     document.addEventListener('mouseup', (event) => {
       if (event.button === 0) this.mouseDown = false;
@@ -74,6 +76,7 @@ export class BrowserInput {
       this.shiftRequested = false;
       this.interactRequested = false;
       this.mouseDown = false;
+      this.fireRequested = false;
       this.active = document.pointerLockElement === canvas && !document.hidden;
       this.onModeChange(this.active);
     }, options);
@@ -106,6 +109,7 @@ export class BrowserInput {
     this.shiftRequested = false;
     this.interactRequested = false;
     this.mouseDown = false;
+    this.fireRequested = false;
     this.onModeChange(false, message);
     if (document.pointerLockElement === this.canvas) document.exitPointerLock();
   }
@@ -132,6 +136,12 @@ export class BrowserInput {
   // A new run starts with the chalk put away.
   putChalkAway() {
     this.chalkOut = false;
+  }
+
+  consumeFireRequest(): boolean {
+    const requested = this.fireRequested;
+    this.fireRequested = false;
+    return requested;
   }
 
   consumeInteractRequest(): boolean {

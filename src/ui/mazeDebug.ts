@@ -140,6 +140,10 @@ export function createMazeDebug(root: HTMLElement,
   // M7b chalk strokes, drawn top-down.
   const chalkLayer = svg('g', { 'data-testid': 'debug-chalk' });
   map.append(chalkLayer);
+  // M10 monsters: dots by kind (the warden larger), ringed red while chasing.
+  const monsterLayer = svg('g', { 'data-testid': 'debug-monsters' });
+  map.append(monsterLayer);
+  const MONSTER_COLORS: Record<string, string> = { husk: '#9fb07f', skitter: '#e0a040', warden: '#ff3b2f' };
   const pointer = svg('g', { class: 'debug-player', 'data-testid': 'debug-player' });
   pointer.append(svg('rect', { x: -0.3, y: -0.3, width: 0.6, height: 0.6, fill: '#fff6d6' }),
     svg('path', { d: 'M 0 0 L 0 -1.9 M -.55 -1.2 L 0 -1.9 L .55 -1.2', fill: 'none', stroke: '#fff6d6', 'stroke-width': 0.35 }));
@@ -231,6 +235,10 @@ export function createMazeDebug(root: HTMLElement,
           ? svg('circle', { cx: points[0].x, cy: points[0].z, r: 0.3, fill: '#f4f1e6', 'data-testid': 'debug-chalk-stroke' })
           : svg('polyline', { points: points.map((point) => `${point.x.toFixed(2)},${point.z.toFixed(2)}`).join(' '), fill: 'none',
             stroke: '#f4f1e6', 'stroke-width': 0.4, 'stroke-linecap': 'round', 'data-testid': 'debug-chalk-stroke' })));
+        monsterLayer.replaceChildren(...(view.tools.monsters ?? []).map((m) => svg('circle', { cx: m.x.toFixed(2), cy: m.z.toFixed(2),
+          r: m.kind === 'warden' ? 1.1 : 0.7, fill: m.mode === 'dead' ? '#444' : MONSTER_COLORS[m.kind], opacity: m.mode === 'dead' ? 0.6 : 1,
+          stroke: m.mode === 'chase' ? '#ff2a2a' : '#000', 'stroke-width': m.mode === 'chase' ? 0.5 : 0.15,
+          'data-testid': 'debug-monster', 'data-kind': m.kind, 'data-mode': m.mode, 'data-stunned': String(m.stunned) })));
         view.tools.trapPhases?.forEach((phase, i) => { if (trapMarks[i] && trapMarks[i].dataset.phase !== phase) trapMarks[i].dataset.phase = phase; });
         for (const [key, on] of Object.entries(view.tools.rules ?? {})) {
           const box = panel.querySelector<HTMLInputElement>(`[data-rule="${key}"]`);

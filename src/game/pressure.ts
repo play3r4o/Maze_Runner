@@ -34,7 +34,11 @@ export function autoShiftTicks(rules: RuleToggles, carrying: boolean, runTicks: 
 // T4 chalk lives in chalk.ts (free draw).
 
 // T3: what the simulation tells the audio module. Positions are world metres; ids only grow.
-export type SoundKind = 'shiftWarning' | 'gateGrind' | 'bellToll' | 'trapClick' | 'trapFire' | 'bladeSwish' | 'hurt';
+export type SoundKind = 'shiftWarning' | 'gateGrind' | 'bellToll' | 'trapClick' | 'trapFire' | 'bladeSwish' | 'hurt'
+  | 'shot' | 'boltHit' | 'monsterHurt' | 'monsterDie' | 'growl' | 'roar' | 'wardenStep';
+// Sounds monsters hear (M10), whether or not sound is switched on for the player. Gates are
+// not among them, so the maze alone never sends monsters hunting.
+export const LOUD_SOUNDS = new Set<SoundKind>(['trapClick', 'trapFire', 'hurt', 'shot', 'boltHit']);
 // `trap` names the trap kind for trapFire (boulder rumble, spikes, pit, darts).
-export type SoundEvent = { id: number; kind: SoundKind; x: number; z: number; tick: number; seconds?: number; strikes?: number; trap?: string };
+export type SoundEvent = { id: number; kind: SoundKind; x: number; z: number; tick: number; seconds?: number; strikes?: number; trap?: string; monster?: string };
 export const SOUND_LIMIT = 32;

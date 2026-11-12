@@ -3,12 +3,21 @@ import { generateMaze } from '../src/simulation/mazeGenerator';
 import { cellPosition, findCell } from '../src/simulation/maze';
 import { findMazeRoute } from '../src/simulation/mazeGraph';
 import { FIXED_DT } from '../src/loop';
-import { AUTO_SHIFT_TICKS, RELIC_REACH, abandonGeneratedRun, buildGeneratedWorld, createGeneratedRun, interactGeneratedRun,
-  isRunOver, placeRelic, relicInReach, requestGeneratedRunShift, setGeneratedRunFrozen, stepGeneratedRun,
+import { AUTO_SHIFT_TICKS, abandonGeneratedRun, buildGeneratedWorld, createGeneratedRun,
+  isRunOver, placeRelic, requestGeneratedRunShift, setGeneratedRunFrozen, stepGeneratedRun,
   teleportTarget } from '../src/game/generatedRun';
 import type { GeneratedRun, GeneratedWorld } from '../src/game/generatedRun';
 import { createRunReport, parseRunReport, reproduceRun } from '../src/game/runReport';
 import { ALL_RULES_ON } from '../src/game/pressure';
+import { closeLoot, containerInReach, interactGeneratedRun, lootQuickMove } from '../src/game/looting';
+import { LOOT_REACH } from '../src/game/tuning';
+
+// M8: open the reliquary with E and move the relic into the bag.
+function takeRelic(run: GeneratedRun) {
+  const opened = interactGeneratedRun(run);
+  const box = opened.containers.find((container) => container.id === 'reliquary')!;
+  return closeLoot(lootQuickMove(opened, 'container', box.items[0]?.uid ?? 'none'));
+}
 
 const still = { forward: 0, strafe: 0 };
 const worlds = new Map<number, GeneratedWorld>();
@@ -47,18 +56,19 @@ describe('relic placement', () => {
 describe('run rules', () => {
   const world = worldFor(41);
   const at = (run: GeneratedRun, dx: number) => ({ ...run, status: 'out' as const, player: { x: world.relic.x + dx, z: world.relic.z, yaw: 0 } });
-  test('E takes the relic only within reach; ownership is unique', () => {
+  test('the relic is taken from its reliquary only within reach; ownership is unique', () => {
     const base = createGeneratedRun(world);
-    expect(relicInReach(world, at(base, RELIC_REACH + 0.05))).toBe(false);
-    expect(interactGeneratedRun(world, at(base, RELIC_REACH + 0.05)).carrying).toBe(false);
-    const taken = interactGeneratedRun(world, at(base, RELIC_REACH - 0.05));
+    expect(containerInReach(at(base, LOOT_REACH + 0.05))).toBeNull();
+    expect(takeRelic(at(base, LOOT_REACH + 0.05)).carrying).toBe(false);
+    const taken = takeRelic(at(base, LOOT_REACH - 0.05));
     expect(taken.carrying).toBe(true);
-    expect(taken.events.at(-1)).toMatchObject({ kind: 'relic' });
-    expect(interactGeneratedRun(world, taken)).toBe(taken);
-    expect(interactGeneratedRun(world, { ...at(base, 0), crushedBy: 'g1' }).carrying).toBe(false);
-    expect(interactGeneratedRun(world, { ...at(base, 0), status: 'abandoned' }).carrying).toBe(false);
+    expect(taken.events.at(-1)).toMatchObject({ kind: 'loot', detail: 'took Heart of the Maze' });
+    expect(taken.containers.find((container) => container.id === 'reliquary')!.items).toEqual([]);
+    expect(takeRelic(taken).bag).toEqual(taken.bag);
+    expect(takeRelic({ ...at(base, 0), crushedBy: 'g1' }).carrying).toBe(false);
+    expect(takeRelic({ ...at(base, 0), status: 'abandoned' }).carrying).toBe(false);
   });
-  test('leaving Sanctuary starts the clock; only carrying the relic home extracts, exactly once', () => {
+  test('leaving Sanctuary starts the clock; coming home extracts, exactly once', () => {
     let run = steps(world, createGeneratedRun(world), 60);
     expect(run).toMatchObject({ status: 'ready', runTicks: 0 });
     // Teleport to an outer room: out of the plaza, the run starts on the next step.
@@ -68,10 +78,9 @@ describe('run rules', () => {
     run = steps(world, run, 59);
     // The clock counts from the step after leaving.
     expect(run.runTicks).toBe(59);
-    // Back home without the relic: not extracted.
+    // M8: back home with or without the relic extracts, once, then is frozen as a record.
     const empty = steps(world, { ...run, player: { x: 0, z: 0, yaw: 0 } }, 5);
-    expect(empty.status).toBe('out');
-    // Back home with it: extracted once, then frozen as a record.
+    expect(empty.status).toBe('extracted');
     const home = steps(world, { ...run, carrying: true, player: { x: 0, z: 0, yaw: 0 } }, 1);
     expect(home.status).toBe('extracted');
     expect(home.events.filter((event) => event.detail.startsWith('extracted'))).toHaveLength(1);
@@ -132,7 +141,7 @@ describe.each([1, 41, 20261111])('seed %i complete solo loop', (seed) => {
     let run = setGeneratedRunFrozen(createGeneratedRun(world, { ...ALL_RULES_ON, traps: false, monsters: false }), true);
     run = walkTo(world, run, world.relic.cell).run;
     expect(run.cell).toBe(world.relic.cell);
-    run = interactGeneratedRun(world, run);
+    run = takeRelic(run);
     expect(run.carrying).toBe(true);
     run = setGeneratedRunFrozen(run, false);
     run = steps(world, run, AUTO_SHIFT_TICKS + Math.round(10.5 / FIXED_DT));

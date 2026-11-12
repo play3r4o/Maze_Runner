@@ -90,3 +90,22 @@ export const CROSSBOW_RELOAD = 0.8;
 export const BOLT_SPEED = 45;
 export const BOLT_RANGE = 40;
 export const BOLT_DAMAGE = 25;
+
+// M8 inventory and loot.
+export const BAG_SIZE = { width: 6, height: 4 } as const;
+export const STASH_SIZE = { width: 12, height: 10 } as const;
+export const CONTAINER_SIZES = {
+  chest: { width: 4, height: 3 }, remains: { width: 3, height: 2 }, reliquary: { width: 2, height: 2 }, sack: { width: 4, height: 4 },
+} as const;
+export const CHESTS_PER_RING = { inner: 2, middle: 4, outer: 6 } as const;
+// Items rolled per container [min, max] by ring; remains of skitters roll at most one.
+export const LOOT_ROLLS = {
+  chest: { inner: [1, 2], middle: [2, 3], outer: [2, 4] },
+  remains: { inner: [0, 1], middle: [1, 1], outer: [1, 2] },
+} as const;
+// Rarity weights by ring (common, uncommon, rare, epic).
+export const RARITY_WEIGHTS = {
+  inner: [70, 25, 5, 0], middle: [45, 35, 17, 3], outer: [25, 35, 28, 12],
+} as const;
+export const LOOT_REACH = 2;
+export const SACK_JOIN_DISTANCE = 1.5;

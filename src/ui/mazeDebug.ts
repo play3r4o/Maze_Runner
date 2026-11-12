@@ -15,7 +15,7 @@ export type MazeDebugOptions = {
   // M6 debug tools. Each callback returns a status message for the panel.
   tools?: {
     config: string; teleports: readonly { label: string; cell: string }[];
-    onFreeze(): string; onTeleport(cell: string): string; onCopyReport(): string; onLoadReport(text: string): string;
+    onFreeze(): string; onTeleport(cell: string): string; onCopyReport(): string; onLoadReport(text: string): string; onClearSave?(): string;
     // M7b rule switches (development only).
     rules?: readonly RuleKey[]; onRule?(key: RuleKey, on: boolean): string;
     // M12 traps to draw on the map.
@@ -60,7 +60,8 @@ export function createMazeDebug(root: HTMLElement,
       ${options.tools.rules ? `<div class="debug-tool-row debug-rules" data-testid="debug-rules" aria-label="Rules">Rules: ${options.tools.rules.map((key) =>
         `<label><input type="checkbox" data-rule="${key}" checked> ${key}</label>`).join('')}</div>` : ''}
       <div class="debug-tool-row"><button type="button" data-action="freeze" data-testid="debug-freeze" aria-pressed="false">Freeze shifts</button>
-        <button type="button" data-action="copy-report">Copy report</button></div>
+        <button type="button" data-action="copy-report">Copy report</button>
+        ${options.tools.onClearSave ? '<button type="button" data-action="clear-save" data-testid="debug-clear-save">Clear save</button>' : ''}</div>
       <div class="debug-tool-row" aria-label="Teleport">${options.tools.teleports.map((item) =>
         `<button type="button" data-teleport="${item.cell}">→ ${item.label}</button>`).join('')}</div>
       <p class="debug-caution">Teleport: click any room on the map, or use the buttons above. Debug only.</p>
@@ -140,6 +141,10 @@ export function createMazeDebug(root: HTMLElement,
   // M7b chalk strokes, drawn top-down.
   const chalkLayer = svg('g', { 'data-testid': 'debug-chalk' });
   map.append(chalkLayer);
+  // M8 containers: chests (brown), remains (grey), reliquary (gold), sacks (tan); opened ones dimmed.
+  const containerLayer = svg('g', { 'data-testid': 'debug-containers' });
+  map.append(containerLayer);
+  const CONTAINER_COLORS: Record<string, string> = { chest: '#a0703a', remains: '#7a7a72', reliquary: '#f0b44a', sack: '#d2b48c' };
   // M10 monsters: dots by kind (the warden larger), ringed red while chasing.
   const monsterLayer = svg('g', { 'data-testid': 'debug-monsters' });
   map.append(monsterLayer);
@@ -178,6 +183,7 @@ export function createMazeDebug(root: HTMLElement,
     const on = (selector: string, action: () => string) =>
       panel.querySelector(selector)!.addEventListener('click', () => status(action()), { signal: events.signal });
     on('[data-action="freeze"]', () => tools.onFreeze());
+    if (tools.onClearSave) on('[data-action="clear-save"]', () => tools.onClearSave!());
     on('[data-action="copy-report"]', () => {
       const text = tools.onCopyReport();
       element<HTMLTextAreaElement>('[data-testid="report-text"]').value = text;
@@ -235,6 +241,14 @@ export function createMazeDebug(root: HTMLElement,
           ? svg('circle', { cx: points[0].x, cy: points[0].z, r: 0.3, fill: '#f4f1e6', 'data-testid': 'debug-chalk-stroke' })
           : svg('polyline', { points: points.map((point) => `${point.x.toFixed(2)},${point.z.toFixed(2)}`).join(' '), fill: 'none',
             stroke: '#f4f1e6', 'stroke-width': 0.4, 'stroke-linecap': 'round', 'data-testid': 'debug-chalk-stroke' })));
+        const containers = view.tools.containers ?? [];
+        const containerSig = JSON.stringify(containers);
+        if (containerLayer.dataset.sig !== containerSig) {
+          containerLayer.dataset.sig = containerSig;
+          containerLayer.replaceChildren(...containers.map((c) => svg('rect', { x: (c.x - 0.6).toFixed(2), y: (c.z - 0.6).toFixed(2), width: 1.2, height: 1.2,
+            fill: CONTAINER_COLORS[c.kind], opacity: c.opened ? 0.45 : 1, stroke: '#000', 'stroke-width': 0.15,
+            'data-testid': 'debug-container', 'data-kind': c.kind, 'data-items': String(c.items), 'data-opened': String(c.opened) })));
+        }
         monsterLayer.replaceChildren(...(view.tools.monsters ?? []).map((m) => svg('circle', { cx: m.x.toFixed(2), cy: m.z.toFixed(2),
           r: m.kind === 'warden' ? 1.1 : 0.7, fill: m.mode === 'dead' ? '#444' : MONSTER_COLORS[m.kind], opacity: m.mode === 'dead' ? 0.6 : 1,
           stroke: m.mode === 'chase' ? '#ff2a2a' : '#000', 'stroke-width': m.mode === 'chase' ? 0.5 : 0.15,

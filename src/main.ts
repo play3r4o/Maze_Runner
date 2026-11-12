@@ -12,12 +12,20 @@ import { debugViewOfMazeRun } from './simulation/mazeDiagnostics';
 import type { DebugView } from './simulation/mazeDiagnostics';
 import type { SceneMode } from './rendering/scene';
 import { MAX_SEED, generateMaze, layoutFingerprint, parseSeed, serializeMaze } from './simulation/mazeGenerator';
-import { abandonGeneratedRun, drawChalk, fireCrossbow, isDead, setRule, buildGeneratedWorld, createGeneratedRun, interactGeneratedRun, isRunOver, relicInReach,
+import { abandonGeneratedRun, drawChalk, fireCrossbow, isDead, setRule, buildGeneratedWorld, createGeneratedRun, isRunOver,
   requestGeneratedRunShift, setGeneratedRunFrozen, stepGeneratedRun, teleportGeneratedRun } from './game/generatedRun';
 import { createRunReport, parseRunReport, reproduceRun } from './game/runReport';
 import { ALL_RULES_ON, RULE_KEYS, autoShiftTicks, isNight, nextBellTick, nightFactor, unrestOf } from './game/pressure';
 import type { RuleKey, RuleToggles } from './game/pressure';
 import { CROSSBOW_RELOAD, dailySeed } from './game/tuning';
+import { closeLoot, containerInReach, dropFromBag, interactGeneratedRun, lootMove, lootQuickMove, openContainerOf } from './game/looting';
+import { withBag } from './game/generatedRun';
+import { moveBetween, quickMove } from './game/inventory';
+import { BAG_SIZE, STASH_SIZE } from './game/tuning';
+import { clearProfile, emptyProfile, finishedRun, loadProfile, saveProfile, startedRun } from './storage/save';
+import type { Profile } from './storage/save';
+import { createInventoryUI } from './ui/inventory';
+import type { GridKey, InventoryView } from './ui/inventory';
 import type { RunReport } from './game/runReport';
 import type { GeneratedRun } from './game/generatedRun';
 import type { ShiftLogEntry } from './simulation/generatedShift';
@@ -30,7 +38,7 @@ const requestedScene = params.get('scene');
 // M0 room, M1 junction and M2/M3 hand-built maze stay reachable for regression checks.
 const mode: SceneMode = requestedScene === 'room' ? 'room' : requestedScene === 'junction' ? 'junction'
   : requestedScene === 'maze' ? 'maze' : 'generated';
-document.title = `Shifting Labyrinth · ${{ generated: 'M10–12', maze: 'M3', junction: 'M1', room: 'M0' }[mode]}`;
+document.title = `Shifting Labyrinth · ${{ generated: 'M8', maze: 'M3', junction: 'M1', room: 'M0' }[mode]}`;
 canvas.setAttribute('aria-label', { generated: 'First-person shifting seeded maze', maze: 'First-person hand-built maze',
   junction: 'First-person shifting junction', room: 'First-person gray room' }[mode]);
 
@@ -69,8 +77,14 @@ if (reproText !== null) history.replaceState(null, '', location.pathname + locat
 // Tool callbacks need the live run, which exists only inside startRoom(); it fills this in.
 let debugTools: NonNullable<Parameters<typeof createMazeDebug>[1]>['tools'] | null = null;
 
+// M8 profile: the bag carried between runs, the stash and the run counter (local storage).
+const loaded = world ? loadProfile() : null;
+let profile: Profile | null = loaded?.profile ?? null;
+const storeProfile = (next: Profile) => { profile = next; saveProfile(next); };
+
 const hudRoot = document.querySelector<HTMLElement>('#hud')!;
 const hud = createHud(hudRoot, mode, world?.maze);
+if (loaded?.notice) { hud.setMode(false, loaded.notice); if (profile) saveProfile(profile); }
 if (world && requestedSeed !== null && parsedSeed === null) {
   hud.setMode(false, `Seed “${requestedSeed}” is not a whole number from 0 to ${MAX_SEED}. Using random seed ${seed}.`);
 }
@@ -84,7 +98,7 @@ const debug = mode === 'maze' ? createMazeDebug(hudRoot)
         ...world.maze.landmarks.map((landmark) => ({ label: landmark.name.split(' ')[0], cell: landmark.cell }))],
       rules: RULE_KEYS, onRule: (key, on) => debugTools?.onRule?.(key, on) ?? '', traps: world.traps,
       onFreeze: () => debugTools?.onFreeze() ?? '', onTeleport: (cell) => debugTools?.onTeleport(cell) ?? '',
-      onCopyReport: () => debugTools?.onCopyReport() ?? '', onLoadReport: (text) => debugTools?.onLoadReport(text) ?? '',
+      onCopyReport: () => debugTools?.onCopyReport() ?? '', onClearSave: () => debugTools?.onClearSave?.() ?? '', onLoadReport: (text) => debugTools?.onLoadReport(text) ?? '',
     } }) : null;
 
 function startRoom() {
@@ -99,7 +113,20 @@ function startRoom() {
   let roomPlayer = { ...PLAYER_SPAWN };
   let run = createJunctionRun();
   let mazeRun = createMazeRun();
-  let generatedRun: GeneratedRun | null = world ? createGeneratedRun(world, initialRules) : null;
+  const runStart = () => ({ runNumber: profile!.runs + 1, bag: profile!.bag });
+  let generatedRun: GeneratedRun | null = world ? createGeneratedRun(world, initialRules, runStart()) : null;
+  // Only runs started from the profile write back to it (a loaded bug report does not).
+  let profileRun = Boolean(world);
+  // Profile bookkeeping when a run starts (bag at risk) and ends (kept only if extracted).
+  function trackProfile(before: GeneratedRun, after: GeneratedRun) {
+    if (!profile || !profileRun) return;
+    if (before.status === 'ready' && after.status !== 'ready' && !isRunOver(after.status)) storeProfile(startedRun(profile, after.runNumber));
+    else if (before.status === 'ready' && !isRunOver(after.status) && before.bag !== after.bag) storeProfile({ ...profile, bag: after.bag });
+    if (!isRunOver(before.status) && isRunOver(after.status)) {
+      if (before.status === 'ready') storeProfile({ ...profile, runs: Math.max(profile.runs, after.runNumber) });
+      storeProfile(finishedRun(profile, after.status === 'extracted', after.bag));
+    }
+  }
   const logLine = (entry: ShiftLogEntry) => `#${entry.request + 1} rev ${entry.revision} ${entry.outcome.toUpperCase()}`
     + `${entry.plan ? ` · ${entry.plan.open.toUpperCase()} opens, ${entry.plan.close.toUpperCase()} closes` : ''}`
     + `${entry.rejectedCandidates ? ` · ${entry.rejectedCandidates} rejected` : ''} · ${entry.reason}`;
@@ -110,6 +137,7 @@ function startRoom() {
     log: generatedRun.shift.log.map(logLine),
     tools: { tick: generatedRun.tick, frozen: generatedRun.frozen, teleports: generatedRun.teleports, errors: pageErrors.length,
       rules: generatedRun.rules, trapPhases: generatedRun.traps.map((trap) => trap.phase),
+      containers: generatedRun.containers.map((c) => ({ x: c.x, z: c.z, kind: c.kind, items: c.items.length, opened: c.opened })),
       monsters: generatedRun.rules.monsters ? generatedRun.monsters.map((m) => ({ x: m.x, z: m.z, kind: m.kind, mode: m.mode, stunned: m.stun > 0 })) : [],
       // Chalk strokes for the map, top-down, with gate drawings at their slab's current offset.
       chalk: generatedRun.chalk.map((stroke) => stroke.points.map((point) => { const [x, , z] = shownPoint(world.maze, generatedRun!.shift.openness, stroke, point); return { x, z }; })),
@@ -130,7 +158,10 @@ function startRoom() {
     if (world) {
       let next = generatedRun!;
       const wasOver = isRunOver(next.status);
-      if (input.consumeInteractRequest()) next = interactGeneratedRun(world, next);
+      if (input.consumeInteractRequest()) {
+        next = interactGeneratedRun(next);
+        if (next.openContainer && !input.isPanelOpen()) { input.openPanel(); stashMode = false; inventory.open(inventoryView(next)); }
+      }
       next = drawChalk(world, { ...next, player: { ...next.player, yaw: state.yaw } }, state.pitch, input.isChalkHeld());
       if (input.consumeFireRequest()) next = fireCrossbow({ ...next, player: { ...next.player, yaw: state.yaw } });
       if (shiftRequested) {
@@ -138,8 +169,11 @@ function startRoom() {
         const entry = next.shift.log.at(-1);
         if (entry && entry !== generatedRun!.shift.log.at(-1)) console.info('Maze shift', { seed, ...entry });
       }
+      const before = generatedRun!;
       generatedRun = next = stepGeneratedRun(world, next, state.intent, state.yaw, dt);
+      trackProfile(before, next);
       if (!wasOver && isRunOver(next.status)) {
+        closeInventory(false);
         console.info('Run ended', { seed, status: next.status, seconds: next.runTicks / 60, shifts: next.shift.completedShifts });
         input.pause();
         hud.showResult(next);
@@ -174,9 +208,74 @@ function startRoom() {
     if (running) pendingPauseMessage = null;
     hud.setMode(running, notice);
   }, debug ? (action) => { if (action === 'toggle') debug.toggle(); else debug.probe(debugView()); } : undefined);
+  input.setPanelHandler((key) => {
+    if (key === 'rotate') inventory.rotate();
+    else if (key === 'close') closeInventory(true);
+    else if (key === 'paused') closeInventory(false);
+    else if (key === 'bag' && generatedRun && !isDead(generatedRun) && !isRunOver(generatedRun.status)) {
+      // Tab: the bag; in Sanctuary before leaving, the bag beside the stash.
+      stashMode = generatedRun.status === 'ready';
+      input.openPanel();
+      inventory.open(inventoryView(generatedRun));
+    }
+  });
+  // M8 bag, loot and stash screens. The pointer is released; the maze keeps running.
+  let stashMode = false;
+  const KIND_TITLES: Record<string, string> = { chest: 'Chest', remains: 'Remains', reliquary: 'Reliquary', sack: 'Dropped sack' };
+  function inventoryView(run: GeneratedRun): InventoryView {
+    const open = openContainerOf(run);
+    const left = open ? { key: 'container' as const, title: KIND_TITLES[open.kind] ?? open.kind, size: { width: open.width, height: open.height }, items: open.items }
+      : stashMode && profile ? { key: 'stash' as const, title: 'Stash', size: STASH_SIZE, items: profile.stash } : null;
+    return { left, bag: run.bag, bagSize: BAG_SIZE, canDrop: run.status === 'out',
+      hint: stashMode ? 'Drag between bag and stash · R rotates while dragging · right-click sends across · whatever is in the bag when you leave is at risk'
+        : 'Drag to move · R rotates while dragging · right-click sends across · drop zone leaves it on the floor · the maze keeps moving' };
+  }
+  const inventory = createInventoryUI(document.body, {
+    move(from: GridKey, uid, to: GridKey, target) {
+      if (!generatedRun || !profile) return;
+      if (from === 'stash' || to === 'stash') {
+        if (generatedRun.status !== 'ready') return;
+        const sizeOf = (key: GridKey) => (key === 'stash' ? STASH_SIZE : BAG_SIZE);
+        const gridOf = (key: GridKey) => (key === 'stash' ? profile!.stash : generatedRun!.bag);
+        const moved = moveBetween(gridOf(from), gridOf(to), sizeOf(to), uid, target, from === to);
+        if (!moved) return;
+        const bag = from === 'bag' ? moved.from : to === 'bag' ? moved.to : generatedRun.bag;
+        const stash = from === 'stash' ? moved.from : to === 'stash' ? moved.to : profile.stash;
+        generatedRun = withBag(generatedRun, from === to && from === 'bag' ? moved.from : bag);
+        storeProfile({ ...profile, bag: generatedRun.bag, stash: from === to && from === 'stash' ? moved.from : stash });
+        return;
+      }
+      const before = generatedRun;
+      generatedRun = lootMove(generatedRun, from as 'bag' | 'container', uid, to as 'bag' | 'container', target);
+      trackProfile(before, generatedRun);
+    },
+    quick(from: GridKey, uid) {
+      if (!generatedRun || !profile) return;
+      if (stashMode && generatedRun.status === 'ready') {
+        const moved = from === 'stash' ? quickMove(profile.stash, generatedRun.bag, BAG_SIZE, uid) : quickMove(generatedRun.bag, profile.stash, STASH_SIZE, uid);
+        if (!moved) return;
+        generatedRun = withBag(generatedRun, from === 'stash' ? moved.to : moved.from);
+        storeProfile({ ...profile, bag: generatedRun.bag, stash: from === 'stash' ? moved.from : moved.to });
+        return;
+      }
+      generatedRun = lootQuickMove(generatedRun, from as 'bag' | 'container', uid);
+    },
+    drop(uid) { if (generatedRun) generatedRun = dropFromBag(generatedRun, uid); },
+    close() { closeInventory(true); },
+  });
+  function closeInventory(relock: boolean) {
+    if (!inventory.isOpen) return;
+    inventory.close();
+    stashMode = false;
+    if (generatedRun) generatedRun = closeLoot(generatedRun);
+    if (relock) input.closePanel();
+  }
+
   // M7 results: the main button starts a new seed; Retry replays this seed; Abandon ends the run.
   const resetGeneratedRun = () => {
-    generatedRun = createGeneratedRun(world!, generatedRun?.rules ?? initialRules);
+    closeInventory(false);
+    profileRun = true;
+    generatedRun = createGeneratedRun(world!, generatedRun?.rules ?? initialRules, runStart());
     scene.audio?.reset();
     input.putChalkAway();
     input.resetLook();
@@ -187,7 +286,9 @@ function startRoom() {
   const onRetrySeed = () => { resetGeneratedRun(); scene.audio?.resume(); void input.start(); };
   const onAbandon = () => {
     if (!generatedRun || isRunOver(generatedRun.status)) return;
+    const before = generatedRun;
     generatedRun = abandonGeneratedRun(generatedRun);
+    trackProfile(before, generatedRun);
     console.info('Run ended', { seed, status: 'abandoned', seconds: generatedRun.runTicks / 60 });
     hud.showResult(generatedRun);
   };
@@ -221,7 +322,9 @@ function startRoom() {
     if (!world || !generatedRun) return 'No generated maze loaded.';
     const wasDead = isDead(generatedRun) || isRunOver(generatedRun.status);
     const result = reproduceRun(world, report);
+    closeInventory(false);
     generatedRun = result.run;
+    profileRun = false;
     input.setLook(result.run.player.yaw);
     stepper.reset();
     if (wasDead) { hud.resetAttempt(); debug?.resetAttempt(); }
@@ -232,6 +335,12 @@ function startRoom() {
   }
   if (world) debugTools = {
     config: '', teleports: [],
+    onClearSave() {
+      clearProfile();
+      profile = emptyProfile();
+      resetGeneratedRun();
+      return 'Save cleared: empty bag and stash. The run was restarted.';
+    },
     rules: RULE_KEYS,
     onRule(key, on) {
       generatedRun = setRule(generatedRun!, key, on);
@@ -310,6 +419,7 @@ function startRoom() {
         carried: live.carrying, beams: live.rules.beams, night: nightFactor(live.rules, live.runTicks), chalk: live.chalk,
         openness: live.shift.openness, sounds: live.sounds, traps: live.traps, time: live.tick / 60,
         monsters: live.monsters, bolts: live.bolts, monstersOn: live.rules.monsters,
+        containers: live.containers, relicHome: live.containers.some((c) => c.kind === 'reliquary' && c.items.length > 0),
         bow: { shown: !input.isChalkOut() && !isDead(live) && !isRunOver(live.status), ready: live.boltsLeft > 0 && live.reload <= 0,
           recoil: live.reload / CROSSBOW_RELOAD } } : undefined);
       // Read-only audio diagnostics for tests and bug reports.
@@ -322,7 +432,9 @@ function startRoom() {
     hud.updatePosition(player, timestamp);
     if (mode === 'junction') hud.updateJunction(run.junction, timestamp, run.pushedBy);
     if (mode === 'maze') hud.updateMaze(mazeRun, timestamp);
-    if (generatedRun) hud.updateGenerated(generatedRun, timestamp, relicInReach(world!, generatedRun), input.isChalkOut());
+    if (generatedRun && inventory.isOpen) inventory.render(inventoryView(generatedRun));
+    const reach = generatedRun && !inventory.isOpen ? containerInReach(generatedRun) : null;
+    if (generatedRun) hud.updateGenerated(generatedRun, timestamp, reach ? (KIND_TITLES[reach.kind] ?? reach.kind) : null, input.isChalkOut());
     debug?.update(debugView(), timestamp);
     frameId = requestAnimationFrame(frame);
   }

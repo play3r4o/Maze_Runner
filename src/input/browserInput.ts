@@ -18,6 +18,9 @@ export class BrowserInput {
   private mouseDown = false;
   // M11 crossbow: a left click while the chalk is away fires once.
   private fireRequested = false;
+  // M8: the bag or loot screen. The pointer is released but the world keeps running.
+  private panelOpen = false;
+  private panelHandler: ((key: 'bag' | 'close' | 'rotate' | 'paused') => void) | null = null;
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -32,8 +35,21 @@ export class BrowserInput {
         if (!event.repeat) this.onDebugAction('toggle');
         return;
       }
+      if (this.panelOpen) {
+        if (event.code === 'Tab' || event.code === 'Escape' || event.code === 'KeyE') {
+          event.preventDefault();
+          if (!event.repeat) this.panelHandler?.('close');
+        } else if (event.code === 'KeyR') {
+          event.preventDefault();
+          this.panelHandler?.('rotate');
+        }
+        return;
+      }
       if (!this.active) return;
-      if (event.code === 'Escape') {
+      if (event.code === 'Tab') {
+        event.preventDefault();
+        if (!event.repeat) this.panelHandler?.('bag');
+      } else if (event.code === 'Escape') {
         this.pause();
       } else if (event.code === 'KeyG') {
         event.preventDefault();
@@ -72,6 +88,9 @@ export class BrowserInput {
     }, options);
 
     document.addEventListener('pointerlockchange', () => {
+      const locked = document.pointerLockElement === canvas && !document.hidden;
+      // Releasing the pointer to open the bag is not a pause.
+      if (this.panelOpen && !locked) { this.active = false; this.keys.clear(); this.mouseDown = false; return; }
       this.keys.clear();
       this.shiftRequested = false;
       this.interactRequested = false;
@@ -104,6 +123,7 @@ export class BrowserInput {
   }
 
   pause(message?: string) {
+    if (this.panelOpen) { this.panelOpen = false; this.panelHandler?.('paused'); }
     this.active = false;
     this.keys.clear();
     this.shiftRequested = false;
@@ -115,13 +135,14 @@ export class BrowserInput {
   }
 
   read(): { active: boolean; yaw: number; pitch: number; intent: MoveIntent } {
+    const panel = this.panelOpen;
     return {
-      active: this.active,
+      active: this.active || panel,
       yaw: this.yaw,
       pitch: this.pitch,
       intent: {
-        forward: Number(this.keys.has('KeyW')) - Number(this.keys.has('KeyS')),
-        strafe: Number(this.keys.has('KeyD')) - Number(this.keys.has('KeyA')),
+        forward: panel ? 0 : Number(this.keys.has('KeyW')) - Number(this.keys.has('KeyS')),
+        strafe: panel ? 0 : Number(this.keys.has('KeyD')) - Number(this.keys.has('KeyA')),
       },
     };
   }
@@ -136,6 +157,22 @@ export class BrowserInput {
   // A new run starts with the chalk put away.
   putChalkAway() {
     this.chalkOut = false;
+  }
+
+  setPanelHandler(handler: (key: 'bag' | 'close' | 'rotate' | 'paused') => void) { this.panelHandler = handler; }
+  isPanelOpen(): boolean { return this.panelOpen; }
+  // Open the bag or loot screen: release the pointer without pausing.
+  openPanel() {
+    if (this.panelOpen || !this.active) return;
+    this.panelOpen = true;
+    this.keys.clear(); this.mouseDown = false; this.fireRequested = false; this.interactRequested = false;
+    if (document.pointerLockElement === this.canvas) document.exitPointerLock();
+  }
+  // Close it and take the pointer again (inside the key or click that closed it).
+  closePanel() {
+    if (!this.panelOpen) return;
+    this.panelOpen = false;
+    void this.start();
   }
 
   consumeFireRequest(): boolean {

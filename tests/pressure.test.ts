@@ -5,7 +5,7 @@ import { FIXED_DT } from '../src/loop';
 import { ALL_RULES_OFF, ALL_RULES_ON, BELL_TICKS, autoShiftTicks, isNight, nightFactor, nextBellTick,
   unrestOf } from '../src/game/pressure';
 import { CHALK_INK_METRES, CHALK_STROKE_LIMIT, dailySeed, ticks } from '../src/game/tuning';
-import { buildGeneratedWorld, createGeneratedRun, drawChalk, interactGeneratedRun, requestGeneratedRunShift, setRule,
+import { buildGeneratedWorld, createGeneratedRun, drawChalk, requestGeneratedRunShift, setRule,
   stepGeneratedRun } from '../src/game/generatedRun';
 import { aimRay, raycastChalk, shownPoint, strokeLength } from '../src/game/chalk';
 import type { Vec3 } from '../src/game/chalk';
@@ -20,6 +20,8 @@ const steps = (run: GeneratedRun, count: number, intent = still) => {
 };
 // An expedition already under way, standing at the relic (outside Sanctuary).
 // Traps and monsters are off here: these tests are about the M7b rules alone.
+import { closeLoot, interactGeneratedRun, lootQuickMove } from '../src/game/looting';
+const takeRelic = (run: GeneratedRun) => { const opened = interactGeneratedRun(run); return closeLoot(lootQuickMove(opened, 'container', opened.containers.find((c) => c.id === 'reliquary')!.items[0].uid)); };
 const QUIET = { ...ALL_RULES_ON, traps: false, monsters: false };
 const out = (patch: Partial<GeneratedRun> = {}): GeneratedRun =>
   ({ ...createGeneratedRun(world, QUIET), status: 'out', player: { x: world.relic.x, z: world.relic.z, yaw: 0 }, ...patch });
@@ -37,11 +39,11 @@ describe('T1 unrest', () => {
     // 30 s into the countdown: picking up the relic (27 s interval) triggers the shift on the next idle step.
     let run = steps(out({ autoTicks: ticks(30) - 1 }), 1);
     expect(run.shift.requests).toBe(0);
-    run = steps(interactGeneratedRun(world, run), 1);
+    run = steps(takeRelic(run), 1);
     expect(run.shift).toMatchObject({ requests: 1, phase: 'warning' });
     // During a warning the timing is the fixed 2 s regardless of unrest.
     let warned = requestGeneratedRunShift(world, out());
-    warned = steps(interactGeneratedRun(world, warned), ticks(2) - 1);
+    warned = steps(takeRelic(warned), ticks(2) - 1);
     expect(warned.shift.phase).toBe('warning');
     expect(steps(warned, 1).shift.phase).toBe('opening');
   });

@@ -24,7 +24,7 @@ test('freeze holds a shift in place, teleport moves rings, and events record bot
   const errors = watchErrors(page);
   const maze = generateMaze(41);
   await installBrowserClock(page); await page.goto('/?seed=41&off=monsters');
-  await expect(page).toHaveTitle('Shifting Labyrinth · M10–12');
+  await expect(page).toHaveTitle('Shifting Labyrinth · M8');
   await page.getByRole('button', { name: 'F2 · Debug map' }).click();
   await startRunning(page, 'Start exploring');
   await freezeBrowserClock(page);

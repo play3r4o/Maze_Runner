@@ -151,3 +151,30 @@ kbd { font: 11px ui-monospace, monospace; min-width: 23px; height: 23px; padding
   .pause-panel { padding: 22px; }
   .control-list { margin: 15px 0; padding: 6px 0; }
 }
+
+/* M8 bag, loot and stash screens */
+.inventory { position: fixed; inset: 0; z-index: 30; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  background: rgba(9, 13, 12, 0.74); color: #e8e4d8; font: 13px/1.3 Inter, system-ui, sans-serif; pointer-events: auto; }
+.inventory[hidden] { display: none; }
+.inventory-panels { display: flex; gap: 36px; align-items: flex-start; }
+.inventory-panel[hidden] { display: none; }
+.inventory-panel h2 { margin: 0 0 8px; font-size: 12px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: #d8cfb5; }
+.inventory-panel h2 span { margin-left: 8px; font-weight: 400; letter-spacing: 0; text-transform: none; color: #a9a28e; }
+.inventory-grid { position: relative; border: 1px solid #44524b; background-color: #18211e;
+  background-image: linear-gradient(#2b3832 1px, transparent 1px), linear-gradient(90deg, #2b3832 1px, transparent 1px); background-size: 46px 46px; }
+.inventory-item { position: absolute; margin: 2px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; padding: 3px;
+  border: 2px solid var(--rarity); border-radius: 3px; background: color-mix(in srgb, var(--rarity) 20%, #111715);
+  font-size: 10px; line-height: 1.1; text-align: center; cursor: grab; user-select: none; touch-action: none; }
+.inventory-item:hover { background: color-mix(in srgb, var(--rarity) 34%, #111715); }
+.inventory-dragging { opacity: 0.25; }
+.inventory-ghost { position: absolute; z-index: 2; margin: 0; pointer-events: none; opacity: 0.9; cursor: grabbing; }
+.inventory-ghost[data-valid="false"] { border-color: #e05a4a; }
+.inventory-drop { margin-top: 10px; padding: 10px; border: 1px dashed #7d6f55; color: #bfb59c; font-size: 12px; text-align: center; }
+.inventory-drop[hidden] { display: none; }
+.inventory-tooltip { position: absolute; z-index: 3; display: flex; flex-direction: column; gap: 3px; max-width: 230px; padding: 8px 10px;
+  border: 1px solid #4a574f; background: #0f1513; font-size: 12px; pointer-events: none; }
+.inventory-tooltip[hidden] { display: none; }
+.inventory-tooltip span { color: #a9a28e; text-transform: capitalize; }
+.inventory-tooltip em { color: #cfc8b4; }
+.inventory-hint { margin: 16px 0 6px; color: #a9a28e; font-size: 12px; }
+.inventory-close { padding: 6px 14px; border: 1px solid #5b6a62; background: #1f2a26; color: #e8e4d8; cursor: pointer; }

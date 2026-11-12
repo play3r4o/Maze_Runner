@@ -21,6 +21,12 @@ import { MONSTER_STATS } from './tuning';
 import { CROSSBOW_BOLTS, CROSSBOW_RELOAD, NOISE_LIMIT } from './tuning';
 import { hurtMonster, monsterRngSeed, newBolt, spawnMonsters, stepBolts, stepMonsters } from './monsters';
 import type { Bolt, Monster, MonsterKind } from './monsters';
+import { CONTAINER_SIZES, LOOT_REACH } from './tuning';
+import { forRun, placeContainers, rollLoot } from './loot';
+import type { Container } from './loot';
+import type { GridItem } from './inventory';
+import { RELIC_ITEM } from './items';
+import { nearestCell } from './monsters';
 import { PLAYER_HEALTH } from './tuning';
 import { PLAYER_HALF_WIDTH } from '../simulation/player';
 import type { ChalkStroke } from './chalk';
@@ -45,18 +51,18 @@ export function placeRelic(maze: GeneratedMaze): RelicSpot {
 
 // Everything physical derived once from a generated layout. Rendering, collision and the
 // debug map all read these same descriptors; nothing is hand-placed separately.
-export type GeneratedWorld = { maze: GeneratedMaze; walls: WallRect[]; solids: WallRect[]; plaza: WallRect; relic: RelicSpot; traps: TrapSpec[]; monsters: Monster[] };
+export type GeneratedWorld = { maze: GeneratedMaze; walls: WallRect[]; solids: WallRect[]; plaza: WallRect; relic: RelicSpot; traps: TrapSpec[]; monsters: Monster[]; containers: Container[] };
 export function buildGeneratedWorld(maze: GeneratedMaze): GeneratedWorld {
   const walls = deriveMazeWalls(maze);
   const relic = placeRelic(maze);
   const traps = placeTraps(maze, relic.cell);
   return { maze, walls, solids: [...walls, ...maze.landmarks.map((landmark) => landmarkRect(landmark, maze))], plaza: plazaRect(maze)!,
-    relic, traps, monsters: spawnMonsters(maze, relic.cell, traps) };
+    relic, traps, monsters: spawnMonsters(maze, relic.cell, traps), containers: placeContainers(maze, relic, traps) };
 }
 
 // Bounded record of what happened in this attempt, for the debug panel and bug reports.
 export type RunEventKind = 'shift' | 'freeze' | 'teleport' | 'visit' | 'ring' | 'death' | 'return' | 'report' | 'run' | 'relic'
-  | 'bell' | 'chalk' | 'rules' | 'trap' | 'hurt' | 'monster' | 'shot';
+  | 'bell' | 'chalk' | 'rules' | 'trap' | 'hurt' | 'monster' | 'shot' | 'loot';
 // ready: in Sanctuary, clock not started. out: the expedition is running. The other three are
 // terminal: each run reaches exactly one of them, once.
 export type RunStatus = 'ready' | 'out' | 'extracted' | 'failed' | 'abandoned';
@@ -90,18 +96,29 @@ export type GeneratedRun = {
   // this step. M11 crossbow: bolts in flight, bolts left, seconds until it can fire again.
   monsters: Monster[]; monsterRng: number; noise: Point2[];
   bolts: Bolt[]; boltsLeft: number; reload: number; nextBoltId: number;
+  // M8: the bag (carried grid), every container in the maze, the one open for looting, the
+  // run counter (part of every new item uid) and a counter for new sacks. `carrying` above
+  // is true while the relic item is in the bag.
+  bag: GridItem[]; containers: Container[]; openContainer: string | null; runNumber: number; nextSack: number;
 };
+export const hasRelic = (bag: readonly GridItem[]) => bag.some((entry) => entry.item === RELIC_ITEM);
+// Replace the bag, keeping `carrying` in step with it.
+export const withBag = (run: GeneratedRun, bag: GridItem[]): GeneratedRun => ({ ...run, bag, carrying: hasRelic(bag) });
 // Dead by any cause: crushed by a gate or killed by a trap or monster.
 export const isDead = (run: GeneratedRun) => run.crushedBy !== null || run.killedBy !== null;
-export function createGeneratedRun(world: GeneratedWorld, rules: RuleToggles = ALL_RULES_ON): GeneratedRun {
+export type RunStart = { runNumber?: number; bag?: readonly GridItem[] };
+export function createGeneratedRun(world: GeneratedWorld, rules: RuleToggles = ALL_RULES_ON, start: RunStart = {}): GeneratedRun {
+  const runNumber = start.runNumber ?? 1;
+  const bag = (start.bag ?? []).map((entry) => ({ ...entry }));
   return { player: { x: 0, z: 0, yaw: 0 }, visited: [], leftSanctuary: false, returned: false, cell: null, ring: 'sanctuary',
     shift: createGeneratedShift(world.maze), crushedBy: null, pushedBy: null,
     tick: 0, shiftTicks: 0, frozen: false, teleports: 0, events: [],
-    status: 'ready', carrying: false, runTicks: 0, autoTicks: 0,
+    status: 'ready', carrying: hasRelic(bag), runTicks: 0, autoTicks: 0,
     rules: { ...rules }, chalk: [], chalkLeft: CHALK_INK_METRES, activeStroke: null, bells: 0, sounds: [], nextSoundId: 1,
     health: PLAYER_HEALTH, killedBy: null, traps: createTrapStates(world.traps),
     monsters: world.monsters.map((monster) => ({ ...monster, path: [...monster.path] })), monsterRng: monsterRngSeed(world.maze), noise: [],
-    bolts: [], boltsLeft: CROSSBOW_BOLTS, reload: 0, nextBoltId: 1 };
+    bolts: [], boltsLeft: CROSSBOW_BOLTS, reload: 0, nextBoltId: 1,
+    bag, containers: forRun(world.containers, runNumber), openContainer: null, runNumber, nextSack: 1 };
 }
 
 // T3: queue a positioned sound if sound is enabled. Returns the updated sound fields.
@@ -155,13 +172,6 @@ export function requestGeneratedRunShift(world: GeneratedWorld, run: GeneratedRu
   return next;
 }
 
-export const relicInReach = (world: GeneratedWorld, run: GeneratedRun) => !run.carrying && !isDead(run) && !isRunOver(run.status)
-  && Math.hypot(run.player.x - world.relic.x, run.player.z - world.relic.z) <= RELIC_REACH;
-// E: take the relic when in reach. Ownership is unique: once carried it cannot be taken again.
-export function interactGeneratedRun(world: GeneratedWorld, run: GeneratedRun): GeneratedRun {
-  if (!relicInReach(world, run)) return run;
-  return { ...run, carrying: true, events: addRunEvent(run, 'relic', `taken at ${world.relic.cell}`) };
-}
 // M11 crossbow (left mouse button with the chalk away): one bolt along the view direction.
 export function fireCrossbow(run: GeneratedRun): GeneratedRun {
   if (isDead(run) || isRunOver(run.status) || run.boltsLeft <= 0 || run.reload > 0) return run;
@@ -257,10 +267,10 @@ export function stepGeneratedRun(world: GeneratedWorld, previous: GeneratedRun, 
   if (returned && !run.returned) note('return', `home after ${visited.length} landmarks${run.teleports ? `, ${run.teleports} teleports` : ''}`);
   let status = run.status;
   if (status === 'ready' && !atHome) { status = 'out'; note('run', 'started: left Sanctuary'); }
-  // Extraction: carrying the relic back into the Sanctuary plaza ends the run once.
-  if (status === 'out' && run.carrying && atHome) {
+  // Extraction (M8): stepping back into the Sanctuary plaza ends the run once, with the bag.
+  if (status === 'out' && run.leftSanctuary && atHome) {
     status = 'extracted';
-    note('run', `extracted in ${(run.runTicks * FIXED_DT).toFixed(1)}s, ${shift.completedShifts} shifts${run.teleports ? `, ${run.teleports} debug teleports` : ''}`);
+    note('run', `extracted in ${(run.runTicks * FIXED_DT).toFixed(1)}s, ${shift.completedShifts} shifts, ${run.bag.length} items${run.carrying ? ' including the relic' : ''}${run.teleports ? `, ${run.teleports} debug teleports` : ''}`);
   }
   let next: GeneratedRun = {
     ...run, ...contact, shift, player, visited, cell: room, ring, events, returned, status,
@@ -268,6 +278,11 @@ export function stepGeneratedRun(world: GeneratedWorld, previous: GeneratedRun, 
   };
   next = applyCombat(world, next, run, previous.frozen, dt);
   if (next.rules.traps && !isRunOver(next.status)) next = applyTraps(world, next, run, dt);
+  // A container closes when the player is dead, the run is over or it is out of reach.
+  if (next.openContainer) {
+    const open = next.containers.find((container) => container.id === next.openContainer);
+    if (!open || isDead(next) || isRunOver(next.status) || Math.hypot(open.x - next.player.x, open.z - next.player.z) > LOOT_REACH + 0.25) next = { ...next, openContainer: null };
+  }
   return next;
 }
 
@@ -284,13 +299,27 @@ function hurtPlayer(run: GeneratedRun, amount: number, lethal: boolean, cause: s
   return next;
 }
 const MONSTER_NAMES: Record<MonsterKind, string> = { husk: 'husk', skitter: 'skitter', warden: 'warden' };
-function noteMonsterHit(run: GeneratedRun, hit: { monster: string; kind: MonsterKind; cause: string; killed: boolean; stunned: boolean }, at: Point2): GeneratedRun {
+function noteMonsterHit(world: GeneratedWorld, run: GeneratedRun, hit: { monster: string; kind: MonsterKind; cause: string; killed: boolean; stunned: boolean }, at: Point2): GeneratedRun {
+  if (hit.killed && hit.kind !== 'warden') run = leaveRemains(world, run, hit.monster, hit.kind, at);
   if (hit.killed) {
     const detail = hit.kind === 'warden' ? `${hit.monster} warden killed by ${hit.cause}; it will return` : `${hit.monster} ${hit.kind} killed by ${hit.cause}`;
     return withSound({ ...run, events: addRunEvent(run, 'monster', detail) }, 'monsterDie', at.x, at.z, { monster: hit.kind });
   }
   if (hit.stunned) return withSound({ ...run, events: addRunEvent(run, 'monster', `${hit.monster} warden staggered by ${hit.cause}`) }, 'monsterHurt', at.x, at.z, { monster: hit.kind });
   return withSound(run, 'monsterHurt', at.x, at.z, { monster: hit.kind });
+}
+
+// M8: a killed husk or skitter leaves remains with a seeded roll from the ring it died in.
+function leaveRemains(world: GeneratedWorld, run: GeneratedRun, monster: string, kind: MonsterKind, at: Point2): GeneratedRun {
+  const id = `remains-${monster}`;
+  if (run.containers.some((container) => container.id === id)) return run;
+  const body = run.monsters.find((item) => item.id === monster);
+  const where = body ?? at;
+  const cell = nearestCell(world.maze, where.x, where.z);
+  const ring = world.maze.rings[cell];
+  const size = CONTAINER_SIZES.remains;
+  const items = ring === 'sanctuary' ? [] : rollLoot(world.maze.seed, id, ring, 'remains', size, `r${run.runNumber}.${id}`, kind === 'skitter');
+  return { ...run, containers: [...run.containers, { id, kind: 'remains', cell, x: where.x, z: where.z, ...size, items, opened: false }] };
 }
 
 // M10/M11: bolts fly (and hit monsters when they are on), then monsters act on what they
@@ -303,7 +332,7 @@ function applyCombat(world: GeneratedWorld, run: GeneratedRun, before: Generated
     const flight = stepBolts(next.bolts, next.monsters, solids, dt, next.rules.monsters);
     next = { ...next, bolts: flight.bolts, monsters: flight.monsters };
     for (const at of flight.impacts) next = withSound(next, 'boltHit', at.x, at.z);
-    for (const hit of flight.hits) next = noteMonsterHit(next, hit, hit);
+    for (const hit of flight.hits) next = noteMonsterHit(world, next, hit, hit);
   }
   if (!next.rules.monsters || frozen || isRunOver(next.status)) return { ...next, noise: [] };
   const outcome = stepMonsters(next.monsters, next.monsterRng, {
@@ -316,7 +345,7 @@ function applyCombat(world: GeneratedWorld, run: GeneratedRun, before: Generated
   for (const note of outcome.notes) next = { ...next, events: addRunEvent(next, 'monster', note) };
   for (const hit of outcome.hits) {
     const monster = outcome.monsters.find((item) => item.id === hit.monster)!;
-    next = noteMonsterHit(next, hit, monster);
+    next = noteMonsterHit(world, next, hit, monster);
   }
   for (const attack of outcome.attacks) next = hurtPlayer(next, attack.amount, false, MONSTER_NAMES[attack.kind]);
   return next;
@@ -357,7 +386,7 @@ function applyTraps(world: GeneratedWorld, run: GeneratedRun, before: GeneratedR
     if (index < 0) continue;
     const result = hurtMonster(next.monsters[index], hit.amount, hit.lethal, hit.cause);
     next = { ...next, monsters: next.monsters.map((monster, i) => (i === index ? result.monster : monster)) };
-    next = noteMonsterHit(next, result.hit, result.monster);
+    next = noteMonsterHit(world, next, result.hit, result.monster);
   }
   return next;
 }

@@ -120,7 +120,11 @@ function walkRoute(world: GeneratedWorld, run: GeneratedRun, cells: string[]): G
   for (const id of cells.slice(1)) {
     const target = cellPosition(findCell(world.maze, id), world.maze);
     const intent = { strafe: Math.sign(Math.round(target.x - run.player.x)), forward: -Math.sign(Math.round(target.z - run.player.z)) };
-    for (let i = 0; i < CELL_SPACING * 20; i++) run = stepGeneratedRun(world, run, intent, 0, 1 / 60);
+    for (let i = 0; i < CELL_SPACING * 20; i++) {
+      run = stepGeneratedRun(world, run, intent, 0, 1 / 60);
+      // M8: crossing Sanctuary extracts; this walk is about geometry, so keep walking.
+      if (run.status === 'extracted') run = { ...run, status: 'out', leftSanctuary: false };
+    }
     expect(Math.hypot(run.player.x - target.x, run.player.z - target.z), `reach ${id}`).toBeLessThan(1e-6);
   }
   return run;
@@ -162,6 +166,6 @@ describe.each([1, 20261111, 4294967295])('seed %i physical walkability', (seed) 
     }
     expect(run.returned).toBe(false);
     run = walkRoute(world, run, findMazeRoute(maze, maze.initialOpenness, from, maze.start)!.cells);
-    expect(run).toMatchObject({ returned: true, ring: 'sanctuary', leftSanctuary: true });
+    expect(run).toMatchObject({ returned: true, ring: 'sanctuary' });
   });
 });

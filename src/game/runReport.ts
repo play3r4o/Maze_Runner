@@ -16,11 +16,15 @@ import type { ChalkStroke } from './chalk';
 import { CHALK_INK_METRES, CHALK_STROKE_LIMIT, PLAYER_HEALTH } from './tuning';
 import type { TrapState } from './traps';
 import type { Bolt, Monster } from './monsters';
+import type { GridItem } from './inventory';
+import { gridValid } from './inventory';
+import type { Container } from './loot';
+import { BAG_SIZE } from './tuning';
 
 // A bug report is plain JSON. With the same build it rebuilds the maze (seed + config),
 // replays the same shift requests to the same gate poses, and puts the player back.
 // Bump REPORT_FORMAT if fields change meaning.
-export const REPORT_FORMAT = 6;
+export const REPORT_FORMAT = 7;
 export type RunReport = {
   format: number; version: string; seed: number; config: GeneratorConfig; fingerprint: string;
   // Replay inputs.
@@ -35,6 +39,8 @@ export type RunReport = {
   health: number; killedBy: string | null; traps: TrapState[];
   // M10/M11 state.
   monsters: Monster[]; monsterRng: number; bolts: Bolt[]; boltsLeft: number; reload: number; nextBoltId: number;
+  // M8 state.
+  bag: GridItem[]; containers: Container[]; openContainer: string | null; runNumber: number; nextSack: number;
   // Recorded results, compared after replay.
   expect: { phase: ShiftPhase; revision: number; completedShifts: number; openness: MazeOpenness };
   // Context for a human reader; not used for replay.
@@ -54,6 +60,7 @@ export function createRunReport(world: GeneratedWorld, run: GeneratedRun, contex
     health: run.health, killedBy: run.killedBy, traps: run.traps.map((trap) => ({ ...trap, hits: { ...trap.hits } })),
     monsters: run.monsters.map((monster) => structuredClone(monster)), monsterRng: run.monsterRng,
     bolts: run.bolts.map((bolt) => ({ ...bolt })), boltsLeft: run.boltsLeft, reload: run.reload, nextBoltId: run.nextBoltId,
+    bag: structuredClone(run.bag), containers: structuredClone(run.containers), openContainer: run.openContainer, runNumber: run.runNumber, nextSack: run.nextSack,
     expect: { phase: run.shift.phase, revision: run.shift.revision, completedShifts: run.shift.completedShifts, openness: { ...run.shift.openness } },
     events: run.events.slice(-20), shiftLog: context.shiftLog ?? [], errors: (context.errors ?? []).slice(-10), note: context.note ?? '',
   };
@@ -112,6 +119,12 @@ export function parseRunReport(text: string): { ok: true; report: RunReport } | 
   if (!Array.isArray(data.monsters) || !data.monsters.every(isMonster) || !isInt(data.monsterRng, 0, MAX_SEED)
     || !Array.isArray(data.bolts) || !isInt(data.boltsLeft, 0, 1000) || !isNumber(data.reload) || !isInt(data.nextBoltId, 1, 1e9)) {
     return { ok: false, error: 'Report monsters or crossbow state is missing or invalid.' };
+  }
+  if (!Array.isArray(data.bag) || !gridValid(data.bag as GridItem[], BAG_SIZE) || !Array.isArray(data.containers)
+    || !data.containers.every((c) => isObject(c) && typeof c.id === 'string' && Array.isArray(c.items) && isNumber(c.x) && isNumber(c.z)
+      && isInt(c.width, 1, 20) && isInt(c.height, 1, 20) && gridValid(c.items as GridItem[], { width: c.width as number, height: c.height as number }))
+    || !isInt(data.runNumber, 0, 1e9) || !isInt(data.nextSack, 1, 1e9) || !(data.openContainer === null || typeof data.openContainer === 'string')) {
+    return { ok: false, error: 'Report bag or containers are missing or invalid.' };
   }
   const report = {
     events: [], shiftLog: [], errors: [], note: '', frozen: false, cell: null, ring: 'sanctuary', leftSanctuary: false,
@@ -173,7 +186,8 @@ export function reproduceRun(world: GeneratedWorld, report: RunReport): { run: G
     health: Math.max(1, report.health), killedBy: null,
     traps: report.traps.length === world.traps.length ? report.traps.map((trap) => ({ ...trap, hits: { ...trap.hits } })) : base.traps,
     monsters: report.monsters.map((monster) => structuredClone(monster)), monsterRng: report.monsterRng, noise: [],
-    bolts: report.bolts.map((bolt) => ({ ...bolt })), boltsLeft: report.boltsLeft, reload: report.reload, nextBoltId: report.nextBoltId };
+    bolts: report.bolts.map((bolt) => ({ ...bolt })), boltsLeft: report.boltsLeft, reload: report.reload, nextBoltId: report.nextBoltId,
+    bag: structuredClone(report.bag), containers: structuredClone(report.containers), openContainer: report.openContainer, runNumber: report.runNumber, nextSack: report.nextSack };
   return { mismatches, run: { ...run, events: addRunEvent(run, 'report',
     `reproduced seed ${report.seed}, ${report.requests} requests${mismatches.length ? `; ${mismatches.length} mismatch(es)` : ''}`) } };
 }

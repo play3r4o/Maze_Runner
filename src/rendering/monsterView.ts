@@ -70,8 +70,8 @@ export function createMonsterView(scene: Scene, camera: Camera, initial: readonl
   const loaded = part(geo(new CylinderGeometry(0.01, 0.01, 0.4, 5)), steel, 0, 0.05, -0.1);
   loaded.rotation.x = Math.PI / 2;
   crossbow.add(loaded);
-  crossbow.scale.setScalar(0.45);
-  crossbow.position.set(0.16, -0.17, -0.4);
+  crossbow.scale.setScalar(0.6);
+  crossbow.position.set(0.3, -0.26, -0.8);
   camera.add(crossbow);
 
   return {
@@ -102,7 +102,7 @@ export function createMonsterView(scene: Scene, camera: Camera, initial: readonl
       });
       crossbow.visible = bow.shown;
       loaded.visible = bow.ready;
-      crossbow.position.z = -0.4 + 0.04 * bow.recoil;
+      crossbow.position.z = -0.8 + 0.05 * bow.recoil;
     },
     dispose() {
       camera.remove(crossbow);

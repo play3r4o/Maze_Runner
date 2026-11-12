@@ -36,7 +36,7 @@ const context = (world: GeneratedWorld, player: { x: number; z: number }, patch:
   player: { ...player, alive: true, safe: false }, noises: [], night: false, dt: DT, ...patch });
 // A run with only the given monster, out on an expedition.
 function soloMonsterRun(world: GeneratedWorld, monster: Monster, patch: Partial<GeneratedRun> = {}): GeneratedRun {
-  return { ...createGeneratedRun(world, NO_TRAPS), status: 'out', leftSanctuary: true, monsters: [monster], ...patch };
+  return { ...createGeneratedRun(world, NO_TRAPS), status: 'out', monsters: [monster], ...patch };
 }
 function steps(world: GeneratedWorld, run: GeneratedRun, count: number, yaw = 0) {
   for (let i = 0; i < count; i++) run = stepGeneratedRun(world, run, STILL, yaw, DT);

@@ -22,7 +22,8 @@ export type DebugView = {
   // Generated mazes only: debug tool state for the panel.
   tools?: { tick: number; frozen: boolean; teleports: number; errors: number; events: readonly string[]; run: string;
     rules?: Readonly<Record<string, boolean>>; trapPhases?: readonly string[];
-    monsters?: readonly { x: number; z: number; kind: string; mode: string; stunned: boolean }[]; chalk?: readonly (readonly { x: number; z: number }[])[] };
+    monsters?: readonly { x: number; z: number; kind: string; mode: string; stunned: boolean }[];
+    containers?: readonly { x: number; z: number; kind: string; items: number; opened: boolean }[]; chalk?: readonly (readonly { x: number; z: number }[])[] };
 };
 export function debugViewOfMazeRun(run: MazeRun): DebugView {
   return { layout: HAND_BUILT_MAZE, player: run.player, openness: run.shift.openness, crushed: run.crushedBy !== null,

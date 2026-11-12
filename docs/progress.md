@@ -11,6 +11,7 @@
 - The developer then confirmed “all works perfect. Go next”: M1 push-before-crush is human accepted, and M2 is approved. M3 and later remain unapproved.
 - The next instruction “all works, go next” accepts M2 and authorizes M3 graph validation/diagnostics. M4 and later remain unapproved.
 - On 2026-11-11, after the M3 Retry fix deployed (run 43005063616, commit `97d3ad9`), the developer replied “accepted, go next”: M3 is human accepted and M4 seeded generation is approved. M5 and later remain unapproved.
+- M8, 2026-11-12 16:21: “let's postpone the co-op for the moment as I have no one to test it with. Let's create the game first and later deal with the coop. Guess M8 is next with the idea that a lot of item things will be added later as well as weapons, armors, shoes and so on as well as some traders at the base. A bit like Dark and Darker type of inventory and trading to traders.” M8 approved, widened to a grid inventory; co-op (M9, M13) postponed. The developer chose that the world keeps running while looting and that entering Sanctuary extracts. Contract: `milestones/M8.md`.
 - M10 + M12 verdict, 2026-11-12 16:03: “all works, what's next?” M10 + M12 (traps, health, monsters, Warden, minimal M11 crossbow) is human accepted. The next milestone has not been chosen.
 - M10 + M12, 2026-11-12 14:06: “let's do 10 and 12. For 10 I want more monsters. Some that can be killed by me and others “bosses” that cannot but can be lured into traps. I want … traps. Places you step that trigger traps. Balls rolling, spike from the side/ground, holes opening and anything else …” Approved together: several monster kinds (killable ones and unkillable bosses that die only to traps or gates), pressure-plate traps (rolling boulder, wall spears, floor spikes, opening pit, dart volleys, swinging blade). Killing monsters needs a weapon, so the plan's minimal M11 crossbow and player health come with it. M8 and M9 remain unapproved. Delivered in two stages: traps and health, then monsters and the crossbow.
 - M7b, 2026-11-12 13:32: “works well but I would want it to be a toggle with c and LMB… When done, you can go ahead directly with the next step.” M7b is treated as human accepted with the chalk toggle as its last change. No written rules-on/off comparison was given. The next milestone has not been chosen.
@@ -33,8 +34,8 @@
 | M6 | Human accepted on 2026-11-11 |
 | M7 | Human accepted 2026-11-12 (okay fun, too easy) |
 | M7b (added 2026-11-11) | Human accepted 2026-11-12 (chalk toggle deployed in run 43211237014) |
-| M9 (scheduled after M7b) | Not started |
-| M8 | Not started |
+| M9 (scheduled after M7b) | Postponed 2026-11-12 (no second tester yet) |
+| M8 (widened: grid inventory) | In progress: stage 1 items, looting, stash |
 | M10 + M12 (with minimal M11 crossbow) | Human accepted 2026-11-12 (deployed in run 43227058037) |
 | M10–M12 | Not started |
 | M13 (co-op PvE) | Conditional, not started |
@@ -309,3 +310,15 @@ Stop for the rules-on versus rules-off comparison. M8 and M9 remain unapproved. 
 - Browser: new monster scenarios pass (map markers and bolts count; one click kills a charging skitter, health untouched; chalk out draws and does not fire; warden over a pit plate falls with the notice and events). Visual check: husk, warden and skitter read clearly in a corridor; crossbow resized after the first look. No page errors. Full local browser suite: all 27 scenarios pass (27.6 min).
 - Commit `f2ee7ca`: GitHub Actions run 43227058037 succeeded on the first attempt in 27m 25s and deployed. Test at `https://play3r4o.github.io/Maze_Runner/?v=f2ee7ca`. This note is committed locally for the next checkpoint.
 - Human acceptance pending: see the [M10–12 checklist](milestones/M10-M12.md#human-acceptance-checklist-after-stage-2).
+
+### M8 stage 1: items, grid bag, looting, extraction and stash — 2026-11-12
+
+- Contract: `milestones/M8.md`. Developer choices: the world keeps running while looting; entering Sanctuary extracts.
+- New `game/items.ts` (17 items: size, category, rarity, gold value, unrest, noisy; the relic is the legendary Heart of the Maze), `game/inventory.ts` (grid fits, rotation, first fit, moves, validation), `game/loot.ts` (seeded chests 2/4/6 per ring in room corners, ring loot tables, the reliquary, run-unique item ids), `game/looting.ts` (E opens the container in reach, drag and right-click moves validated against the open container and reach, drop into a sack at the feet, empty sacks vanish). `storage/save.ts`: versioned local save of bag, stash and run counter; leaving Sanctuary marks the bag at risk, so closing the page mid-run loses it; corrupt or newer saves reset with a notice.
+- Run rules: entering Sanctuary after leaving extracts with the bag; death and abandon lose it; killed husks and skitters leave seeded remains (skitters at most one item), the warden none; containers close when out of reach. Reports are format 7 with the bag and every container.
+- UI: `ui/inventory.ts` drag-and-drop grids with rarity colours, ghost preview (red when it will not fit), R to rotate while dragging, right-click to send across, drop zone, tooltips; Tab opens the bag (beside the stash in Sanctuary before leaving), E a container; the pointer is released without pausing and the player stands still. HUD: “E Open chest” prompt, bag count and value, result screen lists the haul or the loss. Chests (lid opens once looked into) and sacks rendered; the relic crystal shows only while the relic is in its reliquary. F2: containers on the map, Clear save.
+- Older tests changed with the rules: taking the relic is now done through the reliquary; returning home without the relic now extracts; the walkability unit test keeps walking after crossing Sanctuary; monster tests that kept the player at the plaza no longer mark it as having left.
+- Found and fixed while testing: dropping a dragged item did nothing (the drag state was cleared before the drop target was computed); the held crossbow still filled the lower right of the view (moved further from the camera).
+- Full local browser suite: all 29 scenarios pass (27.8 min). Visual check: chest in a room corner, facing the room; loot screen layout readable.
+- Unit: 1419 tests pass, 12 new (grid rules and a 2 000-move fuzz with no lost or duplicated item; chest placement over 200 seeds, outer chests worth over twice inner; unique ids across runs; looting, reach, world running while open, sacks, extraction and loss, remains, reports; save round trip, unfinished run, damaged and newer saves).
+- Browser: new loot scenarios pass (drag to an exact cell, right-click, tooltip, drop into a sack, extract, stash in Sanctuary, both survive a reload; death loses the carried ruby and the save says so; a mid-run reload loses the bag with a notice). The solo-run scenario now loots the relic from its reliquary through the screen.

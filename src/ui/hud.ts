@@ -1,3 +1,4 @@
+import { itemDef } from '../game/items';
 import type { PlayerState } from '../simulation/player';
 import { GATE_IDS, openGatesFor } from '../simulation/junction';
 import type { GateId } from '../simulation/junction';
@@ -22,10 +23,10 @@ export function createHud(root: HTMLElement, scene: SceneMode, generated?: Gener
   const hasNavigation = isMaze || isGenerated;
   const hasGates = isJunction || isMaze;
   const gateIds = isMaze ? MAZE_GATE_IDS : GATE_IDS;
-  const startTitle = isGenerated ? 'Bring the relic home.' : isMaze ? 'Find your way home.' : isJunction ? 'The walls can move.' : 'A place to begin.';
+  const startTitle = isGenerated ? 'Loot the maze. Get out alive.' : isMaze ? 'Find your way home.' : isJunction ? 'The walls can move.' : 'A place to begin.';
   root.innerHTML = `
     <header class="prototype-header">
-      <span class="eyebrow">DEVELOPMENT BUILD / ${isGenerated ? 'M10–12 · DANGER' : isMaze ? 'M3 · GRAPH DIAGNOSTICS' : isJunction ? 'M1 · PUSH &amp; CRUSH' : 'M0'}</span>
+      <span class="eyebrow">DEVELOPMENT BUILD / ${isGenerated ? 'M8 · LOOT' : isMaze ? 'M3 · GRAPH DIAGNOSTICS' : isJunction ? 'M1 · PUSH &amp; CRUSH' : 'M0'}</span>
       <p class="wordmark">Shifting Labyrinth<span>Working title</span></p>
     </header>
     <div class="session-status" role="status" aria-live="polite">
@@ -36,7 +37,7 @@ export function createHud(root: HTMLElement, scene: SceneMode, generated?: Gener
       <div class="pause-panel">
         <p class="eyebrow">MILESTONE ${isGenerated ? '10–12 · DANGER' : isMaze ? '03 · GRAPH DIAGNOSTICS' : isJunction ? '01 · SINGLE JUNCTION' : '00'}</p>
         <h1 id="panel-title">${startTitle}</h1>
-        <p class="panel-description">${isGenerated ? `A relic waits in the outer ring of this ${generated.columns}×${generated.rows} maze (seed ${generated.seed}): follow the blue beam, take it with E, then carry it back to Sanctuary under the gold beam. Warned shifts open one stone gate and close another every 45 seconds, faster while you carry the relic. A bell from Sanctuary tolls as time runs on; after the third, night falls and the maze shifts constantly. Listen for grinding stone. Press C to take out the chalk, then hold the left mouse button to draw or write on floors, walls and gates (limited chalk per run); C puts it away. Closing stone pushes you and crushes you if you no longer fit. Hidden pressure plates set off boulders, spears, spikes, pits and darts; blades swing in some corridors. You have 100 health. Husks and skitters hunt by sight and sound; shoot them with the crossbow (left mouse while the chalk is away, limited bolts). The Warden cannot be killed by bolts, only staggered: lure it into a boulder's path, over an open pit or into a closing gate. Every room always keeps some route home.` : isMaze ? 'Leave the warm Sanctuary marker, find three colored landmarks, then return home. G swaps two gate shortcuts. The 8-meter stone passages push and crush; permanent corridors offer detours. Learn the routes as you explore.' : isJunction ? 'Moving stone pushes you toward the opposite wall. Escape the 8-meter passage before the gap becomes too narrow to fit, or take the outer loop. Press G to shift.' : 'One room. Four walls. The foundation for a changing maze.'}</p>
+        <p class="panel-description">${isGenerated ? `Loot this ${generated.columns}×${generated.rows} maze (seed ${generated.seed}) and get back out: open chests and remains with E, drag what you want into your bag (Tab), and step back into Sanctuary to keep it. Die and the bag is lost. The richest prize, the Heart of the Maze, waits in the outer ring under the blue beam; the gold beam marks home. In Sanctuary before leaving, Tab opens your stash. Warned shifts open one stone gate and close another every 45 seconds, faster while you carry the relic. A bell from Sanctuary tolls as time runs on; after the third, night falls and the maze shifts constantly. Listen for grinding stone. Press C to take out the chalk, then hold the left mouse button to draw or write on floors, walls and gates (limited chalk per run); C puts it away. Closing stone pushes you and crushes you if you no longer fit. Hidden pressure plates set off boulders, spears, spikes, pits and darts; blades swing in some corridors. You have 100 health. Husks and skitters hunt by sight and sound; shoot them with the crossbow (left mouse while the chalk is away, limited bolts). The Warden cannot be killed by bolts, only staggered: lure it into a boulder's path, over an open pit or into a closing gate. Every room always keeps some route home.` : isMaze ? 'Leave the warm Sanctuary marker, find three colored landmarks, then return home. G swaps two gate shortcuts. The 8-meter stone passages push and crush; permanent corridors offer detours. Learn the routes as you explore.' : isJunction ? 'Moving stone pushes you toward the opposite wall. Escape the 8-meter passage before the gap becomes too narrow to fit, or take the outer loop. Press G to shift.' : 'One room. Four walls. The foundation for a changing maze.'}</p>
         <div class="control-list" aria-label="Controls">
           <p><span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span><span>Move</span></p>
           <p><span class="control-name">Mouse</span><span>Look around</span></p>
@@ -71,17 +72,17 @@ export function createHud(root: HTMLElement, scene: SceneMode, generated?: Gener
         <p class="eyebrow">EXPEDITION <span data-testid="hud-seed">seed ${generated.seed}</span></p>
         <p class="run-objective" data-testid="run-objective" role="status">Leave Sanctuary and find the relic under the blue beam.</p>
         <div class="health" aria-label="Health"><span class="health-fill" data-testid="health-fill"></span><output data-testid="health">100</output></div>
-        <p class="shift-layout"><span data-testid="run-time">0:00</span> · <span data-testid="shift-count">0 shifts</span> · <span data-testid="hud-ring">Sanctuary</span> · <span data-testid="chalk-left">100% chalk</span> · <span data-testid="bolts">16 bolts</span></p>
+        <p class="shift-layout"><span data-testid="run-time">0:00</span> · <span data-testid="shift-count">0 shifts</span> · <span data-testid="hud-ring">Sanctuary</span> · <span data-testid="chalk-left">100% chalk</span> · <span data-testid="bolts">16 bolts</span> · <span data-testid="bag-summary">bag empty</span></p>
         <p class="shift-phase" data-testid="shift-phase">Maze still</p>
         <p class="shift-notice" data-testid="shift-notice" role="status"></p>
       </aside>
-      <p class="interact-prompt" data-testid="interact-prompt" hidden><kbd>E</kbd> Take the relic</p>
+      <p class="interact-prompt" data-testid="interact-prompt" hidden><kbd>E</kbd> Open <span data-testid="interact-target">chest</span></p>
       <p class="chalk-mode" data-testid="chalk-mode" hidden>Chalk out · hold left mouse to draw · <kbd>C</kbd> put away</p>` : ''}
     <footer class="diagnostics">
       <span class="diagnostics-label">${hasNavigation ? 'MAZE' : isJunction ? 'JUNCTION' : 'ROOM'} TEST <span class="separator">/</span> POSITION</span>
       <span>X <output data-testid="position-x">0.00</output></span>
       <span>Z <output data-testid="position-z">${hasGates || isGenerated ? '0.00' : '8.00'}</output></span>
-      <span class="footer-controls">WASD · MOVE ${isGenerated ? '<span class="separator">/</span> E · TAKE <span class="separator">/</span> LMB · SHOOT <span class="separator">/</span> C + LMB · DRAW' : hasGates ? '<span class="separator">/</span> G · SHIFT' : ''} <span class="separator">/</span> ESC · PAUSE</span>
+      <span class="footer-controls">WASD · MOVE ${isGenerated ? '<span class="separator">/</span> E · OPEN <span class="separator">/</span> TAB · BAG <span class="separator">/</span> LMB · SHOOT <span class="separator">/</span> C + LMB · DRAW' : hasGates ? '<span class="separator">/</span> G · SHIFT' : ''} <span class="separator">/</span> ESC · PAUSE</span>
     </footer>
   `;
 
@@ -120,6 +121,8 @@ export function createHud(root: HTMLElement, scene: SceneMode, generated?: Gener
   const chalkLeft = isGenerated ? element<HTMLElement>('[data-testid="chalk-left"]') : null;
   const chalkMode = isGenerated ? element<HTMLElement>('[data-testid="chalk-mode"]') : null;
   const health = isGenerated ? element<HTMLElement>('[data-testid="health"]') : null;
+  const bagSummary = isGenerated ? element<HTMLElement>('[data-testid="bag-summary"]') : null;
+  const interactTarget = isGenerated ? element<HTMLElement>('[data-testid="interact-target"]') : null;
   const bolts = isGenerated ? element<HTMLElement>('[data-testid="bolts"]') : null;
   const healthFill = isGenerated ? element<HTMLElement>('[data-testid="health-fill"]') : null;
   const volume = isGenerated ? element<HTMLInputElement>('[data-testid="volume"]') : null;
@@ -206,8 +209,10 @@ export function createHud(root: HTMLElement, scene: SceneMode, generated?: Gener
         returnStatus.dataset.complete = String(run.returned);
       }
     },
-    updateGenerated(run: GeneratedRun, timestamp: number, inReach: boolean, chalkOut: boolean) {
+    updateGenerated(run: GeneratedRun, timestamp: number, lootTarget: string | null, chalkOut: boolean) {
+      const inReach = lootTarget !== null;
       if (prompt && prompt.hidden === inReach) prompt.hidden = !inReach;
+      if (interactTarget && lootTarget && interactTarget.textContent !== lootTarget.toLowerCase()) interactTarget.textContent = lootTarget.toLowerCase();
       // Chalk in hand: indicator and a ring crosshair.
       if (chalkMode && chalkMode.hidden === chalkOut) chalkMode.hidden = !chalkOut;
       if ((root.dataset.chalk === 'out') !== chalkOut) { if (chalkOut) root.dataset.chalk = 'out'; else delete root.dataset.chalk; }
@@ -216,9 +221,9 @@ export function createHud(root: HTMLElement, scene: SceneMode, generated?: Gener
       ringLabel.textContent = run.ring === 'sanctuary' ? 'Sanctuary' : `${run.ring[0].toUpperCase()}${run.ring.slice(1)} ring`;
       ringLabel.dataset.ring = run.ring;
       runTime!.textContent = clock(run.runTicks);
-      const goal = run.status === 'ready' ? 'Leave Sanctuary and find the relic under the blue beam.'
-        : run.carrying ? 'Relic in hand · carry it back to Sanctuary under the gold beam.'
-        : 'Find the relic under the blue beam in the outer ring.';
+      const goal = run.status === 'ready' ? 'Leave Sanctuary, loot what you can, and come back alive. Tab opens your stash.'
+        : run.carrying ? 'The Heart of the Maze is in your bag · get back to Sanctuary under the gold beam.'
+        : 'Loot chests and remains (E). Step back into Sanctuary to keep what you carry.';
       if (objective!.textContent !== goal) { objective!.textContent = goal; objective!.dataset.carrying = String(run.carrying); }
       const state = run.shift;
       const plan = state.plan;
@@ -233,6 +238,8 @@ export function createHud(root: HTMLElement, scene: SceneMode, generated?: Gener
         healthFill!.style.width = `${(100 * run.health) / PLAYER_HEALTH}%`;
         healthFill!.dataset.low = String(run.health <= 35);
       }
+      const value = run.bag.reduce((sum, entry) => sum + itemDef(entry.item).value, 0);
+      bagSummary!.textContent = run.bag.length ? `bag ${run.bag.length} item${run.bag.length === 1 ? '' : 's'} · ${value}g` : 'bag empty';
       bolts!.textContent = `${run.boltsLeft} bolt${run.boltsLeft === 1 ? '' : 's'}`;
       chalkLeft!.textContent = run.rules.chalk ? `${Math.round((run.chalkLeft / CHALK_INK_METRES) * 100)}% chalk` : 'no chalk';
       // Visual equivalent of the bell (T3): name the strikes for a few seconds after they ring.
@@ -256,12 +263,16 @@ export function createHud(root: HTMLElement, scene: SceneMode, generated?: Gener
       const time = clock(run.runTicks);
       const shifts = `${run.shift.completedShifts} shift${run.shift.completedShifts === 1 ? '' : 's'}`;
       const debug = run.teleports ? ` Debug teleports used: ${run.teleports}.` : '';
+      const value = run.bag.reduce((sum, entry) => sum + itemDef(entry.item).value, 0);
+      const haul = run.bag.length ? `${run.bag.length} item${run.bag.length === 1 ? '' : 's'} worth ${value} gold` : 'nothing';
+      const lost = run.bag.length ? ` Lost: ${haul}.` : '';
       const copy = {
-        extracted: ['Relic secured.', 'EXTRACTED', `You carried the relic home in ${time}, through ${shifts}.${debug}`],
+        extracted: [run.carrying ? 'The Heart is yours.' : run.bag.length ? 'Loot secured.' : 'Back alive.', 'EXTRACTED',
+          `You came home in ${time}, through ${shifts}, carrying ${haul}.${debug} It stays in your bag; Tab in Sanctuary moves it to your stash.`],
         failed: run.crushedBy
-          ? ['Crushed.', 'CRUSHED', `The ${run.crushedBy.toUpperCase()} gate pinned you against the opposite wall after ${time} and ${shifts}.${run.carrying ? ' The relic is lost.' : ''}`]
-          : ['You died.', 'DEAD', `${DEATH_TEXT[run.killedBy ?? ''] ?? `Killed by ${run.killedBy}`} after ${time} and ${shifts}.${run.carrying ? ' The relic is lost.' : ''}`],
-        abandoned: ['Run abandoned.', 'ABANDONED', `You gave up after ${time} and ${shifts}. Nothing was secured.${run.carrying ? ' The relic stays in the maze.' : ''}`],
+          ? ['Crushed.', 'CRUSHED', `The ${run.crushedBy.toUpperCase()} gate pinned you against the opposite wall after ${time} and ${shifts}.${lost}`]
+          : ['You died.', 'DEAD', `${DEATH_TEXT[run.killedBy ?? ''] ?? `Killed by ${run.killedBy}`} after ${time} and ${shifts}.${lost}`],
+        abandoned: ['Run abandoned.', 'ABANDONED', `You gave up after ${time} and ${shifts}. Nothing was secured.${lost}`],
       }[run.status as 'extracted' | 'failed' | 'abandoned'];
       title.textContent = copy[0]; mode.textContent = copy[1]; description.textContent = copy[2];
       message.textContent = `Seed ${generated?.seed}. New run builds a fresh maze from a new seed. Retry replays this seed from the start.`;

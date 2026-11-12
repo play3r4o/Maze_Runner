@@ -11,6 +11,7 @@
 - The developer then confirmed “all works perfect. Go next”: M1 push-before-crush is human accepted, and M2 is approved. M3 and later remain unapproved.
 - The next instruction “all works, go next” accepts M2 and authorizes M3 graph validation/diagnostics. M4 and later remain unapproved.
 - On 2026-11-11, after the M3 Retry fix deployed (run 43005063616, commit `97d3ad9`), the developer replied “accepted, go next”: M3 is human accepted and M4 seeded generation is approved. M5 and later remain unapproved.
+- M10 + M12, 2026-11-12 14:06: “let's do 10 and 12. For 10 I want more monsters. Some that can be killed by me and others “bosses” that cannot but can be lured into traps. I want … traps. Places you step that trigger traps. Balls rolling, spike from the side/ground, holes opening and anything else …” Approved together: several monster kinds (killable ones and unkillable bosses that die only to traps or gates), pressure-plate traps (rolling boulder, wall spears, floor spikes, opening pit, dart volleys, swinging blade). Killing monsters needs a weapon, so the plan's minimal M11 crossbow and player health come with it. M8 and M9 remain unapproved. Delivered in two stages: traps and health, then monsters and the crossbow.
 - M7b, 2026-11-12 13:32: “works well but I would want it to be a toggle with c and LMB… When done, you can go ahead directly with the next step.” M7b is treated as human accepted with the chalk toggle as its last change. No written rules-on/off comparison was given. The next milestone has not been chosen.
 - M7 verdict, 2026-11-12: “all seems to be working fine and it's okay in terms of fun. We need way more traps and enemies so it's a bit harder as now it's quite easy. But that is for later on. Continue with next step.” M7 is accepted with an okay-fun verdict; difficulty is too low. Traps and enemies are deferred to their planned milestones (M10 stalker, M12 traps) and should be expanded there; M7b pressure rules are approved next. M8 and later remain unapproved.
 - On 2026-11-11 the developer replied “okay, all looks and works good” after testing the deployed M6: M6 is human accepted. At 20:21 they replied “go next”: M7 complete solo extraction is approved. M7b and later remain unapproved.
@@ -33,6 +34,7 @@
 | M7b (added 2026-11-11) | Human accepted 2026-11-12 (chalk toggle deployed in run 43211237014) |
 | M9 (scheduled after M7b) | Not started |
 | M8 | Not started |
+| M10 + M12 (with minimal M11 crossbow) | In progress: stage 1 traps and health |
 | M10–M12 | Not started |
 | M13 (co-op PvE) | Conditional, not started |
 | M13b (PvP, added 2026-11-11) | Conditional, not started |
@@ -284,3 +286,13 @@ Stop for the rules-on versus rules-off comparison. M8 and M9 remain unapproved. 
 - The positional-sound browser check now requires the simulation to queue at least 4 sounds on a shift (deterministic, `data-sounds-queued`) and the audio engine to have played at least one (headless playback timing varies; one local run fell short of the old “3 played” threshold).
 - Developer instruction “when done, go ahead directly with the next step”: taken as the browser-test hardening proposed in the previous reply. On CI only: one retry per failed test and a 60 s default test timeout (browser contexts took over 30 s to start); the M2 push/crush test budget rose from 90 s to 180 s; the workflow limit from 25 to 35 minutes. No assertions changed. The next milestone (M8, M9, M10 or M12) still needs the developer's choice.
 - Commit `2b407c4`: GitHub Actions run 43211237014 succeeded on the first attempt in 16m 11s and deployed. Test at `https://play3r4o.github.io/Maze_Runner/?v=2b407c4`. This note is committed locally for the next checkpoint.
+
+### M10 + M12 stage 1: traps and health — 2026-11-12
+
+- Contract: `milestones/M10-M12.md`. Stage 1 delivers player health and six pressure-plate trap kinds; stage 2 (monsters, unkillable bosses, crossbow) follows before the human checklist.
+- New `game/traps.ts`: seeded placement (2/5/9 per ring, lethal kinds only from the middle ring outward, exclusions for Sanctuary, entrances, relic and landmark rooms and gate corridors, one per cell, per-kind cap), trap phases (armed, warning, active, cooldown) and a pure step over any list of bodies, so monsters can use it in stage 2. Rolling boulder on straight static runs of at least 3 corridors, wall spears, floor spikes, opening pit, dart volleys, swinging blade. All numbers in `game/tuning.ts`.
+- `game/generatedRun.ts`: 100 health, damage with `hurt` events and sounds, death by trap (`killedBy`, failed once, relic lost), trap states in the run, `traps` rule switch (F2, `?off=traps`). Reports are format 5 and carry health, cause and trap states.
+- `rendering/trapView.ts`: plates glowing while firing, rolling ball, opening pit, rising spikes, sliding spears, darts, swinging blade, all primitive shapes. Audio: plate click, rumble, spike burst, darts, swish, hurt. HUD: health bar, death text per cause. F2 map: trap marks by kind and phase, boulder runs.
+- Found and fixed while testing: a dart volley could fire twice in one step; one seed placed five pits in one ring (now capped per kind); earlier rule tests were disturbed by traps in their walks (those tests now switch traps and monsters off).
+- Unit: 1391 tests pass, including the new trap placement (200 seeds) and behaviour tests.
+- Browser: new traps scenario passes (traps on the map, spike plate 100 → 55 health with events, traps off does nothing, pit death text); generated-maze, M6, M7 and M7b scenarios pass with the new header. Visual check: spikes, blade and a rolling boulder render. No page errors.

@@ -23,7 +23,7 @@ test('leave (automatic countdown starts), take the relic with E, carry it home: 
   test.setTimeout(180_000);
   const errors = watchErrors(page);
   await installBrowserClock(page); await page.goto('/?seed=41');
-  await expect(page).toHaveTitle('Shifting Labyrinth · M7b');
+  await expect(page).toHaveTitle('Shifting Labyrinth · M10–12');
   await expect(page.locator('#panel-title')).toHaveText('Bring the relic home.');
   await page.getByRole('button', { name: 'F2 · Debug map' }).click();
   await startRunning(page, 'Start exploring');

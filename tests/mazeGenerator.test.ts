@@ -5,6 +5,7 @@ import { DEFAULT_GENERATOR_CONFIG, GENERATOR_VERSION, createRng, findBridgeToSan
   parseSeed, ringFor, serializeMaze } from '../src/simulation/mazeGenerator';
 import type { GeneratedMaze } from '../src/simulation/mazeGenerator';
 import { buildGeneratedWorld, createGeneratedRun, setGeneratedRunFrozen, stepGeneratedRun } from '../src/game/generatedRun';
+import { ALL_RULES_ON } from '../src/game/pressure';
 import type { GeneratedRun, GeneratedWorld } from '../src/game/generatedRun';
 import { overlapsBody } from '../src/simulation/movingWalls';
 import { stepPlayer } from '../src/simulation/player';
@@ -149,8 +150,9 @@ describe.each([1, 20261111, 4294967295])('seed %i physical walkability', (seed) 
     }
   });
   test('walking the graph route visits every landmark, then reports the return home', () => {
-    // Walkability check: freeze automatic shifts (M7) so the static gate poses hold for the whole walk.
-    let run = setGeneratedRunFrozen(createGeneratedRun(world), true);
+    // Walkability check: freeze automatic shifts (M7) so the static gate poses hold for the whole
+    // walk, and switch traps and monsters off (M10/M12): this test is about the maze, not dangers.
+    let run = setGeneratedRunFrozen(createGeneratedRun(world, { ...ALL_RULES_ON, traps: false, monsters: false }), true);
     let from = maze.start;
     for (const landmark of maze.landmarks) {
       run = walkRoute(world, run, findMazeRoute(maze, maze.initialOpenness, from, landmark.cell)!.cells);

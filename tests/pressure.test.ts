@@ -10,7 +10,7 @@ import { buildGeneratedWorld, createGeneratedRun, drawChalk, interactGeneratedRu
 import { aimRay, raycastChalk, shownPoint, strokeLength } from '../src/game/chalk';
 import type { Vec3 } from '../src/game/chalk';
 import type { GeneratedRun } from '../src/game/generatedRun';
-import { createRunReport, parseRunReport, reproduceRun } from '../src/game/runReport';
+import { REPORT_FORMAT, createRunReport, parseRunReport, reproduceRun } from '../src/game/runReport';
 
 const world = buildGeneratedWorld(generateMaze(41));
 const still = { forward: 0, strafe: 0 };
@@ -19,8 +19,10 @@ const steps = (run: GeneratedRun, count: number, intent = still) => {
   return run;
 };
 // An expedition already under way, standing at the relic (outside Sanctuary).
+// Traps and monsters are off here: these tests are about the M7b rules alone.
+const QUIET = { ...ALL_RULES_ON, traps: false, monsters: false };
 const out = (patch: Partial<GeneratedRun> = {}): GeneratedRun =>
-  ({ ...createGeneratedRun(world), status: 'out', player: { x: world.relic.x, z: world.relic.z, yaw: 0 }, ...patch });
+  ({ ...createGeneratedRun(world, QUIET), status: 'out', player: { x: world.relic.x, z: world.relic.z, yaw: 0 }, ...patch });
 
 describe('T1 unrest', () => {
   test('carrying the relic shortens the automatic interval from 45 s to 27 s; switched off it stays 45 s', () => {
@@ -100,7 +102,7 @@ describe('T3 sound events', () => {
     for (let i = 0; i < 30; i++) many = steps(requestGeneratedRunShift(world, many), ticks(10.5));
     expect(many.sounds).toHaveLength(32);
     expect(many.sounds.every((sound, i, all) => i === 0 || sound.id === all[i - 1].id + 1)).toBe(true);
-    const silent = steps(requestGeneratedRunShift(world, out({ rules: { ...ALL_RULES_ON, sound: false } })), ticks(10.5));
+    const silent = steps(requestGeneratedRunShift(world, out({ rules: { ...QUIET, sound: false } })), ticks(10.5));
     expect(silent.sounds).toEqual([]);
     expect(silent.shift.completedShifts).toBe(1);
   });
@@ -208,6 +210,6 @@ describe('T8 daily seed, toggles and reports', () => {
     expect(mismatches).toEqual([]);
     expect(copy).toMatchObject({ rules: run.rules, chalk: run.chalk, chalkLeft: run.chalkLeft, bells: 1, activeStroke: null });
     expect(parseRunReport(text.replace(`"chalkLeft":${run.chalkLeft}`, '"chalkLeft":30'))).toMatchObject({ ok: false });
-    expect(parseRunReport(text.replace('"format":4', '"format":3'))).toMatchObject({ ok: false, error: expect.stringContaining('format 3') });
+    expect(parseRunReport(text.replace(`"format":${REPORT_FORMAT}`, '"format":3'))).toMatchObject({ ok: false, error: expect.stringContaining('format 3') });
   });
 });

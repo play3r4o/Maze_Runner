@@ -6,7 +6,10 @@ import { WARNING_SECONDS } from '../simulation/shift';
 import { HAND_BUILT_MAZE, MAZE_GATE_IDS } from '../simulation/maze';
 import type { MazeRun } from '../game/mazeRun';
 import { isRunOver } from '../game/generatedRun';
-import { CHALK_INK_METRES } from '../game/tuning';
+import { CHALK_INK_METRES, PLAYER_HEALTH } from '../game/tuning';
+
+// Result-screen wording for deaths other than gate crushes.
+const DEATH_TEXT: Record<string, string> = {"boulder": "A rolling boulder flattened you", "pit": "The floor opened and you fell", "spears": "Spears from the walls ran you through", "floorSpikes": "Spikes burst from the floor beneath you", "darts": "Darts from the walls brought you down", "blade": "A swinging blade cut you down"};
 import type { GeneratedRun } from '../game/generatedRun';
 import type { GeneratedMaze } from '../simulation/mazeGenerator';
 import type { SceneMode } from '../rendering/scene';
@@ -22,7 +25,7 @@ export function createHud(root: HTMLElement, scene: SceneMode, generated?: Gener
   const startTitle = isGenerated ? 'Bring the relic home.' : isMaze ? 'Find your way home.' : isJunction ? 'The walls can move.' : 'A place to begin.';
   root.innerHTML = `
     <header class="prototype-header">
-      <span class="eyebrow">DEVELOPMENT BUILD / ${isGenerated ? 'M7b · PRESSURE' : isMaze ? 'M3 · GRAPH DIAGNOSTICS' : isJunction ? 'M1 · PUSH &amp; CRUSH' : 'M0'}</span>
+      <span class="eyebrow">DEVELOPMENT BUILD / ${isGenerated ? 'M10–12 · DANGER' : isMaze ? 'M3 · GRAPH DIAGNOSTICS' : isJunction ? 'M1 · PUSH &amp; CRUSH' : 'M0'}</span>
       <p class="wordmark">Shifting Labyrinth<span>Working title</span></p>
     </header>
     <div class="session-status" role="status" aria-live="polite">
@@ -31,9 +34,9 @@ export function createHud(root: HTMLElement, scene: SceneMode, generated?: Gener
     <div class="crosshair" aria-hidden="true"></div>
     <section class="pause-overlay" aria-labelledby="panel-title">
       <div class="pause-panel">
-        <p class="eyebrow">MILESTONE ${isGenerated ? '07b · PRESSURE' : isMaze ? '03 · GRAPH DIAGNOSTICS' : isJunction ? '01 · SINGLE JUNCTION' : '00'}</p>
+        <p class="eyebrow">MILESTONE ${isGenerated ? '10–12 · DANGER' : isMaze ? '03 · GRAPH DIAGNOSTICS' : isJunction ? '01 · SINGLE JUNCTION' : '00'}</p>
         <h1 id="panel-title">${startTitle}</h1>
-        <p class="panel-description">${isGenerated ? `A relic waits in the outer ring of this ${generated.columns}×${generated.rows} maze (seed ${generated.seed}): follow the blue beam, take it with E, then carry it back to Sanctuary under the gold beam. Warned shifts open one stone gate and close another every 45 seconds, faster while you carry the relic. A bell from Sanctuary tolls as time runs on; after the third, night falls and the maze shifts constantly. Listen for grinding stone. Press C to take out the chalk, then hold the left mouse button to draw or write on floors, walls and gates (limited chalk per run); C puts it away. Closing stone pushes you and crushes you if you no longer fit. Every room always keeps some route home.` : isMaze ? 'Leave the warm Sanctuary marker, find three colored landmarks, then return home. G swaps two gate shortcuts. The 8-meter stone passages push and crush; permanent corridors offer detours. Learn the routes as you explore.' : isJunction ? 'Moving stone pushes you toward the opposite wall. Escape the 8-meter passage before the gap becomes too narrow to fit, or take the outer loop. Press G to shift.' : 'One room. Four walls. The foundation for a changing maze.'}</p>
+        <p class="panel-description">${isGenerated ? `A relic waits in the outer ring of this ${generated.columns}×${generated.rows} maze (seed ${generated.seed}): follow the blue beam, take it with E, then carry it back to Sanctuary under the gold beam. Warned shifts open one stone gate and close another every 45 seconds, faster while you carry the relic. A bell from Sanctuary tolls as time runs on; after the third, night falls and the maze shifts constantly. Listen for grinding stone. Press C to take out the chalk, then hold the left mouse button to draw or write on floors, walls and gates (limited chalk per run); C puts it away. Closing stone pushes you and crushes you if you no longer fit. Hidden pressure plates set off boulders, spears, spikes, pits and darts; blades swing in some corridors. You have 100 health. Every room always keeps some route home.` : isMaze ? 'Leave the warm Sanctuary marker, find three colored landmarks, then return home. G swaps two gate shortcuts. The 8-meter stone passages push and crush; permanent corridors offer detours. Learn the routes as you explore.' : isJunction ? 'Moving stone pushes you toward the opposite wall. Escape the 8-meter passage before the gap becomes too narrow to fit, or take the outer loop. Press G to shift.' : 'One room. Four walls. The foundation for a changing maze.'}</p>
         <div class="control-list" aria-label="Controls">
           <p><span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span><span>Move</span></p>
           <p><span class="control-name">Mouse</span><span>Look around</span></p>
@@ -67,6 +70,7 @@ export function createHud(root: HTMLElement, scene: SceneMode, generated?: Gener
       <aside class="shift-panel" aria-label="Expedition status">
         <p class="eyebrow">EXPEDITION <span data-testid="hud-seed">seed ${generated.seed}</span></p>
         <p class="run-objective" data-testid="run-objective" role="status">Leave Sanctuary and find the relic under the blue beam.</p>
+        <div class="health" aria-label="Health"><span class="health-fill" data-testid="health-fill"></span><output data-testid="health">100</output></div>
         <p class="shift-layout"><span data-testid="run-time">0:00</span> · <span data-testid="shift-count">0 shifts</span> · <span data-testid="hud-ring">Sanctuary</span> · <span data-testid="chalk-left">100% chalk</span></p>
         <p class="shift-phase" data-testid="shift-phase">Maze still</p>
         <p class="shift-notice" data-testid="shift-notice" role="status"></p>
@@ -115,6 +119,8 @@ export function createHud(root: HTMLElement, scene: SceneMode, generated?: Gener
   const prompt = isGenerated ? element<HTMLElement>('[data-testid="interact-prompt"]') : null;
   const chalkLeft = isGenerated ? element<HTMLElement>('[data-testid="chalk-left"]') : null;
   const chalkMode = isGenerated ? element<HTMLElement>('[data-testid="chalk-mode"]') : null;
+  const health = isGenerated ? element<HTMLElement>('[data-testid="health"]') : null;
+  const healthFill = isGenerated ? element<HTMLElement>('[data-testid="health-fill"]') : null;
   const volume = isGenerated ? element<HTMLInputElement>('[data-testid="volume"]') : null;
   const mute = isGenerated ? element<HTMLInputElement>('[data-testid="mute"]') : null;
   const retrySeed = isGenerated ? element<HTMLButtonElement>('[data-action="retry-seed"]') : null;
@@ -220,6 +226,12 @@ export function createHud(root: HTMLElement, scene: SceneMode, generated?: Gener
         cooldown: 'Settling' };
       generatedPhase!.textContent = `${labels[state.phase]}${run.frozen ? ' · frozen (debug)' : ''}`; generatedPhase!.dataset.phase = state.phase;
       generatedCount!.textContent = `${state.completedShifts} shift${state.completedShifts === 1 ? '' : 's'}`;
+      // Health shows at once (not throttled) so a hit is felt immediately.
+      if (health!.textContent !== String(run.health)) {
+        health!.textContent = String(run.health);
+        healthFill!.style.width = `${(100 * run.health) / PLAYER_HEALTH}%`;
+        healthFill!.dataset.low = String(run.health <= 35);
+      }
       chalkLeft!.textContent = run.rules.chalk ? `${Math.round((run.chalkLeft / CHALK_INK_METRES) * 100)}% chalk` : 'no chalk';
       // Visual equivalent of the bell (T3): name the strikes for a few seconds after they ring.
       const bell = [...run.events].reverse().find((event) => event.kind === 'bell');
@@ -242,7 +254,9 @@ export function createHud(root: HTMLElement, scene: SceneMode, generated?: Gener
       const debug = run.teleports ? ` Debug teleports used: ${run.teleports}.` : '';
       const copy = {
         extracted: ['Relic secured.', 'EXTRACTED', `You carried the relic home in ${time}, through ${shifts}.${debug}`],
-        failed: ['Crushed.', 'CRUSHED', `The ${run.crushedBy?.toUpperCase()} gate pinned you against the opposite wall after ${time} and ${shifts}.${run.carrying ? ' The relic is lost.' : ''}`],
+        failed: run.crushedBy
+          ? ['Crushed.', 'CRUSHED', `The ${run.crushedBy.toUpperCase()} gate pinned you against the opposite wall after ${time} and ${shifts}.${run.carrying ? ' The relic is lost.' : ''}`]
+          : ['You died.', 'DEAD', `${DEATH_TEXT[run.killedBy ?? ''] ?? `Killed by ${run.killedBy}`} after ${time} and ${shifts}.${run.carrying ? ' The relic is lost.' : ''}`],
         abandoned: ['Run abandoned.', 'ABANDONED', `You gave up after ${time} and ${shifts}. Nothing was secured.${run.carrying ? ' The relic stays in the maze.' : ''}`],
       }[run.status as 'extracted' | 'failed' | 'abandoned'];
       title.textContent = copy[0]; mode.textContent = copy[1]; description.textContent = copy[2];

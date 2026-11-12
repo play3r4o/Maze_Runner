@@ -1,8 +1,8 @@
 # Shifting Labyrinth
 
-Working title. A browser game project starting with a small, first-person shifting-maze prototype. **M0–M7 are accepted. M7b adds pressure and wayfinding: faster shifts while carrying, a dusk bell and night, positional sound, chalk arrows and a daily seed.**
+Working title. A browser game project starting with a small, first-person shifting-maze prototype. **M0–M7b are accepted. M10–12 (in progress) adds 100 health and pressure-plate traps; monsters, bosses and a crossbow come next.**
 
-Read [the brief](project_brief.md), [development plan](docs/development_plan.md), [M7b specification](docs/milestones/M7b.md), and [current progress](docs/progress.md).
+Read [the brief](project_brief.md), [development plan](docs/development_plan.md), [M7b specification](docs/milestones/M7b.md), [M10–12 specification](docs/milestones/M10-M12.md), and [current progress](docs/progress.md).
 
 ## Run
 
@@ -20,6 +20,8 @@ Click **Start exploring** to capture the mouse. **WASD** moves, **mouse** looks,
 **M7 expedition (default scene).** A relic waits in the outer ring under a tall **blue beam**. Leave Sanctuary, press **E** next to the relic, then carry it back into Sanctuary under the **gold beam**. Every 45 seconds the maze shifts by itself after a 2-second warning: one gate opens, another closes, so your way back may change. Crushing ends the run and loses the relic; **Abandon run** is in the pause menu. The result screen shows your time and shifts survived, with **New run** (fresh seed) and **Retry this seed**. G still forces a shift for debugging. See the [M7 specification](docs/milestones/M7.md).
 
 **M7b pressure.** Carrying the relic makes shifts come every 27 s. A bell from Sanctuary tolls once at 2:30, twice at 3:15 and three times at 4:00 of the run; then night falls and the maze shifts every 10 s. Gates warn and grind with positional sound (volume and mute in the pause menu). Press **C** to take out the chalk, then hold the **left mouse button** and look around to draw or write on floors, walls and gates within reach; C puts it away (30 m of line per run; drawings on a gate slide with it). With no `?seed=`, everyone gets today's maze (UTC date). For comparisons, F2 has switches for each rule and the beams; `?off=unrest,dusk,sound,chalk,beams` starts with them off. See the [M7b specification](docs/milestones/M7b.md).
+
+**M10–12 traps.** You have 100 health. Slightly darker square plates in corridors and rooms trigger traps when stepped on: a rolling boulder down a long straight corridor, spears from the walls, spikes from the floor, a pit that opens beneath you, dart volleys, and swinging blades that need no plate. Plates glow amber while a trap fires; step off fast. Boulders and pits kill. `?off=traps` or F2 switches them off.
 
 The default scene is a **seeded 11×11 maze** (M4). The address carries `?seed=N`; the same seed always rebuilds the same layout, and a page opened without a seed picks one and writes it into the address. A central open Sanctuary plaza has one entrance per side. Inner, middle and outer rings each hold one landmark (Amber Spire, Blue Beacon, Rose Pillar); the side panel shows your current ring and the navigation check. Eight stone gates (G1–G8) move when you press **G**: one closed gate opens, then one open gate closes, with the same warning, pushing and crushing rules as the hand-built maze. Each shift is validated first, and the static corridors alone always connect every room, so no shift can strand a region. The F2 panel shows gate states and a shift log with each decision and its reason. See the [M5 specification](docs/milestones/M5.md).
 
@@ -88,7 +90,7 @@ One-time repository setup:
 
 For the current repository, the expected default URL is `https://play3r4o.github.io/Maze_Runner/`. It becomes usable only after GitHub reports a successful deployment; an expected URL alone is not proof of publication.
 
-Open the game in a desktop browser tab and click **Start exploring**. No local Node.js installation is required for the hosted version. After a new deployment, refresh and check the **M7b · PRESSURE** header; remove any `scene=` parameter from the URL to play the current maze. Share a `?seed=N` address to reproduce a layout.
+Open the game in a desktop browser tab and click **Start exploring**. No local Node.js installation is required for the hosted version. After a new deployment, refresh and check the **M10–12 · DANGER** header; remove any `scene=` parameter from the URL to play the current maze. Share a `?seed=N` address to reproduce a layout.
 
 If Pages is unavailable for the repository's visibility or account plan, keep those settings unchanged and report the limitation. Enabling Pages does not require adding credentials to the game or creating a separate server.
 

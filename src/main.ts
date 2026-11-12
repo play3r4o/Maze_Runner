@@ -12,7 +12,7 @@ import { debugViewOfMazeRun } from './simulation/mazeDiagnostics';
 import type { DebugView } from './simulation/mazeDiagnostics';
 import type { SceneMode } from './rendering/scene';
 import { MAX_SEED, generateMaze, layoutFingerprint, parseSeed, serializeMaze } from './simulation/mazeGenerator';
-import { abandonGeneratedRun, drawChalk, setRule, buildGeneratedWorld, createGeneratedRun, interactGeneratedRun, isRunOver, relicInReach,
+import { abandonGeneratedRun, drawChalk, isDead, setRule, buildGeneratedWorld, createGeneratedRun, interactGeneratedRun, isRunOver, relicInReach,
   requestGeneratedRunShift, setGeneratedRunFrozen, stepGeneratedRun, teleportGeneratedRun } from './game/generatedRun';
 import { createRunReport, parseRunReport, reproduceRun } from './game/runReport';
 import { ALL_RULES_ON, RULE_KEYS, autoShiftTicks, isNight, nextBellTick, nightFactor, unrestOf } from './game/pressure';
@@ -30,7 +30,7 @@ const requestedScene = params.get('scene');
 // M0 room, M1 junction and M2/M3 hand-built maze stay reachable for regression checks.
 const mode: SceneMode = requestedScene === 'room' ? 'room' : requestedScene === 'junction' ? 'junction'
   : requestedScene === 'maze' ? 'maze' : 'generated';
-document.title = `Shifting Labyrinth · ${{ generated: 'M7b', maze: 'M3', junction: 'M1', room: 'M0' }[mode]}`;
+document.title = `Shifting Labyrinth · ${{ generated: 'M10–12', maze: 'M3', junction: 'M1', room: 'M0' }[mode]}`;
 canvas.setAttribute('aria-label', { generated: 'First-person shifting seeded maze', maze: 'First-person hand-built maze',
   junction: 'First-person shifting junction', room: 'First-person gray room' }[mode]);
 
@@ -82,7 +82,7 @@ const debug = mode === 'maze' ? createMazeDebug(hudRoot)
       config: `${world.maze.config.size}×${world.maze.config.size} · loops ${world.maze.config.loopChance} · ${world.maze.config.gateCount} gates`,
       teleports: [{ label: 'Sanctuary', cell: world.maze.start },
         ...world.maze.landmarks.map((landmark) => ({ label: landmark.name.split(' ')[0], cell: landmark.cell }))],
-      rules: RULE_KEYS, onRule: (key, on) => debugTools?.onRule?.(key, on) ?? '',
+      rules: RULE_KEYS, onRule: (key, on) => debugTools?.onRule?.(key, on) ?? '', traps: world.traps,
       onFreeze: () => debugTools?.onFreeze() ?? '', onTeleport: (cell) => debugTools?.onTeleport(cell) ?? '',
       onCopyReport: () => debugTools?.onCopyReport() ?? '', onLoadReport: (text) => debugTools?.onLoadReport(text) ?? '',
     } }) : null;
@@ -104,12 +104,12 @@ function startRoom() {
     + `${entry.plan ? ` · ${entry.plan.open.toUpperCase()} opens, ${entry.plan.close.toUpperCase()} closes` : ''}`
     + `${entry.rejectedCandidates ? ` · ${entry.rejectedCandidates} rejected` : ''} · ${entry.reason}`;
   const debugView = (): DebugView => world && generatedRun ? { layout: world.maze, player: generatedRun.player,
-    openness: generatedRun.shift.openness, crushed: generatedRun.crushedBy !== null, phase: generatedRun.shift.phase,
+    openness: generatedRun.shift.openness, crushed: isDead(generatedRun), phase: generatedRun.shift.phase,
     opening: generatedRun.shift.plan?.open ?? null, closing: generatedRun.shift.plan?.close ?? null,
     revision: generatedRun.shift.revision, validation: generatedRun.shift.validation?.reason ?? null,
     log: generatedRun.shift.log.map(logLine),
     tools: { tick: generatedRun.tick, frozen: generatedRun.frozen, teleports: generatedRun.teleports, errors: pageErrors.length,
-      rules: generatedRun.rules,
+      rules: generatedRun.rules, trapPhases: generatedRun.traps.map((trap) => trap.phase),
       // Chalk strokes for the map, top-down, with gate drawings at their slab's current offset.
       chalk: generatedRun.chalk.map((stroke) => stroke.points.map((point) => { const [x, , z] = shownPoint(world.maze, generatedRun!.shift.openness, stroke, point); return { x, z }; })),
       run: (() => {
@@ -217,7 +217,7 @@ function startRoom() {
   // M6 debug tools (generated maze only). They act on the live run between simulation ticks.
   function applyReport(report: RunReport): string {
     if (!world || !generatedRun) return 'No generated maze loaded.';
-    const wasDead = generatedRun.crushedBy !== null || isRunOver(generatedRun.status);
+    const wasDead = isDead(generatedRun) || isRunOver(generatedRun.status);
     const result = reproduceRun(world, report);
     generatedRun = result.run;
     input.setLook(result.run.player.yaw);
@@ -296,7 +296,7 @@ function startRoom() {
   let frameId = 0;
   function frame(timestamp: number) {
     const state = input.read();
-    const playerDead = mode === 'maze' ? mazeRun.crushedBy !== null : mode === 'generated' ? generatedRun?.crushedBy != null
+    const playerDead = mode === 'maze' ? mazeRun.crushedBy !== null : mode === 'generated' ? (generatedRun ? isDead(generatedRun) : false)
       : mode === 'junction' && run.crushedBy !== null;
     stepper.advance(timestamp, graphicsAvailable && !document.hidden && (state.active || playerDead));
     const player = mode === 'room' ? roomPlayer : mode === 'maze' ? mazeRun.player : generatedRun ? generatedRun.player : run.player;
@@ -306,7 +306,7 @@ function startRoom() {
       const live = generatedRun;
       scene.render(player, state.yaw, state.pitch, run.junction, gates, live && world ? {
         carried: live.carrying, beams: live.rules.beams, night: nightFactor(live.rules, live.runTicks), chalk: live.chalk,
-        openness: live.shift.openness, sounds: live.sounds } : undefined);
+        openness: live.shift.openness, sounds: live.sounds, traps: live.traps, time: live.tick / 60 } : undefined);
       // Read-only audio diagnostics for tests and bug reports.
       if (scene.audio) {
         document.documentElement.dataset.audioState = scene.audio.state;

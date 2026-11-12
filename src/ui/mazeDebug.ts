@@ -3,6 +3,7 @@ import type { MazeLayout } from '../simulation/maze';
 import type { WallRect } from '../simulation/player';
 import type { Ring } from '../simulation/mazeGenerator';
 import type { RuleKey } from '../game/pressure';
+import type { TrapSpec } from '../game/traps';
 import { buildLayoutDiagnostics, probeSanctuaryIsolation } from '../simulation/mazeDiagnostics';
 import type { DebugView } from '../simulation/mazeDiagnostics';
 
@@ -17,6 +18,8 @@ export type MazeDebugOptions = {
     onFreeze(): string; onTeleport(cell: string): string; onCopyReport(): string; onLoadReport(text: string): string;
     // M7b rule switches (development only).
     rules?: readonly RuleKey[]; onRule?(key: RuleKey, on: boolean): string;
+    // M12 traps to draw on the map.
+    traps?: readonly TrapSpec[];
   };
 };
 export const RING_COLORS: Record<Ring, string> = { sanctuary: '#bba36b', inner: '#3f8a5c', middle: '#a08a3a', outer: '#a44b5a' };
@@ -122,6 +125,18 @@ export function createMazeDebug(root: HTMLElement,
       class: 'debug-gate-label' }, edge.gate === 'north' ? 'N' : edge.gate === 'east' ? 'E' : edge.gate!.toUpperCase()));
     return { id: edge.gate!, rect };
   });
+  // M12 traps: plate (or blade zone) squares coloured by kind; boulder lines dashed.
+  const TRAP_COLORS: Record<string, string> = { boulder: '#c08a4a', spears: '#d0d4d2', floorSpikes: '#9fb0c0', pit: '#111', darts: '#c9b37a', blade: '#e06a5a' };
+  const trapMarks = (options.tools?.traps ?? []).map((trap) => {
+    if (trap.path) map.append(svg('line', { x1: trap.path.from.x, y1: trap.path.from.z, x2: trap.path.to.x, y2: trap.path.to.z,
+      stroke: TRAP_COLORS.boulder, 'stroke-width': 0.5, 'stroke-dasharray': '1.5 1', opacity: 0.8 }));
+    const r = trap.plate ?? trap.zone;
+    const mark = svg('rect', { x: r.minX, y: r.minZ, width: r.maxX - r.minX, height: r.maxZ - r.minZ, fill: TRAP_COLORS[trap.kind],
+      stroke: '#000', 'stroke-width': 0.15, 'data-testid': 'debug-trap', 'data-trap-kind': trap.kind, 'data-trap-id': trap.id });
+    mark.append(svg('title', {}, `${trap.id} ${trap.kind} in ${trap.cell}`));
+    map.append(mark);
+    return mark;
+  });
   // M7b chalk strokes, drawn top-down.
   const chalkLayer = svg('g', { 'data-testid': 'debug-chalk' });
   map.append(chalkLayer);
@@ -216,6 +231,7 @@ export function createMazeDebug(root: HTMLElement,
           ? svg('circle', { cx: points[0].x, cy: points[0].z, r: 0.3, fill: '#f4f1e6', 'data-testid': 'debug-chalk-stroke' })
           : svg('polyline', { points: points.map((point) => `${point.x.toFixed(2)},${point.z.toFixed(2)}`).join(' '), fill: 'none',
             stroke: '#f4f1e6', 'stroke-width': 0.4, 'stroke-linecap': 'round', 'data-testid': 'debug-chalk-stroke' })));
+        view.tools.trapPhases?.forEach((phase, i) => { if (trapMarks[i] && trapMarks[i].dataset.phase !== phase) trapMarks[i].dataset.phase = phase; });
         for (const [key, on] of Object.entries(view.tools.rules ?? {})) {
           const box = panel.querySelector<HTMLInputElement>(`[data-rule="${key}"]`);
           if (box && box.checked !== on) box.checked = on;

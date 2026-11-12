@@ -8,6 +8,7 @@ import { AUTO_SHIFT_TICKS, RELIC_REACH, abandonGeneratedRun, buildGeneratedWorld
   teleportTarget } from '../src/game/generatedRun';
 import type { GeneratedRun, GeneratedWorld } from '../src/game/generatedRun';
 import { createRunReport, parseRunReport, reproduceRun } from '../src/game/runReport';
+import { ALL_RULES_ON } from '../src/game/pressure';
 
 const still = { forward: 0, strafe: 0 };
 const worlds = new Map<number, GeneratedWorld>();
@@ -127,7 +128,8 @@ describe.each([1, 41, 20261111])('seed %i complete solo loop', (seed) => {
   test('walk out, take the relic, survive a shift that changes the graph, walk the new route home, extract', () => {
     const world = worldFor(seed);
     // Walk out frozen so the scripted route stays valid, then let real shifts run.
-    let run = setGeneratedRunFrozen(createGeneratedRun(world), true);
+    // Traps and monsters off: this checks the extraction loop itself (they have their own tests).
+    let run = setGeneratedRunFrozen(createGeneratedRun(world, { ...ALL_RULES_ON, traps: false, monsters: false }), true);
     run = walkTo(world, run, world.relic.cell).run;
     expect(run.cell).toBe(world.relic.cell);
     run = interactGeneratedRun(world, run);

@@ -1,13 +1,13 @@
 import { AudioListener, Object3D, PositionalAudio } from 'three';
 import type { Camera, Scene } from 'three';
-import type { SoundEvent } from '../game/pressure';
+import type { SoundEvent, SoundKind } from '../game/pressure';
 
 // T3 directional sound. Consumes the simulation's SoundEvent list and plays each new id once,
 // positioned in the world. All sounds are generated in code; no audio files, no occlusion.
 // Audio only presents state; nothing here feeds back into the game.
 const MAX_VOICES = 12;
 // How far each kind carries: distance at which it is at full volume (inverse distance falloff).
-const REF_DISTANCE = { shiftWarning: 8, gateGrind: 8, bellToll: 40 } as const;
+const REF_DISTANCE: Record<SoundKind, number> = { shiftWarning: 8, gateGrind: 8, bellToll: 40, trapClick: 4, trapFire: 10, bladeSwish: 5, hurt: 3 };
 
 export function createAudio(scene: Scene, camera: Camera) {
   const listener = new AudioListener();
@@ -55,11 +55,36 @@ export function createAudio(scene: Scene, camera: Camera) {
       return 0.35 * sum * Math.min(1, t / 0.005);
     });
   }
+  // M12 trap sounds.
+  const click = () => buffer(0.08, (t) => (Math.random() * 2 - 1) * Math.exp(-t * 90) * 0.8);
+  function burst(seconds: number, brightness: number, gain: number) {
+    let low = 0;
+    return buffer(seconds, (t) => {
+      const white = Math.random() * 2 - 1;
+      low += (white - low) * brightness;
+      return gain * low * Math.exp(-t * 6 / seconds) * Math.min(1, t / 0.005);
+    });
+  }
+  const darts = () => buffer(1.2, (t) => {
+    const local = t % 0.5;
+    return local < 0.15 ? (Math.random() * 2 - 1) * 0.5 * Math.sin((Math.PI * local) / 0.15) : 0;
+  });
+  const swish = () => buffer(0.35, (t) => (Math.random() * 2 - 1) * 0.35 * Math.sin((Math.PI * t) / 0.35));
+  const hurt = () => buffer(0.25, (t) => 0.6 * Math.sin(2 * Math.PI * 90 * t) * Math.exp(-t * 14));
+  const clickBuffer = click(), swishBuffer = swish(), hurtBuffer = hurt(), dartsBuffer = darts();
+  function trapBuffer(sound: SoundEvent) {
+    if (sound.trap === 'boulder') return grind(sound.seconds ?? 2);
+    if (sound.trap === 'pit') return grind(1);
+    if (sound.trap === 'darts') return dartsBuffer;
+    return burst(0.4, 0.6, 0.9); // spears and floor spikes: a sharp metallic burst
+  }
   const warningBuffer = warning();
 
   function play(sound: SoundEvent) {
     if (voices.size >= MAX_VOICES) return;
-    const data = sound.kind === 'shiftWarning' ? warningBuffer : sound.kind === 'gateGrind' ? grind(sound.seconds ?? 1) : bell(sound.strikes ?? 1);
+    const data = sound.kind === 'shiftWarning' ? warningBuffer : sound.kind === 'gateGrind' ? grind(sound.seconds ?? 1)
+      : sound.kind === 'bellToll' ? bell(sound.strikes ?? 1) : sound.kind === 'trapClick' ? clickBuffer
+        : sound.kind === 'bladeSwish' ? swishBuffer : sound.kind === 'hurt' ? hurtBuffer : trapBuffer(sound);
     const holder = new Object3D();
     holder.position.set(sound.x, 1.5, sound.z);
     const audio = new PositionalAudio(listener);

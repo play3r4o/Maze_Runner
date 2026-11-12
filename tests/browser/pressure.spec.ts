@@ -43,7 +43,7 @@ test('free-draw chalk strokes, rule switches in the address, and positional soun
   test.setTimeout(150_000);
   const errors = watchErrors(page);
   await installBrowserClock(page); await page.goto('/?seed=41');
-  await expect(page).toHaveTitle('Shifting Labyrinth · M7b');
+  await expect(page).toHaveTitle('Shifting Labyrinth · M10–12');
   await page.getByRole('button', { name: 'F2 · Debug map' }).click();
   await expect(page.getByTestId('chalk-left')).toHaveText('100% chalk');
   await startRunning(page, 'Start exploring');

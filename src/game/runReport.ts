@@ -13,12 +13,13 @@ import { RULE_KEYS } from './pressure';
 import type { RuleToggles } from './pressure';
 import { strokeLength } from './chalk';
 import type { ChalkStroke } from './chalk';
-import { CHALK_INK_METRES, CHALK_STROKE_LIMIT } from './tuning';
+import { CHALK_INK_METRES, CHALK_STROKE_LIMIT, PLAYER_HEALTH } from './tuning';
+import type { TrapState } from './traps';
 
 // A bug report is plain JSON. With the same build it rebuilds the maze (seed + config),
 // replays the same shift requests to the same gate poses, and puts the player back.
 // Bump REPORT_FORMAT if fields change meaning.
-export const REPORT_FORMAT = 4;
+export const REPORT_FORMAT = 5;
 export type RunReport = {
   format: number; version: string; seed: number; config: GeneratorConfig; fingerprint: string;
   // Replay inputs.
@@ -29,6 +30,8 @@ export type RunReport = {
   status: RunStatus; carrying: boolean; runTicks: number; autoTicks: number;
   // M7b rules state.
   rules: RuleToggles; chalk: ChalkStroke[]; chalkLeft: number; bells: number;
+  // M10/M12 state.
+  health: number; killedBy: string | null; traps: TrapState[];
   // Recorded results, compared after replay.
   expect: { phase: ShiftPhase; revision: number; completedShifts: number; openness: MazeOpenness };
   // Context for a human reader; not used for replay.
@@ -45,6 +48,7 @@ export function createRunReport(world: GeneratedWorld, run: GeneratedRun, contex
     status: run.status, carrying: run.carrying, runTicks: run.runTicks, autoTicks: run.autoTicks,
     rules: { ...run.rules }, chalk: run.chalk.map((stroke) => ({ ...stroke, points: stroke.points.map((point) => [...point] as typeof point) })),
     chalkLeft: run.chalkLeft, bells: run.bells,
+    health: run.health, killedBy: run.killedBy, traps: run.traps.map((trap) => ({ ...trap, hits: { ...trap.hits } })),
     expect: { phase: run.shift.phase, revision: run.shift.revision, completedShifts: run.shift.completedShifts, openness: { ...run.shift.openness } },
     events: run.events.slice(-20), shiftLog: context.shiftLog ?? [], errors: (context.errors ?? []).slice(-10), note: context.note ?? '',
   };
@@ -92,9 +96,14 @@ export function parseRunReport(text: string): { ok: true; report: RunReport } | 
     || !isInt(data.bells, 0, 3)) {
     return { ok: false, error: 'Report rules, chalk or bells are missing or invalid.' };
   }
+  if (!isNumber(data.health) || (data.health as number) < 0 || (data.health as number) > PLAYER_HEALTH || !Array.isArray(data.traps)
+    || !data.traps.every((trap) => isObject(trap) && typeof trap.id === 'string' && ['armed', 'warning', 'active', 'cooldown'].includes(trap.phase as string)
+      && isNumber(trap.seconds) && isObject(trap.hits))) {
+    return { ok: false, error: 'Report health or trap state is missing or invalid.' };
+  }
   const report = {
     events: [], shiftLog: [], errors: [], note: '', frozen: false, cell: null, ring: 'sanctuary', leftSanctuary: false,
-    returned: false, teleports: 0, crushedBy: null, fingerprint: '', ...data,
+    returned: false, teleports: 0, crushedBy: null, killedBy: null, fingerprint: '', ...data,
   } as unknown as RunReport;
   return { ok: true, report };
 }
@@ -147,7 +156,10 @@ export function reproduceRun(world: GeneratedWorld, report: RunReport): { run: G
     // A failed run comes back alive and running, so the moment before death can be replayed.
     status: report.status === 'failed' ? 'out' : report.status, carrying: report.carrying, runTicks: report.runTicks, autoTicks: report.autoTicks,
     rules: { ...report.rules }, chalk: report.chalk.map((stroke) => ({ ...stroke, points: stroke.points.map((point) => [...point] as typeof point) })),
-    chalkLeft: report.chalkLeft, activeStroke: null, bells: report.bells };
+    chalkLeft: report.chalkLeft, activeStroke: null, bells: report.bells,
+    // A dead player comes back alive (at least 1 health) so the moment before death can be replayed.
+    health: Math.max(1, report.health), killedBy: null,
+    traps: report.traps.length === world.traps.length ? report.traps.map((trap) => ({ ...trap, hits: { ...trap.hits } })) : base.traps };
   return { mismatches, run: { ...run, events: addRunEvent(run, 'report',
     `reproduced seed ${report.seed}, ${report.requests} requests${mismatches.length ? `; ${mismatches.length} mismatch(es)` : ''}`) } };
 }

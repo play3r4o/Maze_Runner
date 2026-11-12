@@ -12,12 +12,13 @@ import type { GeneratedWorld } from '../game/generatedRun';
 import { createMazeView } from './mazeView';
 import type { GateView } from './mazeView';
 import { createAudio } from './audio';
-import type { ChalkMark, SoundEvent } from '../game/pressure';
-import type { WallRect } from '../simulation/player';
+import type { SoundEvent } from '../game/pressure';
+import type { ChalkStroke } from '../game/chalk';
+import type { MazeOpenness } from '../simulation/maze';
 
 // Per-frame expedition state the view presents (generated maze only).
-export type ExpeditionView = { carried: boolean; beams: boolean; night: number; chalk: readonly ChalkMark[];
-  slabs: readonly WallRect[]; sounds: readonly SoundEvent[] };
+export type ExpeditionView = { carried: boolean; beams: boolean; night: number; chalk: readonly ChalkStroke[];
+  openness: MazeOpenness; sounds: readonly SoundEvent[] };
 
 export type SceneMode = 'room' | 'junction' | 'maze' | 'generated';
 export function createScene(canvas: HTMLCanvasElement, mode: SceneMode, generated?: GeneratedWorld) {
@@ -128,7 +129,7 @@ export function createScene(canvas: HTMLCanvasElement, mode: SceneMode, generate
       mazeView?.update(maze);
       if (expedition) {
         mazeView?.setRelic(expedition.carried, performance.now() / 1000, expedition.beams);
-        mazeView?.setChalk(expedition.chalk, expedition.slabs);
+        mazeView?.setChalk(expedition.chalk, expedition.openness);
         audio?.update(expedition.sounds);
         // Night (T2): dim the light and darken the sky over the fade. Presentation only.
         const night = expedition.night;

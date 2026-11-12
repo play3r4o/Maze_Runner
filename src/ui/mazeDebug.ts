@@ -122,7 +122,7 @@ export function createMazeDebug(root: HTMLElement,
       class: 'debug-gate-label' }, edge.gate === 'north' ? 'N' : edge.gate === 'east' ? 'E' : edge.gate!.toUpperCase()));
     return { id: edge.gate!, rect };
   });
-  // M7b chalk marks: small arrows in the direction drawn.
+  // M7b chalk strokes, drawn top-down.
   const chalkLayer = svg('g', { 'data-testid': 'debug-chalk' });
   map.append(chalkLayer);
   const pointer = svg('g', { class: 'debug-player', 'data-testid': 'debug-player' });
@@ -210,12 +210,12 @@ export function createMazeDebug(root: HTMLElement,
         element('[data-testid="debug-tick"]').textContent = String(view.tools.tick);
         element('[data-testid="debug-errors"]').textContent = String(view.tools.errors);
         element('[data-testid="debug-run"]').textContent = view.tools.run;
-        const marks = view.tools.chalk ?? [];
-        if (chalkLayer.childElementCount !== marks.length) {
-          chalkLayer.replaceChildren(...marks.map((mark) => svg('path', { d: 'M0 1.2 L0 -1.2 M-0.8 -0.4 L0 -1.2 L0.8 -0.4', fill: 'none',
-            stroke: '#f4f1e6', 'stroke-width': 0.35, 'data-testid': 'debug-chalk-mark',
-            transform: `translate(${mark.x} ${mark.z}) rotate(${mark.headingIndex * 45})` })));
-        }
+        // Chalk strokes, top-down (dots become tiny circles). Gate drawings move with their slab.
+        const strokes = view.tools.chalk ?? [];
+        chalkLayer.replaceChildren(...strokes.map((points) => points.length === 1
+          ? svg('circle', { cx: points[0].x, cy: points[0].z, r: 0.3, fill: '#f4f1e6', 'data-testid': 'debug-chalk-stroke' })
+          : svg('polyline', { points: points.map((point) => `${point.x.toFixed(2)},${point.z.toFixed(2)}`).join(' '), fill: 'none',
+            stroke: '#f4f1e6', 'stroke-width': 0.4, 'stroke-linecap': 'round', 'data-testid': 'debug-chalk-stroke' })));
         for (const [key, on] of Object.entries(view.tools.rules ?? {})) {
           const box = panel.querySelector<HTMLInputElement>(`[data-rule="${key}"]`);
           if (box && box.checked !== on) box.checked = on;

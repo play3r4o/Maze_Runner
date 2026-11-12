@@ -18,8 +18,14 @@ export const BELL_SECONDS = [150, 195, 240] as const;
 export const NIGHT_AUTO_SHIFT_SECONDS = 10;
 export const NIGHT_FADE_SECONDS = 10;
 
-// T4 chalk.
-export const CHALK_CHARGES = 12;
+// T4 chalk, free draw (developer request 2026-11-12): metres of line per run, how far the
+// chalk reaches from the eye, point spacing, the largest gap that still continues a stroke,
+// and a cap on separate strokes.
+export const CHALK_INK_METRES = 30;
+export const CHALK_REACH = 2.5;
+export const CHALK_MIN_STEP = 0.03;
+export const CHALK_MAX_JUMP = 0.5;
+export const CHALK_STROKE_LIMIT = 300;
 
 // T8 daily seed: the UTC date as YYYYMMDD.
 export function dailySeed(now: Date): number {

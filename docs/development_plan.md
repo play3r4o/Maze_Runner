@@ -86,7 +86,7 @@ Common requirements for every rule T1–T10:
 - Every sound keeps its existing visual equivalent (HUD warning text). Provide master volume and mute. No wall occlusion or muffling in the first version.
 - Noise for the creature (M10) is a separate plain record `NoiseEvent { x, z, radius }`: walking 6 m plus 2 m per carried item flagged `noisy`; placing chalk 4 m; crossbow shot 20 m; moving gate 25 m.
 
-**T4 — Chalk marks (the only navigation aid). M7b.**
+**T4 — Chalk marks (the only navigation aid). M7b.** Superseded 2026-11-12 by free-draw chalk at the developer's request: hold C to draw or write on any surface within reach, with a limited amount of chalk; see `milestones/M7b.md`. The bullets below describe the first arrow version.
 - Each run starts with 12 chalk charges. Press C to place one mark on the floor at the player's position. The mark is an arrow pointing where the player faces, snapped to the nearest of eight compass directions.
 - State: `ChalkMark { id, x, z, headingIndex }` with `headingIndex` 0–7, in run state. Marks cannot be erased or moved in the first version.
 - Shifts never move, rotate or delete marks. A slab may physically cover a mark; hide it while covered and show it again when uncovered. An arrow that now points at a closed gate is intended behaviour, not a bug.

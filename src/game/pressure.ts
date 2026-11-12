@@ -30,11 +30,7 @@ export function autoShiftTicks(rules: RuleToggles, carrying: boolean, runTicks: 
   return ticks(Math.max(MIN_AUTO_SHIFT_SECONDS, AUTO_SHIFT_SECONDS - UNREST_STEP_SECONDS * unrestOf(rules, carrying)));
 }
 
-// T4: chalk marks point where the player faced, snapped to 8 compass directions.
-// 0 north (−Z), 1 north-east, 2 east (+X), … 7 north-west. Yaw 0 faces north; positive yaw turns left.
-export type ChalkMark = { id: number; x: number; z: number; headingIndex: number };
-export const headingIndexForYaw = (yaw: number) => ((Math.round(-yaw / (Math.PI / 4)) % 8) + 8) % 8;
-export const HEADING_NAMES = ['north', 'north-east', 'east', 'south-east', 'south', 'south-west', 'west', 'north-west'] as const;
+// T4 chalk lives in chalk.ts (free draw).
 
 // T3: what the simulation tells the audio module. Positions are world metres; ids only grow.
 export type SoundKind = 'shiftWarning' | 'gateGrind' | 'bellToll';

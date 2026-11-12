@@ -6,6 +6,7 @@ import { WARNING_SECONDS } from '../simulation/shift';
 import { HAND_BUILT_MAZE, MAZE_GATE_IDS } from '../simulation/maze';
 import type { MazeRun } from '../game/mazeRun';
 import { isRunOver } from '../game/generatedRun';
+import { CHALK_INK_METRES } from '../game/tuning';
 import type { GeneratedRun } from '../game/generatedRun';
 import type { GeneratedMaze } from '../simulation/mazeGenerator';
 import type { SceneMode } from '../rendering/scene';
@@ -32,12 +33,12 @@ export function createHud(root: HTMLElement, scene: SceneMode, generated?: Gener
       <div class="pause-panel">
         <p class="eyebrow">MILESTONE ${isGenerated ? '07b · PRESSURE' : isMaze ? '03 · GRAPH DIAGNOSTICS' : isJunction ? '01 · SINGLE JUNCTION' : '00'}</p>
         <h1 id="panel-title">${startTitle}</h1>
-        <p class="panel-description">${isGenerated ? `A relic waits in the outer ring of this ${generated.columns}×${generated.rows} maze (seed ${generated.seed}): follow the blue beam, take it with E, then carry it back to Sanctuary under the gold beam. Warned shifts open one stone gate and close another every 45 seconds, faster while you carry the relic. A bell from Sanctuary tolls as time runs on; after the third, night falls and the maze shifts constantly. Listen for grinding stone. Press C to chalk an arrow on the floor (12 per run). Closing stone pushes you and crushes you if you no longer fit. Every room always keeps some route home.` : isMaze ? 'Leave the warm Sanctuary marker, find three colored landmarks, then return home. G swaps two gate shortcuts. The 8-meter stone passages push and crush; permanent corridors offer detours. Learn the routes as you explore.' : isJunction ? 'Moving stone pushes you toward the opposite wall. Escape the 8-meter passage before the gap becomes too narrow to fit, or take the outer loop. Press G to shift.' : 'One room. Four walls. The foundation for a changing maze.'}</p>
+        <p class="panel-description">${isGenerated ? `A relic waits in the outer ring of this ${generated.columns}×${generated.rows} maze (seed ${generated.seed}): follow the blue beam, take it with E, then carry it back to Sanctuary under the gold beam. Warned shifts open one stone gate and close another every 45 seconds, faster while you carry the relic. A bell from Sanctuary tolls as time runs on; after the third, night falls and the maze shifts constantly. Listen for grinding stone. Hold C and look around to draw or write in chalk on floors, walls and gates (limited chalk per run). Closing stone pushes you and crushes you if you no longer fit. Every room always keeps some route home.` : isMaze ? 'Leave the warm Sanctuary marker, find three colored landmarks, then return home. G swaps two gate shortcuts. The 8-meter stone passages push and crush; permanent corridors offer detours. Learn the routes as you explore.' : isJunction ? 'Moving stone pushes you toward the opposite wall. Escape the 8-meter passage before the gap becomes too narrow to fit, or take the outer loop. Press G to shift.' : 'One room. Four walls. The foundation for a changing maze.'}</p>
         <div class="control-list" aria-label="Controls">
           <p><span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span><span>Move</span></p>
           <p><span class="control-name">Mouse</span><span>Look around</span></p>
           <p><span><kbd>Esc</kbd></span><span>Pause &amp; release cursor</span></p>
-          ${isGenerated ? '<p><span><kbd>E</kbd></span><span>Take the relic</span></p><p><span><kbd>C</kbd></span><span>Chalk an arrow</span></p><p><span><kbd>G</kbd></span><span>Force a shift (debug)</span></p>'
+          ${isGenerated ? '<p><span><kbd>E</kbd></span><span>Take the relic</span></p><p><span><kbd>C</kbd></span><span>Hold to draw with chalk</span></p><p><span><kbd>G</kbd></span><span>Force a shift (debug)</span></p>'
             : hasGates ? '<p><span><kbd>G</kbd></span><span>Request a shift</span></p>' : ''}
           ${hasNavigation ? '<p><span><kbd>F2</kbd></span><span>Developer debug map</span></p>' : ''}
         </div>
@@ -66,7 +67,7 @@ export function createHud(root: HTMLElement, scene: SceneMode, generated?: Gener
       <aside class="shift-panel" aria-label="Expedition status">
         <p class="eyebrow">EXPEDITION <span data-testid="hud-seed">seed ${generated.seed}</span></p>
         <p class="run-objective" data-testid="run-objective" role="status">Leave Sanctuary and find the relic under the blue beam.</p>
-        <p class="shift-layout"><span data-testid="run-time">0:00</span> · <span data-testid="shift-count">0 shifts</span> · <span data-testid="hud-ring">Sanctuary</span> · <span data-testid="chalk-left">12 chalk</span></p>
+        <p class="shift-layout"><span data-testid="run-time">0:00</span> · <span data-testid="shift-count">0 shifts</span> · <span data-testid="hud-ring">Sanctuary</span> · <span data-testid="chalk-left">100% chalk</span></p>
         <p class="shift-phase" data-testid="shift-phase">Maze still</p>
         <p class="shift-notice" data-testid="shift-notice" role="status"></p>
       </aside>
@@ -75,7 +76,7 @@ export function createHud(root: HTMLElement, scene: SceneMode, generated?: Gener
       <span class="diagnostics-label">${hasNavigation ? 'MAZE' : isJunction ? 'JUNCTION' : 'ROOM'} TEST <span class="separator">/</span> POSITION</span>
       <span>X <output data-testid="position-x">0.00</output></span>
       <span>Z <output data-testid="position-z">${hasGates || isGenerated ? '0.00' : '8.00'}</output></span>
-      <span class="footer-controls">WASD · MOVE ${isGenerated ? '<span class="separator">/</span> E · TAKE <span class="separator">/</span> C · CHALK' : hasGates ? '<span class="separator">/</span> G · SHIFT' : ''} <span class="separator">/</span> ESC · PAUSE</span>
+      <span class="footer-controls">WASD · MOVE ${isGenerated ? '<span class="separator">/</span> E · TAKE <span class="separator">/</span> HOLD C · DRAW' : hasGates ? '<span class="separator">/</span> G · SHIFT' : ''} <span class="separator">/</span> ESC · PAUSE</span>
     </footer>
   `;
 
@@ -214,7 +215,7 @@ export function createHud(root: HTMLElement, scene: SceneMode, generated?: Gener
         cooldown: 'Settling' };
       generatedPhase!.textContent = `${labels[state.phase]}${run.frozen ? ' · frozen (debug)' : ''}`; generatedPhase!.dataset.phase = state.phase;
       generatedCount!.textContent = `${state.completedShifts} shift${state.completedShifts === 1 ? '' : 's'}`;
-      chalkLeft!.textContent = run.rules.chalk ? `${run.chalkLeft} chalk` : 'no chalk';
+      chalkLeft!.textContent = run.rules.chalk ? `${Math.round((run.chalkLeft / CHALK_INK_METRES) * 100)}% chalk` : 'no chalk';
       // Visual equivalent of the bell (T3): name the strikes for a few seconds after they ring.
       const bell = [...run.events].reverse().find((event) => event.kind === 'bell');
       const bellNotice = bell && run.tick - bell.tick < 6 * 60

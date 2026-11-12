@@ -12,7 +12,8 @@ export class BrowserInput {
   private pitch = 0;
   private shiftRequested = false;
   private interactRequested = false;
-  private chalkRequested = false;
+  // Held, not pressed: chalk draws while C is down.
+  private chalkHeld = false;
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -38,7 +39,7 @@ export class BrowserInput {
         if (!event.repeat) this.interactRequested = true;
       } else if (event.code === 'KeyC') {
         event.preventDefault();
-        if (!event.repeat) this.chalkRequested = true;
+        this.chalkHeld = true;
       } else if (event.code === 'KeyV' && this.onDebugAction) {
         event.preventDefault();
         if (!event.repeat) this.onDebugAction('probe');
@@ -50,6 +51,7 @@ export class BrowserInput {
 
     document.addEventListener('keyup', (event) => {
       this.keys.delete(event.code);
+      if (event.code === 'KeyC') this.chalkHeld = false;
       if (this.active && MOVEMENT_KEYS.has(event.code)) event.preventDefault();
     }, options);
 
@@ -63,7 +65,7 @@ export class BrowserInput {
       this.keys.clear();
       this.shiftRequested = false;
       this.interactRequested = false;
-      this.chalkRequested = false;
+      this.chalkHeld = false;
       this.active = document.pointerLockElement === canvas && !document.hidden;
       this.onModeChange(this.active);
     }, options);
@@ -95,7 +97,7 @@ export class BrowserInput {
     this.keys.clear();
     this.shiftRequested = false;
     this.interactRequested = false;
-    this.chalkRequested = false;
+    this.chalkHeld = false;
     this.onModeChange(false, message);
     if (document.pointerLockElement === this.canvas) document.exitPointerLock();
   }
@@ -112,10 +114,8 @@ export class BrowserInput {
     };
   }
 
-  consumeChalkRequest(): boolean {
-    const requested = this.active && this.chalkRequested;
-    this.chalkRequested = false;
-    return requested;
+  isChalkHeld(): boolean {
+    return this.active && this.chalkHeld;
   }
 
   consumeInteractRequest(): boolean {

@@ -18,6 +18,17 @@ async function startRunning(page: Page, name: string) {
 }
 async function pause(page: Page) { await page.keyboard.press('Escape'); await page.clock.runFor(200); }
 const html = (page: Page, key: string) => page.evaluate((name) => document.documentElement.dataset[name], key);
+// Mouse-look while the pointer is locked: relative movement in small steps, a frame each.
+async function look(page: Page, dx: number, dy: number) {
+  await page.evaluate(([x, y]) => document.dispatchEvent(new MouseEvent('mousemove', { movementX: x, movementY: y })), [dx, dy]);
+  await page.clock.runFor(50);
+}
+async function drawWhileMoving(page: Page, moves: [number, number][]) {
+  await page.keyboard.down('KeyC');
+  for (const [dx, dy] of moves) for (let i = 0; i < 10; i++) await look(page, dx / 10, dy / 10);
+  await page.keyboard.up('KeyC');
+  await page.clock.runFor(100);
+}
 const world = buildGeneratedWorld(generateMaze(41));
 // A report placing a running expedition just before a given run-clock time, at the relic room.
 function reportAt(seconds: number) {
@@ -27,22 +38,25 @@ function reportAt(seconds: number) {
   return JSON.stringify(createRunReport(world, run));
 }
 
-test('chalk marks, rule switches in the address, and positional sound on a shift', async ({ page }) => {
+test('free-draw chalk strokes, rule switches in the address, and positional sound on a shift', async ({ page }) => {
   test.setTimeout(150_000);
   const errors = watchErrors(page);
   await installBrowserClock(page); await page.goto('/?seed=41');
   await expect(page).toHaveTitle('Shifting Labyrinth · M7b');
   await page.getByRole('button', { name: 'F2 · Debug map' }).click();
-  await expect(page.getByTestId('chalk-left')).toHaveText('12 chalk');
+  await expect(page.getByTestId('chalk-left')).toHaveText('100% chalk');
   await startRunning(page, 'Start exploring');
   await freezeBrowserClock(page);
   await expect.poll(() => html(page, 'audioState')).toBe('running');
-  // Chalk: two marks, the map shows them.
-  await page.keyboard.press('KeyC'); await page.clock.runFor(100);
-  await page.keyboard.down('KeyW'); await page.clock.runFor(600); await page.keyboard.up('KeyW');
-  await page.keyboard.press('KeyC'); await page.clock.runFor(200);
-  await expect(page.getByTestId('chalk-left')).toHaveText('10 chalk');
-  await expect(page.getByTestId('debug-chalk-mark')).toHaveCount(2);
+  // Free-draw chalk: look down, hold C and move the mouse; release; draw a second stroke.
+  await look(page, 0, 500);
+  await drawWhileMoving(page, [[60, 0], [0, 40], [-60, 0]]);
+  await look(page, 0, 120);
+  await drawWhileMoving(page, [[0, -40]]);
+  await expect(page.getByTestId('debug-chalk-stroke')).toHaveCount(2);
+  const left = Number((await page.getByTestId('chalk-left').textContent())!.replace('% chalk', ''));
+  expect(left).toBeLessThan(100);
+  expect(left).toBeGreaterThan(80);
   // A forced shift is heard: warnings at both gates, then grinding.
   const before = Number(await html(page, 'soundsPlayed'));
   await page.keyboard.press('KeyG'); await page.clock.runFor(4000);
@@ -53,9 +67,9 @@ test('chalk marks, rule switches in the address, and positional sound on a shift
   await expect(page).toHaveURL(/[?&]off=chalk(&|$)/);
   await page.getByTestId('mute').check();
   await startRunning(page, 'Resume exploring');
-  await page.keyboard.press('KeyC'); await page.clock.runFor(300);
+  await drawWhileMoving(page, [[50, 0]]);
   await expect(page.getByTestId('chalk-left')).toHaveText('no chalk');
-  await expect(page.getByTestId('debug-chalk-mark')).toHaveCount(2);
+  await expect(page.getByTestId('debug-chalk-stroke')).toHaveCount(2);
   // A reload keeps the switch: the run starts with chalk off. (The paused test clock survives
   // navigation, so resume it first or the page never draws a frame.)
   await page.clock.resume();

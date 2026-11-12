@@ -11,9 +11,11 @@ import type { GeneratedMaze, Ring } from '../simulation/mazeGenerator';
 import { findMazeRoute } from '../simulation/mazeGraph';
 import { FIXED_DT } from '../loop';
 import { CLOSING_SECONDS, OPENING_SECONDS } from '../simulation/shift';
-import { AUTO_SHIFT_SECONDS, CHALK_CHARGES, RELIC_REACH, ticks } from './tuning';
-import { ALL_RULES_ON, BELL_TICKS, HEADING_NAMES, SOUND_LIMIT, autoShiftTicks, bellsDue, headingIndexForYaw } from './pressure';
-import type { ChalkMark, RuleKey, RuleToggles, SoundEvent, SoundKind } from './pressure';
+import { AUTO_SHIFT_SECONDS, CHALK_INK_METRES, RELIC_REACH, ticks } from './tuning';
+import { ALL_RULES_ON, BELL_TICKS, SOUND_LIMIT, autoShiftTicks, bellsDue } from './pressure';
+import type { RuleKey, RuleToggles, SoundEvent, SoundKind } from './pressure';
+import { aimRay, drawChalkStep, raycastChalk } from './chalk';
+import type { ChalkStroke } from './chalk';
 
 export { AUTO_SHIFT_SECONDS, RELIC_REACH };
 // Base interval in steps (no unrest, daytime). The live interval comes from autoShiftTicks().
@@ -67,16 +69,17 @@ export type GeneratedRun = {
   // M7 expedition: status, whether the relic is carried, run clock (ticks while out and alive),
   // and idle ticks towards the next automatic shift.
   status: RunStatus; carrying: boolean; runTicks: number; autoTicks: number;
-  // M7b: rule toggles, chalk marks and charges left, bells already rung, and the last sounds
-  // (bounded; the audio module plays ids it has not played yet).
-  rules: RuleToggles; chalk: ChalkMark[]; chalkLeft: number; bells: number; sounds: SoundEvent[]; nextSoundId: number;
+  // M7b: rule toggles, chalk strokes, metres of chalk left and the stroke being drawn, bells
+  // already rung, and the last sounds (bounded; the audio module plays ids it has not played yet).
+  rules: RuleToggles; chalk: ChalkStroke[]; chalkLeft: number; activeStroke: number | null;
+  bells: number; sounds: SoundEvent[]; nextSoundId: number;
 };
 export function createGeneratedRun(world: GeneratedWorld, rules: RuleToggles = ALL_RULES_ON): GeneratedRun {
   return { player: { x: 0, z: 0, yaw: 0 }, visited: [], leftSanctuary: false, returned: false, cell: null, ring: 'sanctuary',
     shift: createGeneratedShift(world.maze), crushedBy: null, pushedBy: null,
     tick: 0, shiftTicks: 0, frozen: false, teleports: 0, events: [],
     status: 'ready', carrying: false, runTicks: 0, autoTicks: 0,
-    rules: { ...rules }, chalk: [], chalkLeft: CHALK_CHARGES, bells: 0, sounds: [], nextSoundId: 1 };
+    rules: { ...rules }, chalk: [], chalkLeft: CHALK_INK_METRES, activeStroke: null, bells: 0, sounds: [], nextSoundId: 1 };
 }
 
 // T3: queue a positioned sound if sound is enabled. Returns the updated sound fields.
@@ -90,12 +93,19 @@ const gateCentre = (world: GeneratedWorld, gate: string) => {
   return { x: (rect.minX + rect.maxX) / 2, z: (rect.minZ + rect.maxZ) / 2 };
 };
 
-// T4: place a chalk arrow where the player stands, pointing where they face.
-export function placeChalk(run: GeneratedRun): GeneratedRun {
-  if (!run.rules.chalk || run.chalkLeft <= 0 || run.crushedBy || isRunOver(run.status)) return run;
-  const mark: ChalkMark = { id: CHALK_CHARGES - run.chalkLeft + 1, x: run.player.x, z: run.player.z, headingIndex: headingIndexForYaw(run.player.yaw) };
-  return { ...run, chalk: [...run.chalk, mark], chalkLeft: run.chalkLeft - 1,
-    events: addRunEvent(run, 'chalk', `mark ${mark.id} points ${HEADING_NAMES[mark.headingIndex]}${run.cell ? ` in ${run.cell}` : ''}`) };
+// T4 free-draw chalk, one step: while `held`, draw where the player (yaw from run.player,
+// pitch given) is looking, on stone or gates within reach. Releasing ends the stroke.
+export function drawChalk(world: GeneratedWorld, run: GeneratedRun, pitch: number, held: boolean): GeneratedRun {
+  if (!held || !run.rules.chalk || run.crushedBy || isRunOver(run.status)) {
+    return run.activeStroke === null ? run : { ...run, activeStroke: null };
+  }
+  const { origin, direction } = aimRay(run.player, pitch);
+  const hit = raycastChalk(origin, direction, world.solids, layoutGateColliders(world.maze, run.shift.openness));
+  const { state, started } = drawChalkStep(run, hit, world.maze, run.shift.openness);
+  const next = { ...run, ...state };
+  if (!started) return next;
+  const where = started.surface === 'static' ? (started.normal[1] === 1 ? 'floor' : 'stone') : `gate ${started.surface.toUpperCase()}`;
+  return { ...next, events: addRunEvent(run, 'chalk', `stroke ${started.id} on ${where}${run.cell ? ` in ${run.cell}` : ''}`) };
 }
 // Debug: switch one rule. Applies from the next step; logged so reports explain odd runs.
 export function setRule(run: GeneratedRun, key: RuleKey, on: boolean): GeneratedRun {

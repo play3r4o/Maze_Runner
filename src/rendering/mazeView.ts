@@ -1,24 +1,46 @@
-import { BoxGeometry, CanvasTexture, Group, InstancedMesh, Matrix4, Mesh, MeshBasicMaterial,
-  MeshStandardMaterial, OctahedronGeometry, PlaneGeometry, SRGBColorSpace } from 'three';
+import { BoxGeometry, BufferGeometry, CanvasTexture, DoubleSide, Float32BufferAttribute, Group, InstancedMesh, Matrix4, Mesh,
+  MeshBasicMaterial, MeshStandardMaterial, OctahedronGeometry, PlaneGeometry, SRGBColorSpace } from 'three';
 import type { Scene } from 'three';
 import { HAND_BUILT_MAZE, MAZE_WALLS, cellPosition, findCell, gateEdges, gateRect, landmarkRect, plazaRect } from '../simulation/maze';
 import type { MazeLayout, MazeOpenness } from '../simulation/maze';
 import type { WallRect } from '../simulation/player';
 import type { ShiftPhase } from '../simulation/shift';
-import type { ChalkMark } from '../game/pressure';
+import { gateOffset } from '../game/chalk';
+import type { ChalkStroke, Vec3 } from '../game/chalk';
 
-// A white chalk arrow pointing to the texture's top (north once laid flat).
-function chalkTexture() {
-  const canvas = document.createElement('canvas');
-  canvas.width = canvas.height = 64;
-  const draw = canvas.getContext('2d');
-  if (draw) {
-    draw.strokeStyle = '#f4f1e6'; draw.lineWidth = 7; draw.lineCap = 'round'; draw.lineJoin = 'round';
-    draw.beginPath(); draw.moveTo(32, 56); draw.lineTo(32, 10); draw.moveTo(14, 28); draw.lineTo(32, 10); draw.lineTo(50, 28); draw.stroke();
+// Flat chalk ribbons for strokes, lying on their surface. One mesh per surface ('static' or a
+// gate ID); gate meshes are shifted each frame by the slab's offset so drawings slide with it.
+const CHALK_HALF_WIDTH = 0.025, CHALK_LIFT = 0.006;
+function chalkGeometry(strokes: readonly ChalkStroke[]) {
+  const positions: number[] = [];
+  const quad = (a: number[], b: number[], c: number[], d: number[]) => positions.push(...a, ...b, ...c, ...a, ...c, ...d);
+  for (const stroke of strokes) {
+    const n = stroke.normal;
+    const lift = (p: Vec3, side: number[], k: number) => [p[0] + n[0] * CHALK_LIFT + side[0] * k, p[1] + n[1] * CHALK_LIFT + side[1] * k, p[2] + n[2] * CHALK_LIFT + side[2] * k];
+    if (stroke.points.length === 1) {
+      // A dot: a small square in the surface plane.
+      const u = Math.abs(n[1]) > 0.5 ? [1, 0, 0] : [0, 1, 0];
+      const v = [n[1] * u[2] - n[2] * u[1], n[2] * u[0] - n[0] * u[2], n[0] * u[1] - n[1] * u[0]];
+      const p = stroke.points[0], w = CHALK_HALF_WIDTH;
+      quad([...lift(p, u, -w)].map((x, i) => x - v[i] * w), [...lift(p, u, w)].map((x, i) => x - v[i] * w),
+        [...lift(p, u, w)].map((x, i) => x + v[i] * w), [...lift(p, u, -w)].map((x, i) => x + v[i] * w));
+      continue;
+    }
+    for (let i = 0; i + 1 < stroke.points.length; i++) {
+      const a = stroke.points[i], b = stroke.points[i + 1];
+      const d = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+      const length = Math.hypot(d[0], d[1], d[2]);
+      if (length < 1e-6) continue;
+      // Side vector in the surface plane, perpendicular to the segment; extend ends slightly to close joins.
+      const side = [(d[1] * n[2] - d[2] * n[1]) / length, (d[2] * n[0] - d[0] * n[2]) / length, (d[0] * n[1] - d[1] * n[0]) / length];
+      const e = CHALK_HALF_WIDTH / length;
+      const a2: Vec3 = [a[0] - d[0] * e, a[1] - d[1] * e, a[2] - d[2] * e], b2: Vec3 = [b[0] + d[0] * e, b[1] + d[1] * e, b[2] + d[2] * e];
+      quad(lift(a2, side, -CHALK_HALF_WIDTH), lift(b2, side, -CHALK_HALF_WIDTH), lift(b2, side, CHALK_HALF_WIDTH), lift(a2, side, CHALK_HALF_WIDTH));
+    }
   }
-  const texture = new CanvasTexture(canvas);
-  texture.colorSpace = SRGBColorSpace;
-  return texture;
+  const geometry = new BufferGeometry();
+  geometry.setAttribute('position', new Float32BufferAttribute(positions, 3));
+  return geometry;
 }
 
 // What the view needs to draw gates: poses plus which gate is warning/closing.
@@ -70,10 +92,9 @@ export function createMazeView(scene: Scene, layout: MazeLayout = HAND_BUILT_MAZ
     geometries.push(mesh.geometry); materials.push(material); group.add(mesh);
     return mesh;
   }
-  const chalkMap = chalkTexture();
-  const chalkMaterial = new MeshBasicMaterial({ map: chalkMap, transparent: true, depthWrite: false });
-  const chalkGeometry = new PlaneGeometry(1.1, 1.1);
-  const chalkMeshes: Mesh[] = [];
+  const chalkMaterial = new MeshBasicMaterial({ color: '#eeece2', side: DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+  const chalkMeshes = new Map<string, Mesh>();
+  let chalkSignature = '';
   let crystal: Mesh | null = null;
   let relicBeam: Mesh | null = null;
   let homeBeam: Mesh | null = null;
@@ -127,20 +148,26 @@ export function createMazeView(scene: Scene, layout: MazeLayout = HAND_BUILT_MAZ
       if (homeBeam) homeBeam.visible = beamsOn;
       if (crystal) { crystal.rotation.y = seconds * 1.2; crystal.position.y = 1.25 + Math.sin(seconds * 2) * 0.08; }
     },
-    // T4: chalk arrows on the floor. Hidden while a gate slab covers the mark's centre.
-    setChalk(marks: readonly ChalkMark[], slabs: readonly WallRect[]) {
-      while (chalkMeshes.length < marks.length) {
-        const mesh = new Mesh(chalkGeometry, chalkMaterial);
-        mesh.rotation.order = 'YXZ'; mesh.rotation.x = -Math.PI / 2;
-        group.add(mesh); chalkMeshes.push(mesh);
+    // T4 free-draw chalk. Rebuilds geometry only when strokes change; gate drawings follow their slab.
+    setChalk(strokes: readonly ChalkStroke[], openness: MazeOpenness) {
+      const signature = strokes.map((stroke) => `${stroke.id}:${stroke.points.length}`).join(',');
+      if (signature !== chalkSignature) {
+        chalkSignature = signature;
+        for (const mesh of chalkMeshes.values()) { group.remove(mesh); mesh.geometry.dispose(); }
+        chalkMeshes.clear();
+        const bySurface = new Map<string, ChalkStroke[]>();
+        for (const stroke of strokes) bySurface.set(stroke.surface, [...(bySurface.get(stroke.surface) ?? []), stroke]);
+        for (const [surface, list] of bySurface) {
+          const mesh = new Mesh(chalkGeometry(list), chalkMaterial);
+          mesh.renderOrder = 1;
+          group.add(mesh); chalkMeshes.set(surface, mesh);
+        }
       }
-      chalkMeshes.forEach((mesh, index) => {
-        const mark = marks[index];
-        mesh.visible = Boolean(mark) && !slabs.some((rect) => mark.x > rect.minX && mark.x < rect.maxX && mark.z > rect.minZ && mark.z < rect.maxZ);
-        if (!mark) return;
-        mesh.position.set(mark.x, 0.05, mark.z);
-        mesh.rotation.y = -mark.headingIndex * Math.PI / 4;
-      });
+      for (const [surface, mesh] of chalkMeshes) {
+        if (surface === 'static') continue;
+        const offset = gateOffset(layout, surface, openness[surface] ?? 0);
+        mesh.position.set(offset.x, 0, offset.z);
+      }
     },
     update(state?: GateView) {
       if (!state) return;
@@ -160,7 +187,8 @@ export function createMazeView(scene: Scene, layout: MazeLayout = HAND_BUILT_MAZ
       for (const geometry of geometries) geometry.dispose();
       for (const material of materials) material.dispose();
       for (const texture of textures) texture.dispose();
-      chalkGeometry.dispose(); chalkMaterial.dispose(); chalkMap.dispose();
+      for (const mesh of chalkMeshes.values()) mesh.geometry.dispose();
+      chalkMaterial.dispose();
     },
   };
 }

@@ -29,7 +29,7 @@
 | M5 | Human accepted on 2026-11-11 |
 | M6 | Human accepted on 2026-11-11 |
 | M7 | Human accepted 2026-11-12 (okay fun, too easy) |
-| M7b (added 2026-11-11) | Deployed (run 43182160127); awaiting the comparison |
+| M7b (added 2026-11-11) | Free-draw chalk revision in progress; awaiting the comparison |
 | M9 (scheduled after M7b) | Not started |
 | M8 | Not started |
 | M10–M12 | Not started |
@@ -267,3 +267,10 @@ Stop for the rules-on versus rules-off comparison. M8 and M9 remain unapproved. 
 - Visual check: chalk arrows on the plaza point the drawn directions after the height fix. No page errors.
 - Commit `65876ca` pushed. GitHub Actions run 43182160127 passed the full suite (unit and all 24 browser scenarios, including the long M1/M2 tests) and deployed in 18m 27s, on the first attempt. Test at `https://play3r4o.github.io/Maze_Runner/?v=65876ca`. This note is committed locally for the next checkpoint.
 - Human comparison pending: see the [M7b checklist](milestones/M7b.md#human-acceptance-checklist).
+
+### M7b revision: free-draw chalk — 2026-11-12
+
+- Developer request: “for the chalk, instead I want it to be a free draw tool… write and draw things… still limited to few uses… draw on anything, not just the floor.” This replaces the T4 arrow marks inside the approved M7b; the plan's T4 entry now points to the new rule.
+- New `game/chalk.ts`: eye ray from yaw and pitch against the floor plane, walls, landmark pillars and gate slabs (same boxes as collision, pure code); strokes continue on the same surface and face within 0.5 m, otherwise start anew; 3 cm point spacing, millimetre storage, 30 m of ink, 300-stroke cap, 2.5 m reach. Gate drawings are stored in the gate's closed pose and shown at its current offset. Input: C is now held. Rendering: flat 5 cm ribbons per surface, gate meshes moved by the slab offset each frame. HUD shows chalk as a percentage. Debug map draws strokes. Reports are format 4 and check that ink left plus drawn length equals 30 m. Negative zero from rounding is normalised so reports survive JSON.
+- Unit: 1184 tests pass (chalk tests rewritten: aiming at floor, wall and gate, drawing and ink, release, surface change, ink exhaustion, stroke cap, disabled states, gate drawing sliding 4.5 m, other drawings unchanged by shifts, report round trip and tampered ink).
+- Browser: both M7b scenarios pass, now drawing two strokes by holding C and moving the mouse. Visual check: “HI” written on the plaza's north wall reads clearly. No page errors.

@@ -12,7 +12,7 @@ import { debugViewOfMazeRun } from './simulation/mazeDiagnostics';
 import type { DebugView } from './simulation/mazeDiagnostics';
 import type { SceneMode } from './rendering/scene';
 import { MAX_SEED, generateMaze, layoutFingerprint, parseSeed, serializeMaze } from './simulation/mazeGenerator';
-import { abandonGeneratedRun, placeChalk, setRule, buildGeneratedWorld, createGeneratedRun, interactGeneratedRun, isRunOver, relicInReach,
+import { abandonGeneratedRun, drawChalk, setRule, buildGeneratedWorld, createGeneratedRun, interactGeneratedRun, isRunOver, relicInReach,
   requestGeneratedRunShift, setGeneratedRunFrozen, stepGeneratedRun, teleportGeneratedRun } from './game/generatedRun';
 import { createRunReport, parseRunReport, reproduceRun } from './game/runReport';
 import { ALL_RULES_ON, RULE_KEYS, autoShiftTicks, isNight, nextBellTick, nightFactor, unrestOf } from './game/pressure';
@@ -21,7 +21,8 @@ import { dailySeed } from './game/tuning';
 import type { RunReport } from './game/runReport';
 import type { GeneratedRun } from './game/generatedRun';
 import type { ShiftLogEntry } from './simulation/generatedShift';
-import { MAZE_GATE_IDS, layoutGateColliders } from './simulation/maze';
+import { MAZE_GATE_IDS } from './simulation/maze';
+import { shownPoint } from './game/chalk';
 
 const canvas = document.querySelector<HTMLCanvasElement>('#scene')!;
 const params = new URLSearchParams(location.search);
@@ -108,7 +109,9 @@ function startRoom() {
     revision: generatedRun.shift.revision, validation: generatedRun.shift.validation?.reason ?? null,
     log: generatedRun.shift.log.map(logLine),
     tools: { tick: generatedRun.tick, frozen: generatedRun.frozen, teleports: generatedRun.teleports, errors: pageErrors.length,
-      rules: generatedRun.rules, chalk: generatedRun.chalk,
+      rules: generatedRun.rules,
+      // Chalk strokes for the map, top-down, with gate drawings at their slab's current offset.
+      chalk: generatedRun.chalk.map((stroke) => stroke.points.map((point) => { const [x, , z] = shownPoint(world.maze, generatedRun!.shift.openness, stroke, point); return { x, z }; })),
       run: (() => {
         const r = generatedRun;
         const interval = autoShiftTicks(r.rules, r.carrying, r.runTicks);
@@ -127,7 +130,7 @@ function startRoom() {
       let next = generatedRun!;
       const wasOver = isRunOver(next.status);
       if (input.consumeInteractRequest()) next = interactGeneratedRun(world, next);
-      if (input.consumeChalkRequest()) next = placeChalk({ ...next, player: { ...next.player, yaw: state.yaw } });
+      next = drawChalk(world, { ...next, player: { ...next.player, yaw: state.yaw } }, state.pitch, input.isChalkHeld());
       if (shiftRequested) {
         next = requestGeneratedRunShift(world, next);
         const entry = next.shift.log.at(-1);
@@ -302,7 +305,7 @@ function startRoom() {
       const live = generatedRun;
       scene.render(player, state.yaw, state.pitch, run.junction, gates, live && world ? {
         carried: live.carrying, beams: live.rules.beams, night: nightFactor(live.rules, live.runTicks), chalk: live.chalk,
-        slabs: layoutGateColliders(world.maze, live.shift.openness), sounds: live.sounds } : undefined);
+        openness: live.shift.openness, sounds: live.sounds } : undefined);
       // Read-only audio diagnostics for tests and bug reports.
       if (scene.audio) {
         document.documentElement.dataset.audioState = scene.audio.state;

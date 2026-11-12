@@ -25,7 +25,8 @@ import type { MazeOpenness } from '../simulation/maze';
 // Per-frame expedition state the view presents (generated maze only).
 export type ExpeditionView = { carried: boolean; beams: boolean; night: number; chalk: readonly ChalkStroke[];
   openness: MazeOpenness; sounds: readonly SoundEvent[]; traps: readonly TrapState[]; time: number;
-  monsters: readonly Monster[]; bolts: readonly Bolt[]; monstersOn: boolean; containers: readonly Container[]; relicHome: boolean; bow: { shown: boolean; ready: boolean; recoil: number } };
+  monsters: readonly Monster[]; bolts: readonly Bolt[]; monstersOn: boolean; containers: readonly Container[]; relicHome: boolean;
+  thread: readonly (readonly { x: number; z: number }[])[]; trace: { x: number; z: number; chalk: readonly ChalkStroke[] } | null; bow: { shown: boolean; ready: boolean; recoil: number } };
 
 export type SceneMode = 'room' | 'junction' | 'maze' | 'generated';
 export function createScene(canvas: HTMLCanvasElement, mode: SceneMode, generated?: GeneratedWorld) {
@@ -140,7 +141,8 @@ export function createScene(canvas: HTMLCanvasElement, mode: SceneMode, generate
       mazeView?.update(maze);
       if (expedition) {
         mazeView?.setRelic(!expedition.relicHome, performance.now() / 1000, expedition.beams);
-        containerView?.update(expedition.containers);
+        containerView?.update(expedition.containers, expedition.thread, expedition.trace);
+        mazeView?.setFadedChalk(expedition.trace?.chalk ?? [], expedition.openness);
         mazeView?.setChalk(expedition.chalk, expedition.openness);
         audio?.update(expedition.sounds);
         trapView?.update(expedition.traps, expedition.time);

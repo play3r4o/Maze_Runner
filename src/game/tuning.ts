@@ -109,3 +109,17 @@ export const RARITY_WEIGHTS = {
 } as const;
 export const LOOT_REACH = 2;
 export const SACK_JOIN_DISTANCE = 1.5;
+
+// M8 stage 2.
+// T3: walking makes noise every half second: 6 m, plus 2 m per noisy item carried.
+export const FOOTSTEP_SECONDS = 0.5;
+export const FOOTSTEP_NOISE_METRES = 6;
+export const NOISY_ITEM_NOISE_METRES = 2;
+// T5: thread from the starter-kit spool, one point per metre walked.
+export const THREAD_METRES = 150;
+export const THREAD_POINT_SPACING = 1;
+// T6: sacrificing an item holds a closing gate.
+export const JAM_SECONDS = 6;
+export const JAM_RANGE = 3;
+// T8: death traces kept per seed, most recent seeds first.
+export const TRACE_SEEDS_KEPT = 20;

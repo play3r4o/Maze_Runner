@@ -32,7 +32,7 @@ export function rollLoot(seed: number, key: string, ring: LootRing, kind: 'chest
     let roll = rng.next() * (weights as readonly number[]).reduce((sum, w) => sum + w, 0);
     let rarity = 0;
     while (roll >= weights[rarity]) { roll -= weights[rarity]; rarity++; }
-    const options = ITEMS.filter((def) => def.rarity === RARITIES[rarity] && def.id !== RELIC_ITEM);
+    const options = ITEMS.filter((def) => def.rarity === RARITIES[rarity] && def.id !== RELIC_ITEM && def.category !== 'tool');
     const def = rng.pick(options);
     const spot = firstFit(items, size, def.id, `${uidPrefix}.${n + 1}`);
     if (spot) items.push(spot);

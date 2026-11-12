@@ -79,7 +79,7 @@ test('leave (automatic countdown starts), loot the relic from its reliquary, com
   await clickWithBrowserFrames(page, page.getByRole('button', { name: 'Resume exploring' }));
   await page.clock.runFor(300);
   await expect(page.locator('#panel-title')).toHaveText('The Heart is yours.');
-  await expect(page.locator('.panel-description')).toContainText('carrying 1 item worth 400 gold');
+  await expect(page.locator('.panel-description')).toContainText('carrying 2 items worth 402 gold');
   await expect(page.getByTestId('hud')).toHaveAttribute('data-result', 'extracted');
   await expect(page.locator('.panel-description')).toContainText('through 0 shifts');
   await expect(page.locator('.panel-description')).toContainText('Debug teleports used: 2');

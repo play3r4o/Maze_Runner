@@ -28,12 +28,13 @@ const out = (patch: Partial<GeneratedRun> = {}): GeneratedRun =>
 
 describe('T1 unrest', () => {
   test('carrying the relic shortens the automatic interval from 45 s to 27 s; switched off it stays 45 s', () => {
-    expect(unrestOf(ALL_RULES_ON, false)).toBe(0);
-    expect(unrestOf(ALL_RULES_ON, true)).toBe(3);
-    expect(unrestOf({ ...ALL_RULES_ON, unrest: false }, true)).toBe(0);
-    expect(autoShiftTicks(ALL_RULES_ON, false, 0)).toBe(ticks(45));
-    expect(autoShiftTicks(ALL_RULES_ON, true, 0)).toBe(ticks(27));
-    expect(autoShiftTicks(ALL_RULES_OFF, true, 0)).toBe(ticks(45));
+    const relic = [{ item: 'heartOfMaze' }];
+    expect(unrestOf(ALL_RULES_ON, [])).toBe(0);
+    expect(unrestOf(ALL_RULES_ON, relic)).toBe(3);
+    expect(unrestOf({ ...ALL_RULES_ON, unrest: false }, relic)).toBe(0);
+    expect(autoShiftTicks(ALL_RULES_ON, [], 0)).toBe(ticks(45));
+    expect(autoShiftTicks(ALL_RULES_ON, relic, 0)).toBe(ticks(27));
+    expect(autoShiftTicks(ALL_RULES_OFF, relic, 0)).toBe(ticks(45));
   });
   test('taking the relic applies to the countdown under way, but never to a warning already running', () => {
     // 30 s into the countdown: picking up the relic (27 s interval) triggers the shift on the next idle step.
@@ -66,7 +67,7 @@ describe('T2 dusk bell', () => {
     expect(run.bells).toBe(3);
     expect(run.events.at(-1)!.detail).toBe('3 strikes · night falls');
     expect(isNight(run.rules, run.runTicks)).toBe(true);
-    expect(autoShiftTicks(run.rules, true, run.runTicks)).toBe(ticks(10));
+    expect(autoShiftTicks(run.rules, [{ item: 'heartOfMaze' }], run.runTicks)).toBe(ticks(10));
     expect(nightFactor(run.rules, ticks(240))).toBe(0);
     expect(nightFactor(run.rules, ticks(245))).toBeCloseTo(0.5, 6);
     expect(nightFactor(run.rules, ticks(300))).toBe(1);

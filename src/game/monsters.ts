@@ -29,6 +29,8 @@ export type Monster = {
   // Warden only: seconds until it returns (0 while alive). Cause of the last death.
   respawn: number; cause: string | null;
 };
+// A noise monsters may hear; without a radius it carries the default hearing distance.
+export type Noise = Point2 & { radius?: number };
 export type Bolt = { id: number; x: number; z: number; dx: number; dz: number; travelled: number };
 export const isUnkillable = (kind: MonsterKind) => kind === 'warden';
 // What kills a warden.
@@ -199,7 +201,7 @@ export type MonsterContext = {
   maze: GeneratedMaze; solids: readonly WallRect[]; plaza: Rect;
   before: MazeOpenness; openness: MazeOpenness;
   player: { x: number; z: number; alive: boolean; safe: boolean };
-  noises: readonly Point2[]; night: boolean; dt: number;
+  noises: readonly Noise[]; night: boolean; dt: number;
 };
 export type MonsterSound = { kind: 'growl' | 'roar' | 'wardenStep'; x: number; z: number; monster: MonsterKind };
 export type MonsterOutcome = {
@@ -267,7 +269,7 @@ export function stepMonsters(monsters: readonly Monster[], rngState: number, ctx
     } else if (m.mode === 'chase') {
       setGoal(m.lastSeen ? nearestCell(maze, m.lastSeen.x, m.lastSeen.z) : null, 'search');
     } else {
-      const heard = ctx.noises.find((noise) => Math.hypot(noise.x - m.x, noise.z - m.z) <= MONSTER_HEARING);
+      const heard = ctx.noises.find((noise) => Math.hypot(noise.x - m.x, noise.z - m.z) <= (noise.radius ?? MONSTER_HEARING));
       if (heard) setGoal(nearestCell(maze, heard.x, heard.z), 'investigate');
     }
 

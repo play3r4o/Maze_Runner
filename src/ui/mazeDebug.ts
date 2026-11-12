@@ -144,6 +144,9 @@ export function createMazeDebug(root: HTMLElement,
   // M8 containers: chests (brown), remains (grey), reliquary (gold), sacks (tan); opened ones dimmed.
   const containerLayer = svg('g', { 'data-testid': 'debug-containers' });
   map.append(containerLayer);
+  // M8 stage 2: thread strands (red) and the cairn of the last death on this seed.
+  const threadLayer = svg('g', { 'data-testid': 'debug-thread' });
+  map.append(threadLayer);
   const CONTAINER_COLORS: Record<string, string> = { chest: '#a0703a', remains: '#7a7a72', reliquary: '#f0b44a', sack: '#d2b48c' };
   // M10 monsters: dots by kind (the warden larger), ringed red while chasing.
   const monsterLayer = svg('g', { 'data-testid': 'debug-monsters' });
@@ -241,6 +244,14 @@ export function createMazeDebug(root: HTMLElement,
           ? svg('circle', { cx: points[0].x, cy: points[0].z, r: 0.3, fill: '#f4f1e6', 'data-testid': 'debug-chalk-stroke' })
           : svg('polyline', { points: points.map((point) => `${point.x.toFixed(2)},${point.z.toFixed(2)}`).join(' '), fill: 'none',
             stroke: '#f4f1e6', 'stroke-width': 0.4, 'stroke-linecap': 'round', 'data-testid': 'debug-chalk-stroke' })));
+        const threadSig = JSON.stringify([view.tools.thread?.map((strand) => strand.length), view.tools.cairn]);
+        if (threadLayer.dataset.sig !== threadSig) {
+          threadLayer.dataset.sig = threadSig;
+          threadLayer.replaceChildren(
+            ...(view.tools.thread ?? []).filter((strand) => strand.length > 1).map((strand) => svg('polyline', {
+              points: strand.map((p) => `${p.x},${p.z}`).join(' '), fill: 'none', stroke: '#d0453a', 'stroke-width': 0.35, 'data-testid': 'debug-thread-strand' })),
+            ...(view.tools.cairn ? [svg('circle', { cx: view.tools.cairn.x, cy: view.tools.cairn.z, r: 0.9, fill: '#bdb6a6', stroke: '#000', 'stroke-width': 0.2, 'data-testid': 'debug-cairn' })] : []));
+        }
         const containers = view.tools.containers ?? [];
         const containerSig = JSON.stringify(containers);
         if (containerLayer.dataset.sig !== containerSig) {

@@ -1,4 +1,4 @@
-import { BoxGeometry, Group, Mesh, MeshStandardMaterial, SphereGeometry } from 'three';
+import { BoxGeometry, BufferGeometry as LineGeometry, Group, Line, LineBasicMaterial, Mesh, MeshStandardMaterial, SphereGeometry, Vector3 } from 'three';
 import type { BufferGeometry, Material, Scene } from 'three';
 import type { Container } from '../game/loot';
 
@@ -19,6 +19,15 @@ export function createContainerView(scene: Scene) {
   const strap = geo(new BoxGeometry(0.06, 0.52, 0.62));
   const sack = geo(new SphereGeometry(0.3, 10, 8));
   const views = new Map<string, { group: Group; lid?: Group }>();
+  // T5 thread: one line per strand, just above the floor. T8: a cairn of three stones.
+  const threadMaterial = mat(new LineBasicMaterial({ color: '#c8382c' }));
+  const threadLines: Line[] = [];
+  let threadSignature = '';
+  const stone = mat(new MeshStandardMaterial({ color: '#a9a294', roughness: 1 }));
+  const cairn = new Group();
+  [[0.32, 0.22], [0.25, 0.55], [0.17, 0.82]].forEach(([r, y], i) => { const m = new Mesh(geo(new SphereGeometry(r, 9, 7)), stone); m.scale.y = 0.65; m.position.set(i * 0.04, y, 0); cairn.add(m); });
+  cairn.visible = false;
+  group.add(cairn);
 
   function build(container: Container) {
     const holder = new Group();
@@ -40,7 +49,20 @@ export function createContainerView(scene: Scene) {
     return { group: holder };
   }
   return {
-    update(containers: readonly Container[]) {
+    update(containers: readonly Container[], thread: readonly (readonly { x: number; z: number }[])[] = [], trace: { x: number; z: number } | null = null) {
+      cairn.visible = Boolean(trace);
+      if (trace) cairn.position.set(trace.x, 0, trace.z);
+      const signature = thread.map((strand) => strand.length).join(',');
+      if (signature !== threadSignature) {
+        threadSignature = signature;
+        for (const line of threadLines) { group.remove(line); line.geometry.dispose(); }
+        threadLines.length = 0;
+        for (const strand of thread) {
+          if (strand.length < 2) continue;
+          const line = new Line(new LineGeometry().setFromPoints(strand.map((p) => new Vector3(p.x, 0.03, p.z))), threadMaterial);
+          group.add(line); threadLines.push(line);
+        }
+      }
       const seen = new Set<string>();
       for (const container of containers) {
         if (container.kind !== 'chest' && container.kind !== 'sack') continue;
@@ -51,6 +73,6 @@ export function createContainerView(scene: Scene) {
       }
       for (const [id, view] of views) if (!seen.has(id)) { group.remove(view.group); views.delete(id); }
     },
-    dispose() { scene.remove(group); for (const g of geometries) g.dispose(); for (const m of materials) m.dispose(); },
+    dispose() { for (const line of threadLines) line.geometry.dispose(); scene.remove(group); for (const g of geometries) g.dispose(); for (const m of materials) m.dispose(); },
   };
 }

@@ -1,6 +1,6 @@
 // M8 item catalogue. Plain data, so later milestones (equipment, traders) can extend it:
 // add fields such as an equipment slot without changing grids or containers.
-export type ItemCategory = 'valuable' | 'material' | 'provision' | 'relic';
+export type ItemCategory = 'valuable' | 'material' | 'provision' | 'relic' | 'tool';
 export type Rarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
 export type ItemDef = {
   id: string; name: string;
@@ -18,7 +18,7 @@ export const RARITY_COLORS: Record<Rarity, string> = {
 };
 export const RARITIES: readonly Rarity[] = ['common', 'uncommon', 'rare', 'epic', 'legendary'];
 // Unrest by category (plan T1): provisions 0, materials 1, relics 3, valuables 0.
-const UNREST: Record<ItemCategory, number> = { provision: 0, material: 1, relic: 3, valuable: 0 };
+const UNREST: Record<ItemCategory, number> = { provision: 0, material: 1, relic: 3, valuable: 0, tool: 0 };
 
 const item = (id: string, name: string, size: [number, number], category: ItemCategory, rarity: Rarity, value: number,
   description: string, noisy = false): ItemDef =>
@@ -41,6 +41,8 @@ export const ITEMS: readonly ItemDef[] = [
   item('quicksilverVial', 'Quicksilver Vial', [1, 1], 'material', 'rare', 55, 'It moves on its own inside the glass.'),
   item('stoneIdol', 'Stone Idol', [2, 2], 'relic', 'epic', 140, 'A squat figure with too many eyes. The walls seem to notice it.'),
   item('gildedMask', 'Gilded Mask', [2, 3], 'relic', 'epic', 170, 'A golden face, calm and wrong.'),
+  // Starter kit (T5): a free spool each run if the bag has room. Never found in chests.
+  item('threadSpool', 'Thread Spool', [1, 1], 'tool', 'common', 2, '150 metres of strong thread. Press T to start or stop laying it.'),
   item('heartOfMaze', 'Heart of the Maze', [2, 2], 'relic', 'legendary', 400, 'Warm, and faintly beating. The maze wants it back.'),
 ];
 export const ITEM_BY_ID: ReadonlyMap<string, ItemDef> = new Map(ITEMS.map((def) => [def.id, def]));
@@ -50,3 +52,6 @@ export const itemDef = (id: string): ItemDef => {
   return def;
 };
 export const RELIC_ITEM = 'heartOfMaze';
+export const THREAD_ITEM = 'threadSpool';
+export const noisyCount = (bag: readonly { item: string }[]) => bag.filter((entry) => itemDef(entry.item).noisy).length;
+export const bagUnrest = (bag: readonly { item: string }[]) => bag.reduce((sum, entry) => sum + itemDef(entry.item).unrest, 0);

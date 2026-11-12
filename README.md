@@ -1,6 +1,6 @@
 # Shifting Labyrinth
 
-Working title. A browser game project starting with a small, first-person shifting-maze prototype. **M0–M7b and M10–12 are accepted. M8 (in progress) turns runs into loot runs: a grid bag, chests and remains to loot, extraction with whatever you carry, and a stash that is saved between visits.**
+Working title. A browser game project starting with a small, first-person shifting-maze prototype. **M0–M7b and M10–12 are accepted. M8 (awaiting acceptance) turns runs into loot runs: a grid bag, chests and remains to loot, extraction with whatever you carry, a saved stash, and a maze that reacts to what you carry.**
 
 Read [the brief](project_brief.md), [development plan](docs/development_plan.md), [M7b specification](docs/milestones/M7b.md), [M10–12 specification](docs/milestones/M10-M12.md), [M8 specification](docs/milestones/M8.md), and [current progress](docs/progress.md).
 
@@ -21,7 +21,7 @@ Click **Start exploring** to capture the mouse. **WASD** moves, **mouse** looks,
 
 **M7b pressure.** Carrying the relic makes shifts come every 27 s. A bell from Sanctuary tolls once at 2:30, twice at 3:15 and three times at 4:00 of the run; then night falls and the maze shifts every 10 s. Gates warn and grind with positional sound (volume and mute in the pause menu). Press **C** to take out the chalk, then hold the **left mouse button** and look around to draw or write on floors, walls and gates within reach; C puts it away (30 m of line per run; drawings on a gate slide with it). With no `?seed=`, everyone gets today's maze (UTC date). For comparisons, F2 has switches for each rule and the beams; `?off=unrest,dusk,sound,chalk,beams` starts with them off. See the [M7b specification](docs/milestones/M7b.md).
 
-**M8 loot.** Chests sit in room corners; killed husks and skitters leave remains. Press **E** next to one to open it and drag items into your **bag** (6 × 4 cells; items take 1 to 6 cells; **R** rotates while dragging; right-click sends an item across; drag to the drop zone to leave it on the floor). **Tab** opens the bag. The maze keeps moving while you loot. Step back into Sanctuary to extract and keep what you carry; dying, abandoning or closing the page mid-run loses the bag. In Sanctuary before leaving, Tab shows your **stash** beside the bag. Everything is saved in this browser. The Heart of the Maze (under the blue beam) is the richest prize. See the [M8 specification](docs/milestones/M8.md).
+**M8 loot.** Chests sit in room corners; killed husks and skitters leave remains. Press **E** next to one to open it and drag items into your **bag** (6 × 4 cells; items take 1 to 6 cells; **R** rotates while dragging; right-click sends an item across; drag to the drop zone to leave it on the floor). **Tab** opens the bag. The maze keeps moving while you loot. Step back into Sanctuary to extract and keep what you carry; dying, abandoning or closing the page mid-run loses the bag. In Sanctuary before leaving, Tab shows your **stash** beside the bag. Everything is saved in this browser. The Heart of the Maze (under the blue beam) is the richest prize. Heavy items (materials, relics) make the maze shift faster; coins clink and carry your footsteps further. Each run you get a free thread spool: **T** starts or stops laying a red line on the floor (150 m). When a gate is closing near you, **F** sacrifices an item to hold it for 6 s. Dying leaves a cairn and your faded drawings for your next try at the same seed. See the [M8 specification](docs/milestones/M8.md).
 
 **M10–12 traps.** You have 100 health. Slightly darker square plates in corridors and rooms trigger traps when stepped on: a rolling boulder down a long straight corridor, spears from the walls, spikes from the floor, a pit that opens beneath you, dart volleys, and swinging blades that need no plate. Plates glow amber while a trap fires; step off fast. Boulders and pits kill. `?off=traps` or F2 switches them off.
 
@@ -43,7 +43,7 @@ The topology revision starts at **0** and usually reaches **2** per complete swa
 
 With the view open, press **V** or click **Probe isolation** to propose blocking Sanctuary's connections in a **dry run**. Read the rejection and inspect the proposed edge IDs/unreachable cells. This cannot move walls, change the revision or alter the run. Escape releases the cursor so you can scroll/expand the connection and validation details. Retry resets revision/attempt history while keeping the panel's visibility for that page.
 
-Follow the [M10–12 checklist](docs/milestones/M10-M12.md#human-acceptance-checklist-after-stage-2) before approving the next milestone. Accepted reference scenes remain available: `?scene=room` for M0, `?scene=junction` for M1 and `?scene=maze` for M2/M3. Teleport, automatic shifting, jumping and sprinting remain deferred.
+Follow the [M8 checklist](docs/milestones/M8.md#human-acceptance-checklist-after-stage-2) before approving the next milestone. Accepted reference scenes remain available: `?scene=room` for M0, `?scene=junction` for M1 and `?scene=maze` for M2/M3. Teleport, automatic shifting, jumping and sprinting remain deferred.
 
 ## Check and build
 
@@ -112,4 +112,4 @@ The local npm cache is ignored `.cache/npm` to work inside restricted cloud work
 
 Stop the development server before reinstalling dependencies and restart it afterward. If Vite reports an outdated optimized dependency after an install, restart the server rather than changing application code.
 
-Next is M8 or M9 in the plan's order, **after the M10–12 checklist and explicit approval**. Approved GitHub pushes trigger the Pages workflow; a successful local build alone does not establish a successful hosted deployment.
+Next is M8 or M9 in the plan's order, **after the M8 checklist and explicit approval**. Approved GitHub pushes trigger the Pages workflow; a successful local build alone does not establish a successful hosted deployment.

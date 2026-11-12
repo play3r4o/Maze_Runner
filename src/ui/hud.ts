@@ -72,17 +72,18 @@ export function createHud(root: HTMLElement, scene: SceneMode, generated?: Gener
         <p class="eyebrow">EXPEDITION <span data-testid="hud-seed">seed ${generated.seed}</span></p>
         <p class="run-objective" data-testid="run-objective" role="status">Leave Sanctuary and find the relic under the blue beam.</p>
         <div class="health" aria-label="Health"><span class="health-fill" data-testid="health-fill"></span><output data-testid="health">100</output></div>
-        <p class="shift-layout"><span data-testid="run-time">0:00</span> · <span data-testid="shift-count">0 shifts</span> · <span data-testid="hud-ring">Sanctuary</span> · <span data-testid="chalk-left">100% chalk</span> · <span data-testid="bolts">16 bolts</span> · <span data-testid="bag-summary">bag empty</span></p>
+        <p class="shift-layout"><span data-testid="run-time">0:00</span> · <span data-testid="shift-count">0 shifts</span> · <span data-testid="hud-ring">Sanctuary</span> · <span data-testid="chalk-left">100% chalk</span> · <span data-testid="bolts">16 bolts</span> · <span data-testid="bag-summary">bag empty</span><span data-testid="thread-status"></span></p>
         <p class="shift-phase" data-testid="shift-phase">Maze still</p>
         <p class="shift-notice" data-testid="shift-notice" role="status"></p>
       </aside>
+      <p class="interact-prompt jam-prompt" data-testid="jam-prompt" hidden><kbd>F</kbd> Jam <span data-testid="jam-gate"></span> with your <span data-testid="jam-item"></span></p>
       <p class="interact-prompt" data-testid="interact-prompt" hidden><kbd>E</kbd> Open <span data-testid="interact-target">chest</span></p>
       <p class="chalk-mode" data-testid="chalk-mode" hidden>Chalk out · hold left mouse to draw · <kbd>C</kbd> put away</p>` : ''}
     <footer class="diagnostics">
       <span class="diagnostics-label">${hasNavigation ? 'MAZE' : isJunction ? 'JUNCTION' : 'ROOM'} TEST <span class="separator">/</span> POSITION</span>
       <span>X <output data-testid="position-x">0.00</output></span>
       <span>Z <output data-testid="position-z">${hasGates || isGenerated ? '0.00' : '8.00'}</output></span>
-      <span class="footer-controls">WASD · MOVE ${isGenerated ? '<span class="separator">/</span> E · OPEN <span class="separator">/</span> TAB · BAG <span class="separator">/</span> LMB · SHOOT <span class="separator">/</span> C + LMB · DRAW' : hasGates ? '<span class="separator">/</span> G · SHIFT' : ''} <span class="separator">/</span> ESC · PAUSE</span>
+      <span class="footer-controls">WASD · MOVE ${isGenerated ? '<span class="separator">/</span> E · OPEN <span class="separator">/</span> TAB · BAG <span class="separator">/</span> T · THREAD <span class="separator">/</span> LMB · SHOOT <span class="separator">/</span> C + LMB · DRAW' : hasGates ? '<span class="separator">/</span> G · SHIFT' : ''} <span class="separator">/</span> ESC · PAUSE</span>
     </footer>
   `;
 
@@ -252,6 +253,22 @@ export function createHud(root: HTMLElement, scene: SceneMode, generated?: Gener
         : wardenNotice ?? bellNotice ?? (run.status === 'out' && state.phase === 'idle' && state.completedShifts === 0
           ? 'The maze shifts by itself, after a 2 second warning. Listen for grinding stone.' : state.notice);
       if (generatedNotice!.textContent !== notice) generatedNotice!.textContent = notice;
+    },
+    // M8 stage 2: the gate-jam prompt (T6) and thread left (T5).
+    updateTools(jam: { gate: string; item: string } | null, thread: { left: number; laying: boolean } | null) {
+      const prompt = root.querySelector<HTMLElement>('[data-testid="jam-prompt"]');
+      if (prompt) {
+        if (prompt.hidden === Boolean(jam)) prompt.hidden = !jam;
+        if (jam) {
+          const gate = `gate ${jam.gate.toUpperCase()}`;
+          const g = prompt.querySelector('[data-testid="jam-gate"]')!, i = prompt.querySelector('[data-testid="jam-item"]')!;
+          if (g.textContent !== gate) g.textContent = gate;
+          if (i.textContent !== jam.item) i.textContent = jam.item;
+        }
+      }
+      const status = root.querySelector<HTMLElement>('[data-testid="thread-status"]');
+      const text = thread ? ` · thread ${Math.floor(thread.left)} m${thread.laying ? ' (laying)' : ''}` : '';
+      if (status && status.textContent !== text) { status.textContent = text; status.dataset.laying = String(Boolean(thread?.laying)); }
     },
     // Terminal result for the M7 expedition. Uses the 'dead' state so pausing cannot hide it.
     showResult(run: GeneratedRun) {

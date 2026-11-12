@@ -45,6 +45,7 @@ export function createInventoryUI(host: HTMLElement, handlers: InventoryHandlers
   root.querySelector('[data-testid="inventory-close"]')!.addEventListener('click', () => handlers.close());
 
   let view: InventoryView | null = null;
+  let hovered: string | null = null;
   let signature = '';
   type Drag = { uid: string; from: GridKey; item: string; rotated: boolean; grabX: number; grabY: number; ghost: HTMLElement; source: HTMLElement };
   let drag: Drag | null = null;
@@ -67,8 +68,8 @@ export function createInventoryUI(host: HTMLElement, handlers: InventoryHandlers
     el.innerHTML = `<span>${def.name}</span>`;
     el.addEventListener('pointerdown', (event) => startDrag(event, entry, from, el));
     el.addEventListener('contextmenu', (event) => { event.preventDefault(); if (!drag) handlers.quick(from, entry.uid); });
-    el.addEventListener('pointerenter', () => showTooltip(entry, el));
-    el.addEventListener('pointerleave', () => { tooltip.hidden = true; });
+    el.addEventListener('pointerenter', () => { hovered = from === 'bag' ? entry.uid : null; showTooltip(entry, el); });
+    el.addEventListener('pointerleave', () => { hovered = null; tooltip.hidden = true; });
     return el;
   }
   function fill(el: HTMLElement, size: GridSize, items: readonly GridItem[], key: GridKey) {
@@ -167,10 +168,12 @@ export function createInventoryUI(host: HTMLElement, handlers: InventoryHandlers
   }
   return {
     get isOpen() { return !root.hidden; },
+    // The bag item under the pointer (for F: jam a gate with it).
+    get hoveredBagItem() { return hovered; },
     open(next: InventoryView) { root.hidden = false; signature = ''; render(next); },
     close() {
       if (drag) { drag.ghost.remove(); drag.source.classList.remove('inventory-dragging'); drag = null; }
-      root.hidden = true; tooltip.hidden = true;
+      root.hidden = true; tooltip.hidden = true; hovered = null;
     },
     render,
     // R while dragging: a quarter turn (non-square items only).

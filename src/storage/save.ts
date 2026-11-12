@@ -1,14 +1,17 @@
 // M8 local save (browser local storage). The only storage code; game rules never touch it.
-// Format 1: { format, runs, bag, stash, inRun }. Unknown, corrupt or newer saves are
+// Format 2: { format, runs, bag, stash, inRun, traces }. Format 1 (no traces) is upgraded. Unknown, corrupt or newer saves are
 // reported once and replaced with an empty profile, so the game always starts.
 import { gridValid } from '../game/inventory';
 import type { GridItem } from '../game/inventory';
-import { BAG_SIZE, STASH_SIZE } from '../game/tuning';
+import { BAG_SIZE, STASH_SIZE, TRACE_SEEDS_KEPT } from '../game/tuning';
+import type { ChalkStroke } from '../game/chalk';
 
 export const SAVE_KEY = 'shifting-labyrinth.save';
-export const SAVE_FORMAT = 1;
-export type Profile = { format: number; runs: number; bag: GridItem[]; stash: GridItem[]; inRun: boolean };
-export const emptyProfile = (): Profile => ({ format: SAVE_FORMAT, runs: 0, bag: [], stash: [], inRun: false });
+export const SAVE_FORMAT = 2;
+// T8: where the runner last died on a seed (and with which generator), with that run's chalk.
+export type Trace = { seed: number; version: string; x: number; z: number; chalk: ChalkStroke[] };
+export type Profile = { format: number; runs: number; bag: GridItem[]; stash: GridItem[]; inRun: boolean; traces: Trace[] };
+export const emptyProfile = (): Profile => ({ format: SAVE_FORMAT, runs: 0, bag: [], stash: [], inRun: false, traces: [] });
 
 type Store = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
 const storage = (): Store | null => { try { return window.localStorage; } catch { return null; } };
@@ -24,12 +27,15 @@ export function parseProfile(text: string | null): { profile: Profile; notice: s
   const d = data as Partial<Profile>;
   if (typeof data !== 'object' || data === null || typeof d.format !== 'number') return { profile: emptyProfile(), notice: 'Your save could not be read and was reset.' };
   if (d.format > SAVE_FORMAT) return { profile: emptyProfile(), notice: `Your save is from a newer version (format ${d.format}); starting fresh here.` };
-  if (d.format !== SAVE_FORMAT || !Number.isInteger(d.runs) || (d.runs as number) < 0 || !Array.isArray(d.bag) || !Array.isArray(d.stash)
+  const traces = d.format === 1 ? [] : d.traces;
+  const isTrace = (t: unknown) => typeof t === 'object' && t !== null && Number.isInteger((t as Trace).seed) && typeof (t as Trace).version === 'string'
+    && Number.isFinite((t as Trace).x) && Number.isFinite((t as Trace).z) && Array.isArray((t as Trace).chalk);
+  if ((d.format !== 1 && d.format !== SAVE_FORMAT) || !Array.isArray(traces) || !traces.every(isTrace) || !Number.isInteger(d.runs) || (d.runs as number) < 0 || !Array.isArray(d.bag) || !Array.isArray(d.stash)
     || !d.bag.every(isGridItem) || !d.stash.every(isGridItem) || !gridValid(d.bag, BAG_SIZE) || !gridValid(d.stash, STASH_SIZE)
     || new Set([...d.bag, ...d.stash].map((entry) => entry.uid)).size !== d.bag.length + d.stash.length) {
     return { profile: emptyProfile(), notice: 'Your save was damaged and was reset.' };
   }
-  const profile: Profile = { format: SAVE_FORMAT, runs: d.runs as number, bag: d.bag, stash: d.stash, inRun: d.inRun === true };
+  const profile: Profile = { format: SAVE_FORMAT, runs: d.runs as number, bag: d.bag, stash: d.stash, inRun: d.inRun === true, traces: traces as Trace[] };
   // A run that never finished (page closed or reloaded) counts as abandoned: the bag is gone.
   if (profile.inRun) return { profile: { ...profile, inRun: false, bag: [] }, notice: 'Your last expedition was never finished. Whatever you carried is lost.' };
   return { profile, notice: null };
@@ -46,3 +52,9 @@ export function clearProfile(store: Store | null = storage()) { try { store?.rem
 export const startedRun = (profile: Profile, runNumber: number): Profile => ({ ...profile, runs: Math.max(profile.runs, runNumber), bag: [], inRun: true });
 export const finishedRun = (profile: Profile, extracted: boolean, bag: readonly GridItem[]): Profile =>
   ({ ...profile, bag: extracted ? bag.map((entry) => ({ ...entry })) : [], inRun: false });
+
+// T8: dying replaces this seed's trace (most recent seeds kept).
+export const withTrace = (profile: Profile, trace: Trace): Profile => ({ ...profile,
+  traces: [trace, ...profile.traces.filter((item) => item.seed !== trace.seed || item.version !== trace.version)].slice(0, TRACE_SEEDS_KEPT) });
+export const traceFor = (profile: Profile, seed: number, version: string) =>
+  profile.traces.find((item) => item.seed === seed && item.version === version) ?? null;

@@ -60,7 +60,8 @@ test('loot a chest by dragging and right-click, drop into a sack, extract, stash
   // Right-click the rest into the bag.
   for (let n = 1; n < chest.items.length; n++) { await inChest.first().click({ button: 'right' }); await page.clock.runFor(100); }
   await expect(inChest).toHaveCount(0);
-  await expect(bagItems(page)).toHaveCount(chest.items.length);
+  // The bag also holds the free thread spool (starter kit).
+  await expect(bagItems(page)).toHaveCount(chest.items.length + 1);
   // Hover shows the item's details.
   await dragged.hover();
   await expect(page.getByTestId('inventory-tooltip')).toContainText('gold');
@@ -70,11 +71,11 @@ test('loot a chest by dragging and right-click, drop into a sack, extract, stash
   await page.mouse.move(box.x + 10, box.y + 10); await page.mouse.down();
   await page.mouse.move(drop.x + drop.width / 2, drop.y + drop.height / 2, { steps: 5 }); await page.mouse.up();
   await page.clock.runFor(200);
-  await expect(bagItems(page)).toHaveCount(chest.items.length - 1);
+  await expect(bagItems(page)).toHaveCount(chest.items.length);
   await expect(page.locator('[data-testid="debug-container"][data-kind="sack"]')).toHaveCount(1);
   await page.keyboard.press('Tab');
   await expect.poll(() => page.evaluate(() => document.pointerLockElement?.id)).toBe('scene');
-  await expect(page.getByTestId('bag-summary')).toContainText(`bag ${chest.items.length - 1} item`);
+  await expect(page.getByTestId('bag-summary')).toContainText(`bag ${chest.items.length} item`);
 
   // Home: stepping into Sanctuary extracts with the bag.
   await pause(page);
@@ -82,15 +83,17 @@ test('loot a chest by dragging and right-click, drop into a sack, extract, stash
   await clickWithBrowserFrames(page, page.getByRole('button', { name: 'Resume exploring' }));
   await page.clock.runFor(300);
   await expect(page.locator('#panel-title')).toHaveText(/Loot secured|The Heart is yours/);
-  await expect(page.locator('.panel-description')).toContainText(`carrying ${chest.items.length - 1} item`);
+  await expect(page.locator('.panel-description')).toContainText(`carrying ${chest.items.length} item`);
 
   // Retry: in Sanctuary, Tab opens the bag beside the stash. Move one item to the stash.
   await startRunning(page, 'Retry this seed');
   await page.keyboard.press('Tab'); await page.clock.runFor(200);
   await expect(page.getByTestId('inventory-left-title')).toHaveText('Stash');
-  await expect(bagItems(page)).toHaveCount(chest.items.length - 1);
-  const stashed = await bagItems(page).first().getAttribute('data-uid');
-  await bagItems(page).first().click({ button: 'right' }); await page.clock.runFor(200);
+  await expect(bagItems(page)).toHaveCount(chest.items.length);
+  // Stash something other than the spool (a missing spool is replaced by the starter kit).
+  const loot = page.locator('[data-testid="grid-bag"] [data-testid="inv-item"]:not([data-item="threadSpool"])').first();
+  const stashed = await loot.getAttribute('data-uid');
+  await loot.click({ button: 'right' }); await page.clock.runFor(200);
   await expect(page.locator(`[data-grid="left"] [data-uid="${stashed}"]`)).toHaveCount(1);
   await page.keyboard.press('Tab'); await page.clock.runFor(200);
 
@@ -100,7 +103,7 @@ test('loot a chest by dragging and right-click, drop into a sack, extract, stash
   await startRunning(page, 'Start exploring');
   await page.keyboard.press('Tab'); await page.clock.runFor(300);
   await expect(page.locator(`[data-grid="left"] [data-uid="${stashed}"]`)).toHaveCount(1);
-  await expect(bagItems(page)).toHaveCount(chest.items.length - 2);
+  await expect(bagItems(page)).toHaveCount(chest.items.length - 1);
   expect(errors).toEqual([]);
 });
 
@@ -114,14 +117,14 @@ test('death loses the bag; closing the page mid-run counts as abandoning it', as
   await installBrowserClock(page);
   await page.goto('/?seed=41&off=monsters');
   await page.getByRole('button', { name: 'F2 · Debug map' }).click();
-  await expect(page.getByTestId('bag-summary')).toContainText(`bag 1 item · ${itemDef('ruby').value}g`);
+  await expect(page.getByTestId('bag-summary')).toContainText(`bag 2 items · ${itemDef('ruby').value + 2}g`);
   await startRunning(page, 'Start exploring');
   await freezeBrowserClock(page);
   const pit = world.traps.find((trap) => trap.kind === 'pit')!;
   await teleport(page, pit.cell);
   await page.clock.runFor(1500);
   await expect(page.locator('#panel-title')).toHaveText('You died.');
-  await expect(page.locator('.panel-description')).toContainText(`Lost: 1 item worth ${itemDef('ruby').value} gold`);
+  await expect(page.locator('.panel-description')).toContainText(`Lost: 2 items worth ${itemDef('ruby').value + 2} gold`);
   const saved = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)!), SAVE_KEY);
   expect(saved).toMatchObject({ bag: [], inRun: false, runs: 10 });
 
@@ -135,6 +138,7 @@ test('death loses the bag; closing the page mid-run counts as abandoning it', as
   await expect.poll(() => page.evaluate((key) => JSON.parse(localStorage.getItem(key)!).inRun, SAVE_KEY)).toBe(true);
   await page.goto('/?seed=41&off=monsters,traps&visit=3');
   await expect(page.locator('[data-message]')).toContainText('never finished');
-  await expect(page.getByTestId('bag-summary')).toHaveText('bag empty');
+  // The ruby is gone; only a fresh starter spool is in the bag.
+  await expect(page.getByTestId('bag-summary')).toHaveText('bag 1 item · 2g');
   expect(errors).toEqual([]);
 });

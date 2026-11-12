@@ -19,10 +19,11 @@ import { ALL_RULES_ON, RULE_KEYS, autoShiftTicks, isNight, nextBellTick, nightFa
 import type { RuleKey, RuleToggles } from './game/pressure';
 import { CROSSBOW_RELOAD, dailySeed } from './game/tuning';
 import { closeLoot, containerInReach, dropFromBag, interactGeneratedRun, lootMove, lootQuickMove, openContainerOf } from './game/looting';
-import { withBag } from './game/generatedRun';
+import { hasSpool, jamGate, jamTarget, toggleThread, withBag } from './game/generatedRun';
 import { moveBetween, quickMove } from './game/inventory';
 import { BAG_SIZE, STASH_SIZE } from './game/tuning';
-import { clearProfile, emptyProfile, finishedRun, loadProfile, saveProfile, startedRun } from './storage/save';
+import { clearProfile, emptyProfile, finishedRun, loadProfile, saveProfile, startedRun, traceFor, withTrace } from './storage/save';
+import { itemDef } from './game/items';
 import type { Profile } from './storage/save';
 import { createInventoryUI } from './ui/inventory';
 import type { GridKey, InventoryView } from './ui/inventory';
@@ -113,10 +114,12 @@ function startRoom() {
   let roomPlayer = { ...PLAYER_SPAWN };
   let run = createJunctionRun();
   let mazeRun = createMazeRun();
-  const runStart = () => ({ runNumber: profile!.runs + 1, bag: profile!.bag });
+  const runStart = () => ({ runNumber: profile!.runs + 1, bag: profile!.bag, starterKit: true });
   let generatedRun: GeneratedRun | null = world ? createGeneratedRun(world, initialRules, runStart()) : null;
   // Only runs started from the profile write back to it (a loaded bug report does not).
   let profileRun = Boolean(world);
+  // T8: the cairn and faded chalk of the last death on this seed (fixed for this page).
+  const activeTrace = world && profile ? traceFor(profile, world.maze.seed, world.maze.version) : null;
   // Profile bookkeeping when a run starts (bag at risk) and ends (kept only if extracted).
   function trackProfile(before: GeneratedRun, after: GeneratedRun) {
     if (!profile || !profileRun) return;
@@ -125,6 +128,10 @@ function startRoom() {
     if (!isRunOver(before.status) && isRunOver(after.status)) {
       if (before.status === 'ready') storeProfile({ ...profile, runs: Math.max(profile.runs, after.runNumber) });
       storeProfile(finishedRun(profile, after.status === 'extracted', after.bag));
+      // T8: dying leaves a cairn and this run's chalk for the next run of the same seed.
+      if (after.status === 'failed' && world) {
+        storeProfile(withTrace(profile, { seed: world.maze.seed, version: world.maze.version, x: after.player.x, z: after.player.z, chalk: after.chalk }));
+      }
     }
   }
   const logLine = (entry: ShiftLogEntry) => `#${entry.request + 1} rev ${entry.revision} ${entry.outcome.toUpperCase()}`
@@ -137,15 +144,16 @@ function startRoom() {
     log: generatedRun.shift.log.map(logLine),
     tools: { tick: generatedRun.tick, frozen: generatedRun.frozen, teleports: generatedRun.teleports, errors: pageErrors.length,
       rules: generatedRun.rules, trapPhases: generatedRun.traps.map((trap) => trap.phase),
+      thread: generatedRun.thread, cairn: activeTrace ? { x: activeTrace.x, z: activeTrace.z } : null,
       containers: generatedRun.containers.map((c) => ({ x: c.x, z: c.z, kind: c.kind, items: c.items.length, opened: c.opened })),
       monsters: generatedRun.rules.monsters ? generatedRun.monsters.map((m) => ({ x: m.x, z: m.z, kind: m.kind, mode: m.mode, stunned: m.stun > 0 })) : [],
       // Chalk strokes for the map, top-down, with gate drawings at their slab's current offset.
       chalk: generatedRun.chalk.map((stroke) => stroke.points.map((point) => { const [x, , z] = shownPoint(world.maze, generatedRun!.shift.openness, stroke, point); return { x, z }; })),
       run: (() => {
         const r = generatedRun;
-        const interval = autoShiftTicks(r.rules, r.carrying, r.runTicks);
+        const interval = autoShiftTicks(r.rules, r.bag, r.runTicks);
         const bell = nextBellTick(r.runTicks);
-        return `Run ${r.status}${r.carrying ? ' · carrying relic' : ''} · relic ${world.relic.cell} · unrest ${unrestOf(r.rules, r.carrying)}`
+        return `Run ${r.status}${r.carrying ? ' · carrying relic' : ''} · relic ${world.relic.cell} · unrest ${unrestOf(r.rules, r.bag)}`
           + ` · interval ${(interval / 60).toFixed(0)}s · `
           + (r.status === 'out' && r.shift.phase === 'idle' ? `auto shift in ${((interval - r.autoTicks) / 60).toFixed(1)}s` : 'auto shift waiting')
           + ` · clock ${(r.runTicks / 60).toFixed(1)}s · ${isNight(r.rules, r.runTicks) ? 'NIGHT' : r.rules.dusk && bell ? `next bell ${(bell / 60).toFixed(0)}s` : 'no bell'}`;
@@ -163,6 +171,8 @@ function startRoom() {
         if (next.openContainer && !input.isPanelOpen()) { input.openPanel(); stashMode = false; inventory.open(inventoryView(next)); }
       }
       next = drawChalk(world, { ...next, player: { ...next.player, yaw: state.yaw } }, state.pitch, input.isChalkHeld());
+      if (input.consumeThreadRequest()) next = toggleThread(next);
+      if (input.consumeJamRequest() && next.bag.length) next = jamGate(world, next, next.bag[next.bag.length - 1].uid);
       if (input.consumeFireRequest()) next = fireCrossbow({ ...next, player: { ...next.player, yaw: state.yaw } });
       if (shiftRequested) {
         next = requestGeneratedRunShift(world, next);
@@ -212,6 +222,10 @@ function startRoom() {
     if (key === 'rotate') inventory.rotate();
     else if (key === 'close') closeInventory(true);
     else if (key === 'paused') closeInventory(false);
+    else if (key === 'jam' && generatedRun && world) {
+      const uid = inventory.hoveredBagItem ?? generatedRun.bag.at(-1)?.uid;
+      if (uid) generatedRun = jamGate(world, generatedRun, uid);
+    }
     else if (key === 'bag' && generatedRun && !isDead(generatedRun) && !isRunOver(generatedRun.status)) {
       // Tab: the bag; in Sanctuary before leaving, the bag beside the stash.
       stashMode = generatedRun.status === 'ready';
@@ -419,6 +433,7 @@ function startRoom() {
         carried: live.carrying, beams: live.rules.beams, night: nightFactor(live.rules, live.runTicks), chalk: live.chalk,
         openness: live.shift.openness, sounds: live.sounds, traps: live.traps, time: live.tick / 60,
         monsters: live.monsters, bolts: live.bolts, monstersOn: live.rules.monsters,
+        thread: live.thread, trace: activeTrace,
         containers: live.containers, relicHome: live.containers.some((c) => c.kind === 'reliquary' && c.items.length > 0),
         bow: { shown: !input.isChalkOut() && !isDead(live) && !isRunOver(live.status), ready: live.boltsLeft > 0 && live.reload <= 0,
           recoil: live.reload / CROSSBOW_RELOAD } } : undefined);
@@ -435,6 +450,12 @@ function startRoom() {
     if (generatedRun && inventory.isOpen) inventory.render(inventoryView(generatedRun));
     const reach = generatedRun && !inventory.isOpen ? containerInReach(generatedRun) : null;
     if (generatedRun) hud.updateGenerated(generatedRun, timestamp, reach ? (KIND_TITLES[reach.kind] ?? reach.kind) : null, input.isChalkOut());
+    if (generatedRun && world) {
+      const gate = jamTarget(world, generatedRun);
+      const sacrifice = gate ? (inventory.isOpen && inventory.hoveredBagItem ? generatedRun.bag.find((e) => e.uid === inventory.hoveredBagItem) : generatedRun.bag.at(-1)) : null;
+      hud.updateTools(gate && sacrifice ? { gate, item: itemDef(sacrifice.item).name } : null,
+        hasSpool(generatedRun) ? { left: generatedRun.threadLeft, laying: generatedRun.laying } : null);
+    }
     debug?.update(debugView(), timestamp);
     frameId = requestAnimationFrame(frame);
   }

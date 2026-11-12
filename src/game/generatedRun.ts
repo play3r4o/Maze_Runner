@@ -25,7 +25,11 @@ import { CONTAINER_SIZES, LOOT_REACH } from './tuning';
 import { forRun, placeContainers, rollLoot } from './loot';
 import type { Container } from './loot';
 import type { GridItem } from './inventory';
-import { RELIC_ITEM } from './items';
+import { RELIC_ITEM, THREAD_ITEM, itemDef, noisyCount } from './items';
+import { FOOTSTEP_NOISE_METRES, FOOTSTEP_SECONDS, JAM_RANGE, JAM_SECONDS, NOISY_ITEM_NOISE_METRES, THREAD_METRES, THREAD_POINT_SPACING } from './tuning';
+import { firstFit } from './inventory';
+import { BAG_SIZE } from './tuning';
+import type { Noise } from './monsters';
 import { nearestCell } from './monsters';
 import { PLAYER_HEALTH } from './tuning';
 import { PLAYER_HALF_WIDTH } from '../simulation/player';
@@ -94,22 +98,31 @@ export type GeneratedRun = {
   health: number; killedBy: string | null; traps: TrapState[];
   // M10 monsters (same order as world.monsters) and their RNG state; noises they may hear
   // this step. M11 crossbow: bolts in flight, bolts left, seconds until it can fire again.
-  monsters: Monster[]; monsterRng: number; noise: Point2[];
+  monsters: Monster[]; monsterRng: number; noise: Noise[];
   bolts: Bolt[]; boltsLeft: number; reload: number; nextBoltId: number;
   // M8: the bag (carried grid), every container in the maze, the one open for looting, the
   // run counter (part of every new item uid) and a counter for new sacks. `carrying` above
   // is true while the relic item is in the bag.
   bag: GridItem[]; containers: Container[]; openContainer: string | null; runNumber: number; nextSack: number;
+  // M8 stage 2: seconds towards the next footstep noise (T3); thread strands laid, metres left
+  // and whether it is being laid (T5); the gate jam in progress and gates jammed per plan (T6).
+  footstep: number; thread: Point2[][]; threadLeft: number; laying: boolean;
+  jam: { gate: string; seconds: number } | null; jams: { gate: string; request: number }[];
 };
 export const hasRelic = (bag: readonly GridItem[]) => bag.some((entry) => entry.item === RELIC_ITEM);
 // Replace the bag, keeping `carrying` in step with it.
 export const withBag = (run: GeneratedRun, bag: GridItem[]): GeneratedRun => ({ ...run, bag, carrying: hasRelic(bag) });
 // Dead by any cause: crushed by a gate or killed by a trap or monster.
 export const isDead = (run: GeneratedRun) => run.crushedBy !== null || run.killedBy !== null;
-export type RunStart = { runNumber?: number; bag?: readonly GridItem[] };
+// starterKit (T5): add a free thread spool if the bag has none and has room.
+export type RunStart = { runNumber?: number; bag?: readonly GridItem[]; starterKit?: boolean };
 export function createGeneratedRun(world: GeneratedWorld, rules: RuleToggles = ALL_RULES_ON, start: RunStart = {}): GeneratedRun {
   const runNumber = start.runNumber ?? 1;
   const bag = (start.bag ?? []).map((entry) => ({ ...entry }));
+  if (start.starterKit && !bag.some((entry) => entry.item === THREAD_ITEM)) {
+    const spot = firstFit(bag, BAG_SIZE, THREAD_ITEM, `r${runNumber}.spool`);
+    if (spot) bag.push(spot);
+  }
   return { player: { x: 0, z: 0, yaw: 0 }, visited: [], leftSanctuary: false, returned: false, cell: null, ring: 'sanctuary',
     shift: createGeneratedShift(world.maze), crushedBy: null, pushedBy: null,
     tick: 0, shiftTicks: 0, frozen: false, teleports: 0, events: [],
@@ -118,7 +131,8 @@ export function createGeneratedRun(world: GeneratedWorld, rules: RuleToggles = A
     health: PLAYER_HEALTH, killedBy: null, traps: createTrapStates(world.traps),
     monsters: world.monsters.map((monster) => ({ ...monster, path: [...monster.path] })), monsterRng: monsterRngSeed(world.maze), noise: [],
     bolts: [], boltsLeft: CROSSBOW_BOLTS, reload: 0, nextBoltId: 1,
-    bag, containers: forRun(world.containers, runNumber), openContainer: null, runNumber, nextSack: 1 };
+    bag, containers: forRun(world.containers, runNumber), openContainer: null, runNumber, nextSack: 1,
+    footstep: 0, thread: [], threadLeft: THREAD_METRES, laying: false, jam: null, jams: [] };
 }
 
 // T3: queue a positioned sound if sound is enabled. Returns the updated sound fields.
@@ -225,9 +239,16 @@ export function stepGeneratedRun(world: GeneratedWorld, previous: GeneratedRun, 
   // The interval follows unrest (T1) and night (T2); a change applies to the countdown under way.
   if (start.status === 'out' && !isDead(start) && !start.frozen && start.shift.phase === 'idle') {
     start = { ...start, autoTicks: start.autoTicks + 1 };
-    if (start.autoTicks >= autoShiftTicks(start.rules, start.carrying, start.runTicks)) start = requestGeneratedRunShift(world, start, 'auto');
+    if (start.autoTicks >= autoShiftTicks(start.rules, start.bag, start.runTicks)) start = requestGeneratedRunShift(world, start, 'auto');
   }
-  const moving = !start.frozen && start.shift.phase !== 'idle';
+  // T6: a jammed gate holds the closing phase still (only the closing gate moves in it).
+  const jammed = start.jam !== null && start.jam.seconds > 0 && start.shift.phase === 'closing';
+  if (start.jam) {
+    const seconds = start.jam.seconds - dt;
+    start = { ...start, jam: seconds > 1e-9 && start.shift.phase === 'closing' ? { ...start.jam, seconds } : null,
+      events: seconds <= 1e-9 ? addRunEvent(start, 'shift', `${start.jam.gate.toUpperCase()} jam gave way`) : start.events };
+  }
+  const moving = !start.frozen && !jammed && start.shift.phase !== 'idle';
   let run: GeneratedRun = { ...start, tick: start.tick + 1, shiftTicks: start.shiftTicks + Number(moving),
     runTicks: start.runTicks + Number(start.status === 'out' && !isDead(start)) };
   // T2: the dusk bell rings once per threshold the run clock reaches while dusk is enabled.
@@ -236,7 +257,7 @@ export function stepGeneratedRun(world: GeneratedWorld, previous: GeneratedRun, 
     run = withSound({ ...run, bells: strikes, events: addRunEvent(run, 'bell', `${strikes} strike${strikes === 1 ? '' : 's'}${strikes === BELL_TICKS.length ? ' · night falls' : ''}`) },
       'bellToll', 0, 0, { strikes });
   }
-  const shift = previous.frozen ? run.shift : advanceGeneratedShift(run.shift, dt, maze);
+  const shift = previous.frozen || jammed ? run.shift : advanceGeneratedShift(run.shift, dt, maze);
   // T3: a slab is heard grinding from the moment it starts to move.
   if (shift.plan && shift.phase !== run.shift.phase && (shift.phase === 'opening' || shift.phase === 'closing')) {
     const gate = shift.phase === 'opening' ? shift.plan.open : shift.plan.close;
@@ -277,6 +298,8 @@ export function stepGeneratedRun(world: GeneratedWorld, previous: GeneratedRun, 
     leftSanctuary: run.leftSanctuary || !atHome,
   };
   next = applyCombat(world, next, run, previous.frozen, dt);
+  // Footstep noise is heard on the next step, like trap noises.
+  next = walkEffects(next, run.player, dt);
   if (next.rules.traps && !isRunOver(next.status)) next = applyTraps(world, next, run, dt);
   // A container closes when the player is dead, the run is over or it is out of reach.
   if (next.openContainer) {
@@ -284,6 +307,69 @@ export function stepGeneratedRun(world: GeneratedWorld, previous: GeneratedRun, 
     if (!open || isDead(next) || isRunOver(next.status) || Math.hypot(open.x - next.player.x, open.z - next.player.z) > LOOT_REACH + 0.25) next = { ...next, openContainer: null };
   }
   return next;
+}
+
+// T3 footsteps and T5 thread, after the player has moved this step.
+const round3 = (value: number) => Math.round(value * 1000) / 1000 + 0;
+function walkEffects(run: GeneratedRun, from: PlayerState, dt: number): GeneratedRun {
+  const walked = Math.hypot(run.player.x - from.x, run.player.z - from.z);
+  let next = run;
+  if (walked > 1e-6 && !isRunOver(run.status)) {
+    const footstep = run.footstep + dt;
+    if (footstep >= FOOTSTEP_SECONDS - 1e-9) {
+      const noisy = noisyCount(run.bag);
+      next = { ...next, footstep: 0, noise: [...next.noise, { x: run.player.x, z: run.player.z, radius: FOOTSTEP_NOISE_METRES + NOISY_ITEM_NOISE_METRES * noisy }].slice(-NOISE_LIMIT) };
+      if (noisy) next = withSound(next, 'jingle', run.player.x, run.player.z);
+    } else next = { ...next, footstep };
+  }
+  if (!next.laying) return next;
+  if (!next.bag.some((entry) => entry.item === THREAD_ITEM) || isDead(next) || isRunOver(next.status)) return { ...next, laying: false };
+  const strands = next.thread.map((strand) => [...strand]);
+  const strand = strands[strands.length - 1];
+  let left = next.threadLeft;
+  let last = strand[strand.length - 1];
+  // One point per metre walked from the last point, until the thread runs out.
+  while (left > 1e-9) {
+    const gap = Math.hypot(next.player.x - last.x, next.player.z - last.z);
+    if (gap < THREAD_POINT_SPACING) break;
+    const step = Math.min(THREAD_POINT_SPACING, left);
+    const k = step / gap;
+    last = { x: round3(last.x + (next.player.x - last.x) * k), z: round3(last.z + (next.player.z - last.z) * k) };
+    strand.push(last);
+    left = Math.max(0, round3(left - step));
+  }
+  next = { ...next, thread: strands, threadLeft: left };
+  if (left <= 1e-9) next = { ...next, laying: false, events: addRunEvent(next, 'loot', 'thread ran out') };
+  return next;
+}
+export const hasSpool = (run: GeneratedRun) => run.bag.some((entry) => entry.item === THREAD_ITEM);
+// T: start or stop laying thread (needs the spool in the bag and thread left).
+export function toggleThread(run: GeneratedRun): GeneratedRun {
+  if (run.laying) return { ...run, laying: false };
+  if (!hasSpool(run) || run.threadLeft <= 1e-9 || isDead(run) || isRunOver(run.status)) return run;
+  const at = { x: round3(run.player.x), z: round3(run.player.z) };
+  return { ...run, laying: true, thread: [...run.thread, [at]], events: addRunEvent(run, 'loot', `thread started (${Math.round(run.threadLeft)} m left)`) };
+}
+
+// T6 gate jam: with the closing gate within reach, sacrifice one bag item to hold it.
+const rectDistance = (p: { x: number; z: number }, r: { minX: number; maxX: number; minZ: number; maxZ: number }) =>
+  Math.hypot(Math.max(r.minX - p.x, 0, p.x - r.maxX), Math.max(r.minZ - p.z, 0, p.z - r.maxZ));
+export function jamTarget(world: GeneratedWorld, run: GeneratedRun): string | null {
+  const plan = run.shift.plan;
+  if (!plan || run.shift.phase !== 'closing' || run.jam || isDead(run) || isRunOver(run.status) || !run.bag.length) return null;
+  if (run.jams.some((jam) => jam.gate === plan.close && jam.request === run.shift.requests)) return null;
+  const edge = world.maze.edges.find((item) => item.gate === plan.close)!;
+  return rectDistance(run.player, corridorRect(world.maze, edge)) <= JAM_RANGE ? plan.close : null;
+}
+export function jamGate(world: GeneratedWorld, run: GeneratedRun, uid: string): GeneratedRun {
+  const gate = jamTarget(world, run);
+  const entry = run.bag.find((item) => item.uid === uid);
+  if (!gate || !entry) return run;
+  let next = withBag(run, run.bag.filter((item) => item.uid !== uid));
+  next = { ...next, jam: { gate, seconds: JAM_SECONDS }, jams: [...run.jams, { gate, request: run.shift.requests }].slice(-16),
+    events: addRunEvent(next, 'shift', `${gate.toUpperCase()} jammed with ${itemDef(entry.item).name} for ${JAM_SECONDS}s`) };
+  const { x, z } = gateCentre(world, gate);
+  return withSound(next, 'gateJam', x, z);
 }
 
 // Player damage from any source; at 0 the run fails once with the cause.

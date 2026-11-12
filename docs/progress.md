@@ -35,7 +35,7 @@
 | M7 | Human accepted 2026-11-12 (okay fun, too easy) |
 | M7b (added 2026-11-11) | Human accepted 2026-11-12 (chalk toggle deployed in run 43211237014) |
 | M9 (scheduled after M7b) | Postponed 2026-11-12 (no second tester yet) |
-| M8 (widened: grid inventory) | In progress: stage 1 items, looting, stash |
+| M8 (widened: grid inventory) | Implemented; human acceptance pending |
 | M10 + M12 (with minimal M11 crossbow) | Human accepted 2026-11-12 (deployed in run 43227058037) |
 | M10–M12 | Not started |
 | M13 (co-op PvE) | Conditional, not started |
@@ -322,3 +322,13 @@ Stop for the rules-on versus rules-off comparison. M8 and M9 remain unapproved. 
 - Full local browser suite: all 29 scenarios pass (27.8 min). Visual check: chest in a room corner, facing the room; loot screen layout readable.
 - Unit: 1419 tests pass, 12 new (grid rules and a 2 000-move fuzz with no lost or duplicated item; chest placement over 200 seeds, outer chests worth over twice inner; unique ids across runs; looting, reach, world running while open, sacks, extraction and loss, remains, reports; save round trip, unfinished run, damaged and newer saves).
 - Browser: new loot scenarios pass (drag to an exact cell, right-click, tooltip, drop into a sack, extract, stash in Sanctuary, both survive a reload; death loses the carried ruby and the save says so; a mid-run reload loses the bag with a notice). The solo-run scenario now loots the relic from its reliquary through the screen.
+- Commit `560fa63` pushed (stage 1). GitHub Actions run 43246202406 failed: the new loot browser test lost a Tab and an Escape on the slow runner. A key pressed just after the pointer locked, before its change event arrived, was ignored. Keys and opening the bag now count from the actual lock state (fixed with stage 2). Stage 1 was therefore not deployed on its own.
+
+### M8 stage 2: the maze reacts to what you carry — 2026-11-12
+
+- T1: unrest is the sum of carried items' unrest (materials 1, relics 3); the automatic interval is max(15, 45 − 6 × unrest) and follows the bag at once. T3: walking makes a footstep noise every 0.5 s heard within 6 m plus 2 m per noisy item, with a clink when coins are carried; noises carry a radius for monster hearing. T5: free Thread Spool (new `tool` category, never in chests) added to the bag at run start when missing and there is room; T lays a red floor line one point per metre, 150 m per run. T6: with a gate closing within 3 m, F destroys the hovered bag item (or the last one added) and holds the closing phase 6 s; the replayed shift clock does not advance while held, so reports stay exact; once per gate per plan; prompt names gate and item. T8: dying stores seed, generator, position and chalk in the save (format 2, last 20 seeds; format 1 upgrades); the next run of that seed shows a cairn and the old drawings faded.
+- Chalk rendering is now a reusable layer so the faded drawings share it. Reports are format 8 (thread, jam).
+- Found while testing: footstep noise was cleared by the monster step that same tick, so it is now emitted after combat and heard on the next step, like trap noises.
+- Unit: 1426 tests pass, 7 new. Browser: new scenarios pass (jam prompt and F, thread on the map; a death leaves a cairn on the next run of the same seed and not another). Loot and solo scenarios updated for the free spool. Visual check: cairn, faded drawing and red thread read clearly.
+- Full local browser suite: all 31 scenarios pass (27.9 min); after the input fix, the key-dependent scenarios (room, loot, stage 2, monsters, pressure) pass again.
+- Human acceptance pending: see the [M8 checklist](milestones/M8.md#human-acceptance-checklist-after-stage-2).

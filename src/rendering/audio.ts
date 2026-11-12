@@ -8,7 +8,7 @@ import type { SoundEvent, SoundKind } from '../game/pressure';
 const MAX_VOICES = 12;
 // How far each kind carries: distance at which it is at full volume (inverse distance falloff).
 const REF_DISTANCE: Record<SoundKind, number> = { shiftWarning: 8, gateGrind: 8, bellToll: 40, trapClick: 4, trapFire: 10, bladeSwish: 5, hurt: 3,
-  shot: 3, boltHit: 4, monsterHurt: 5, monsterDie: 7, growl: 6, roar: 16, wardenStep: 9 };
+  shot: 3, boltHit: 4, monsterHurt: 5, monsterDie: 7, growl: 6, roar: 16, wardenStep: 9, jingle: 2, gateJam: 8 };
 
 export function createAudio(scene: Scene, camera: Camera) {
   const listener = new AudioListener();
@@ -102,10 +102,13 @@ export function createAudio(scene: Scene, camera: Camera) {
     return growlBuffers[sound.kind === 'roar' ? 'warden' : kind];
   }
   const COMBAT = new Set(['shot', 'boltHit', 'wardenStep', 'monsterHurt', 'monsterDie', 'growl', 'roar']);
+  // M8: coins clinking while walking; a gate jammed by a crushed item.
+  const jingleBuffer = buffer(0.25, (t) => [2400, 3100, 3700].reduce((sum, f, i) => sum + Math.sin(2 * Math.PI * f * t) * Math.exp(-(t - i * 0.06) * 40) * (t >= i * 0.06 ? 0.12 : 0), 0));
+  const jamBuffer = buffer(0.6, (t) => (Math.random() * 2 - 1) * 0.7 * Math.exp(-t * 7) + 0.4 * Math.sin(2 * Math.PI * 70 * t) * Math.exp(-t * 5));
 
   function play(sound: SoundEvent) {
     if (voices.size >= MAX_VOICES) return;
-    const data = COMBAT.has(sound.kind) ? combatBuffer(sound) : sound.kind === 'shiftWarning' ? warningBuffer : sound.kind === 'gateGrind' ? grind(sound.seconds ?? 1)
+    const data = sound.kind === 'jingle' ? jingleBuffer : sound.kind === 'gateJam' ? jamBuffer : COMBAT.has(sound.kind) ? combatBuffer(sound) : sound.kind === 'shiftWarning' ? warningBuffer : sound.kind === 'gateGrind' ? grind(sound.seconds ?? 1)
       : sound.kind === 'bellToll' ? bell(sound.strikes ?? 1) : sound.kind === 'trapClick' ? clickBuffer
         : sound.kind === 'bladeSwish' ? swishBuffer : sound.kind === 'hurt' ? hurtBuffer : trapBuffer(sound);
     const holder = new Object3D();

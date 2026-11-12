@@ -93,8 +93,35 @@ export function createMazeView(scene: Scene, layout: MazeLayout = HAND_BUILT_MAZ
     return mesh;
   }
   const chalkMaterial = new MeshBasicMaterial({ color: '#eeece2', side: DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
-  const chalkMeshes = new Map<string, Mesh>();
-  let chalkSignature = '';
+  const fadedMaterial = new MeshBasicMaterial({ color: '#b9c2b4', transparent: true, opacity: 0.4, side: DoubleSide, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
+  function makeChalkLayer(material: MeshBasicMaterial) {
+    const meshes = new Map<string, Mesh>();
+    let signature = '';
+    return {
+      set(strokes: readonly ChalkStroke[], openness: MazeOpenness) {
+        const next = strokes.map((stroke) => `${stroke.id}:${stroke.points.length}`).join(',');
+        if (next !== signature) {
+          signature = next;
+          for (const mesh of meshes.values()) { group.remove(mesh); mesh.geometry.dispose(); }
+          meshes.clear();
+          const bySurface = new Map<string, ChalkStroke[]>();
+          for (const stroke of strokes) bySurface.set(stroke.surface, [...(bySurface.get(stroke.surface) ?? []), stroke]);
+          for (const [surface, list] of bySurface) {
+            const mesh = new Mesh(chalkGeometry(list), material);
+            mesh.renderOrder = 1;
+            group.add(mesh); meshes.set(surface, mesh);
+          }
+        }
+        for (const [surface, mesh] of meshes) {
+          if (surface === 'static') continue;
+          const offset = gateOffset(layout, surface, openness[surface] ?? 0);
+          mesh.position.set(offset.x, 0, offset.z);
+        }
+      },
+      dispose() { for (const mesh of meshes.values()) mesh.geometry.dispose(); material.dispose(); },
+    };
+  }
+  const chalkLayer = makeChalkLayer(chalkMaterial), fadedLayer = makeChalkLayer(fadedMaterial);
   let crystal: Mesh | null = null;
   let relicBeam: Mesh | null = null;
   let homeBeam: Mesh | null = null;
@@ -149,26 +176,9 @@ export function createMazeView(scene: Scene, layout: MazeLayout = HAND_BUILT_MAZ
       if (crystal) { crystal.rotation.y = seconds * 1.2; crystal.position.y = 1.25 + Math.sin(seconds * 2) * 0.08; }
     },
     // T4 free-draw chalk. Rebuilds geometry only when strokes change; gate drawings follow their slab.
-    setChalk(strokes: readonly ChalkStroke[], openness: MazeOpenness) {
-      const signature = strokes.map((stroke) => `${stroke.id}:${stroke.points.length}`).join(',');
-      if (signature !== chalkSignature) {
-        chalkSignature = signature;
-        for (const mesh of chalkMeshes.values()) { group.remove(mesh); mesh.geometry.dispose(); }
-        chalkMeshes.clear();
-        const bySurface = new Map<string, ChalkStroke[]>();
-        for (const stroke of strokes) bySurface.set(stroke.surface, [...(bySurface.get(stroke.surface) ?? []), stroke]);
-        for (const [surface, list] of bySurface) {
-          const mesh = new Mesh(chalkGeometry(list), chalkMaterial);
-          mesh.renderOrder = 1;
-          group.add(mesh); chalkMeshes.set(surface, mesh);
-        }
-      }
-      for (const [surface, mesh] of chalkMeshes) {
-        if (surface === 'static') continue;
-        const offset = gateOffset(layout, surface, openness[surface] ?? 0);
-        mesh.position.set(offset.x, 0, offset.z);
-      }
-    },
+    setChalk(strokes: readonly ChalkStroke[], openness: MazeOpenness) { chalkLayer.set(strokes, openness); },
+    // T8: the last death's drawings on this seed, faded.
+    setFadedChalk(strokes: readonly ChalkStroke[], openness: MazeOpenness) { fadedLayer.set(strokes, openness); },
     update(state?: GateView) {
       if (!state) return;
       for (const gate of gates) {
@@ -187,8 +197,7 @@ export function createMazeView(scene: Scene, layout: MazeLayout = HAND_BUILT_MAZ
       for (const geometry of geometries) geometry.dispose();
       for (const material of materials) material.dispose();
       for (const texture of textures) texture.dispose();
-      for (const mesh of chalkMeshes.values()) mesh.geometry.dispose();
-      chalkMaterial.dispose();
+      chalkLayer.dispose(); fadedLayer.dispose();
     },
   };
 }

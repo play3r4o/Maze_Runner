@@ -106,8 +106,10 @@ export class BrowserInput {
     }, options);
 
     document.addEventListener('mousedown', (event) => {
-      if (this.active && event.button === 0) { this.mouseDown = true; if (!this.chalkOut) this.fireRequested = true; }
-      if (this.active && event.button === 2) this.rightDown = true;
+      // Count clicks from the actual lock, even before its change event arrives (slow machines).
+      const locked = this.active || (!this.panelOpen && document.pointerLockElement === this.canvas);
+      if (locked && event.button === 0) { this.mouseDown = true; if (!this.chalkOut) this.fireRequested = true; }
+      if (locked && event.button === 2) this.rightDown = true;
     }, options);
     document.addEventListener('mouseup', (event) => {
       if (event.button === 0) this.mouseDown = false;

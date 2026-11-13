@@ -169,3 +169,7 @@ export const TORCH = { seconds: 120, sightBonus: 0.5 } as const;
 // open. finalSeal: run seconds at which every gate seals for good (night falls at 240 s); anyone
 // still inside is lost. coreRadius/coreSeconds: the night extract in the core (stand on it).
 export const MATCH = { countdown: 3, finalSeal: 330, coreRadius: 2, coreSeconds: 5 } as const;
+// M18 stage 2: the rings seal and turn. Turns start at `first` s and then every `every` s of
+// run clock, alternating the outer-ring boundary and the core boundary. Each: warning, ring
+// doors close (they push and crush), sealed while the ring turns, the other half opens.
+export const RING_TURN = { first: 60, every: 60, warning: 4, closing: 2, sealed: 4, opening: 2 } as const;

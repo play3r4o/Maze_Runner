@@ -7,7 +7,7 @@ import { overlapsBody } from '../simulation/movingWalls';
 import { advanceGeneratedShift, createGeneratedShift, requestGeneratedShift } from '../simulation/generatedShift';
 import type { GeneratedShift } from '../simulation/generatedShift';
 import type { ShiftPhase } from '../simulation/shift';
-import { RUN_EVENT_LIMIT, addRunEvent, createGeneratedRun, homeOpenness, teleportTarget } from './generatedRun';
+import { RUN_EVENT_LIMIT, addRunEvent, createGeneratedRun, homeOpenness, ringOpenness, teleportTarget } from './generatedRun';
 import { OCTAGON_CONFIG, OCTAGON_VERSION } from '../simulation/octagon';
 import type { GeneratedRun, GeneratedWorld, RunEvent, RunStatus } from './generatedRun';
 import { RULE_KEYS } from './pressure';
@@ -188,7 +188,7 @@ export function reproduceRun(world: GeneratedWorld, report: RunReport): { run: G
   // M18: the home gate is not replayed; it follows the match clock.
   if (world.maze.homeGate) {
     const status = report.status === 'failed' ? 'out' : report.status;
-    shift = { ...shift, openness: { ...shift.openness, [world.maze.homeGate]: homeOpenness({ match: report.match, tick: report.tick, status }) } };
+    shift = { ...shift, openness: { ...shift.openness, [world.maze.homeGate]: homeOpenness({ match: report.match, tick: report.tick, status }), ...ringOpenness(world, report.runTicks) } };
   }
   const expect = report.expect;
   if (shift.phase !== expect.phase) mismatches.push(`Phase ${shift.phase}, report says ${expect.phase}.`);

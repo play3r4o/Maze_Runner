@@ -80,6 +80,10 @@ export function findMazeRoute(layout: MazeLayout, openness: MazeOpenness, from: 
   return { cells: cells.reverse(), edges: edges.reverse() };
 }
 export const LOBBY_GATE = 'home';
+export const isScheduledGate = (gate: string) => gate === LOBBY_GATE || gate.startsWith('ring');
+// Openness with every scheduled gate (lobby gate, ring doors) open; empty for the square maze.
+export const scheduledOpen = (layout: MazeLayout): MazeOpenness =>
+  Object.fromEntries(layout.edges.flatMap((edge) => edge.gate && isScheduledGate(edge.gate) ? [[edge.gate, 1]] : []));
 export function validateMazeTopology(layout: MazeLayout, openness: MazeOpenness, blocked: readonly string[] = []): TopologyCheck {
   const errors = mazeLayoutErrors(layout);
   for (const edge of layout.edges) {
@@ -89,8 +93,9 @@ export function validateMazeTopology(layout: MazeLayout, openness: MazeOpenness,
   }
   if (blocked.some((id) => !layout.edges.some((edge) => edge.id === id))) errors.push('Candidate contains an unknown edge ID.');
   if (errors.length) return { ok: false, reason: errors.join(' '), reachableCount: 0, unreachable: layout.cells.map((cell) => cell.id) };
-  // M18: the lobby gate is not a shift gate; routes count it as open (the match decides it).
-  const reachable = reachableMazeCells(layout, layout.edges.some((edge) => edge.gate === LOBBY_GATE) ? { ...openness, [LOBBY_GATE]: 1 } : openness, layout.start, blocked);
+  // M18: the lobby gate and ring doors are not shift gates; their timing is set by the match
+  // clock, so routes count them as open (shifts must keep every room reachable without them).
+  const reachable = reachableMazeCells(layout, { ...openness, ...scheduledOpen(layout) }, layout.start, blocked);
   const unreachable = layout.cells.filter((cell) => !reachable.has(cell.id)).map((cell) => cell.id);
   return { ok: unreachable.length === 0, reachableCount: reachable.size, unreachable,
     reason: unreachable.length ? `${unreachable.length} of ${layout.cells.length} cells lose their route to Sanctuary: ${unreachable.join(', ')}.`

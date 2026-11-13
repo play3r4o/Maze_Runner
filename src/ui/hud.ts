@@ -9,6 +9,7 @@ import type { MazeRun } from '../game/mazeRun';
 import { isRunOver } from '../game/generatedRun';
 import { CHALK_INK_METRES, MATCH } from '../game/tuning';
 import { isNight } from '../game/pressure';
+import { RING_BOUNDARY_NAMES, nextRingTurn, ringTurnAt } from '../game/ringTurns';
 import { maxHealthOf } from '../game/equipment';
 import { activeWeapon } from '../game/generatedRun';
 
@@ -273,7 +274,17 @@ export function createHud(root: HTMLElement, scene: SceneMode, generated?: Gener
       const fell = [...run.events].reverse().find((event) => event.kind === 'monster' && event.detail.includes('warden killed by'));
       const wardenNotice = fell && run.tick - fell.tick < 5 * 60 ? 'The Warden has fallen. It will return.' : null;
       const coreNotice = octagon && run.match.channel > 0 ? `Extracting through the core… ${Math.ceil(MATCH.coreSeconds - run.match.channel)}s` : null;
-      const notice = coreNotice ?? (run.pushedBy ? `${run.pushedBy.toUpperCase()} stone is pushing you. Escape along the passage!`
+      const turn = octagon && run.status === 'out' ? ringTurnAt(run.runTicks) : null;
+      const ringName = turn ? RING_BOUNDARY_NAMES[turn.boundary] : '';
+      const ringNotice = !turn ? null : {
+        warning: `The ${ringName} seals and turns in ${Math.ceil(turn.secondsLeft)}s · get through its doors now, or wait.`,
+        closing: `The ${ringName} doors are closing!`,
+        sealed: `The ${ringName} is sealed and turning…`,
+        opening: `The ${ringName} doors open on new sides.`,
+      }[turn.phase];
+      const next = octagon && run.status === 'out' && !turn ? nextRingTurn(run.runTicks) : null;
+      const nextNotice = next && next.seconds <= 15 ? `The ${RING_BOUNDARY_NAMES[next.boundary]} turns in ${Math.ceil(next.seconds)}s.` : null;
+      const notice = coreNotice ?? (run.pushedBy ? `${run.pushedBy.toUpperCase()} stone is pushing you. Escape along the passage!` : null) ?? ringNotice ?? nextNotice ?? (run.pushedBy ? `${run.pushedBy.toUpperCase()} stone is pushing you. Escape along the passage!`
         : wardenNotice ?? bellNotice ?? (run.status === 'out' && state.phase === 'idle' && state.completedShifts === 0
           ? 'The maze shifts by itself, after a 2 second warning. Listen for grinding stone.' : state.notice));
       if (generatedNotice!.textContent !== notice) generatedNotice!.textContent = notice;

@@ -181,7 +181,8 @@ export function createMazeView(scene: Scene, layout: MazeLayout = HAND_BUILT_MAZ
     const mesh = block(rect.maxX - rect.minX, rect.height, rect.maxZ - rect.minZ, 0, rect.height / 2, 0, '#ae965f');
     // Along the passage (M18 doorways are wider than they are long).
     const vertical = findCell(layout, edge.a).column === findCell(layout, edge.b).column;
-    const label = id === 'home' ? 'HOME GATE' : `${id.toUpperCase()} / ${octagon ? '' : '8m '}CRUSH`;
+    const ring = id.startsWith('ring');
+    const label = id === 'home' ? 'HOME GATE' : ring ? 'RING DOOR / CRUSH' : `${id.toUpperCase()} / ${octagon ? '' : '8m '}CRUSH`;
     const outlines = [
       block(rect.maxX - rect.minX, 0.015, 0.035, (rect.minX + rect.maxX) / 2, 0.025, rect.minZ, '#c4ad6e'),
       block(rect.maxX - rect.minX, 0.015, 0.035, (rect.minX + rect.maxX) / 2, 0.025, rect.maxZ, '#c4ad6e'),
@@ -195,7 +196,7 @@ export function createMazeView(scene: Scene, layout: MazeLayout = HAND_BUILT_MAZ
       sign(label, rect.minX - 0.05, 3.5, centerZ, -Math.PI / 2);
       sign(label, rect.maxX + 0.05, 3.5, centerZ, Math.PI / 2);
     }
-    return { id, edge, mesh, outlines };
+    return { id, edge, mesh, outlines, base: ring ? '#8a78ad' : '#ae965f' };
   });
   return {
     // Crystal hides when carried; beams follow the `beams` rule (relic beam also hides when carried).
@@ -222,7 +223,7 @@ export function createMazeView(scene: Scene, layout: MazeLayout = HAND_BUILT_MAZ
         gate.mesh.position.set((rect.minX + rect.maxX) / 2, rect.height / 2, (rect.minZ + rect.maxZ) / 2);
         const closing = state.phase === 'closing' && gate.id === state.closing;
         const warning = state.phase === 'warning' && gate.id === state.closing;
-        gate.mesh.material.color.set(closing ? '#c17a59' : warning ? '#e6bf62' : '#ae965f');
+        gate.mesh.material.color.set(closing ? '#c17a59' : warning ? '#e6bf62' : gate.base);
         gate.mesh.material.emissive.set(warning ? '#5b420b' : '#000000');
         gate.mesh.material.emissiveIntensity = warning ? 0.4 + 0.3 * Math.sin(state.phaseSeconds * 10) : 0;
         for (const line of gate.outlines) line.material.color.set(closing || warning ? '#e67758' : '#c4ad6e');

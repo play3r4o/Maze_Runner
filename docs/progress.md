@@ -356,7 +356,7 @@ Stop for the rules-on versus rules-off comparison. M8 and M9 remain unapproved. 
 - Unit: 5 new trader tests (buy lists, prices, seeded stock and refresh, sell and buy with refusals, 400 random trades conserving value apart from the markup, save upgrade). Browser: a new trading scenario (the Armourer buys chainmail and refuses a ruby, the Jeweller buys the ruby by drag, the Weaponsmith sells its cheapest item into the stash, all kept after a reload).
 - Stage 1 build: full local browser suite, all 33 scenarios pass (29.1 min). Final build with stage 2: all 34 pass (27.8 min); unit 1445. Visual check: trader tab with prices beside the stash; on a 1280×800 window the panels wrap, so the screen now scrolls from the top instead of clipping it.
 - Commit `062b85a`: GitHub Actions run 43291280956 succeeded and deployed (25m 44s): 33 passed, 1 flaky (the M8 mid-run reload scenario waited in vain for the Resume button on its first attempt after a reload with a resumed clock, then passed on retry; to watch). Test at `https://play3r4o.github.io/Maze_Runner/?v=062b85a`. This note is committed locally for the next checkpoint.
-- Human acceptance pending: see the [M16 checklist](milestones/M16.md#human-acceptance-checklist-after-stage-2).
+- Human accepted 2026-11-13 with M17 ("all seems to work fine").
 
 ### M17: survival kit and new threats — 2026-11-12
 
@@ -367,4 +367,24 @@ Stop for the rules-on versus rules-off comparison. M8 and M9 remain unapproved. 
 - Full local browser suite: 35 of 36 passed (32.3 min). The M10 crossbow scenario failed because spitter globs shared the bolt-number counter (the first shot became bolt 2) and a new spitter nearby hurt the player. Globs now take ids from the tick, and that M10 scenario switches the M17 kinds off; it and the threat scenario pass again; unit 1460.
 - Commit `a0f2dd4`: GitHub Actions run 43307584669 failed: the M16 equipment scenario's first axe swing was ignored on the slow runner (a click just after the pointer locked, before its change event, did not count); the M8 mid-run reload scenario was flaky again and passed on retry. Mouse buttons now count from the actual lock state, like keys since M8. Locally the mouse-dependent scenarios (equipment, room, monsters, pressure) pass.
 - Commit `6c36ddf`: GitHub Actions run 43313304732 passed all 36 browser scenarios on the first attempt and deployed (24m 46s). Test at `https://play3r4o.github.io/Maze_Runner/?v=6c36ddf`. This note is committed locally for the next checkpoint.
-- Human acceptance pending: see the [M17 checklist](milestones/M17.md#human-acceptance-checklist-after-stage-2).
+- Human accepted 2026-11-13 together with M16: "all seems to work fine".
+
+### M18: the Octagon — 2026-11-13
+
+- Approved 2026-11-13 after a design discussion ("okay, let's try this to see how it works and we can adjust on the go. Let's try it out"); see the [M18 specification](milestones/M18.md).
+- Geometry: room and doorway sizes are per layout (`roomHalf`, `doorHalf`); walls are also cut at doorway edges; extra open chambers (`chambers`). Square mazes are unchanged (same seeds, same walls, all earlier tests pass); the corridor-trap axis now comes from the edge's direction, which is the same result there.
+- Stage 1: `simulation/octagon.ts` (generator `o1`). It builds a 109-room octagon (outer ring 60, middle ring 40, core chamber 9), the home sanctuary outside the south side, seven sealed bases, ring doors, eight shift gates, landmarks one per ring, and its own spawn counts.
+
+  Run rules:
+  - Lobby: the home gate is shut until E, then a 3 s countdown, and the clock starts as it opens.
+  - Extracting home shuts it.
+  - Night core extract: 5 s on the disc, which resets if you step off.
+  - Final seal at 330 s.
+
+  Shift and route checks count the lobby gate and ring doors as open. Default layout is the Octagon; `?layout=square` and reports pick the old one. Report format 12 (match state). HUD ring names, lobby, night and seal texts; the core disc, sealed slabs and home sign are drawn from primitive shapes.
+- Stage 2: `game/ringTurns.ts`. From 60 s and then every 60 s, one boundary turns, alternating the outer ring and the core: 4 s warning, 2 s doors closing (they push and crush), 4 s sealed, 2 s for the other half of the doors to open. The schedule is a pure function of the run clock (reports replay it). HUD warning and countdown, grinding sounds, purple ring doors. The generator makes sure the static rooms connect with either half of the ring doors open.
+- Unit: 1477 tests pass, 17 new:
+  - Layout: shape, rings, determinism over 150 seeds, home gate, ring doors with either half open, room and door sizes, spawns in the core and none in the lobby or hub.
+  - Match: lobby, countdown, home extract, night core extract and reset, final seal, shifts while shut, report round trip.
+  - Rings: schedule, doors in a run, a closing ring door pushes, reports.
+- Browser: every earlier scenario now loads `?layout=square`. New Octagon scenario (default header and title; gate shut until E; through it into the outer ring; back home extracts) passes (2.5 min).

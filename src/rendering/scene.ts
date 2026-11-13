@@ -28,7 +28,9 @@ import type { MazeOpenness } from '../simulation/maze';
 export type ExpeditionView = { carried: boolean; beams: boolean; night: number; chalk: readonly ChalkStroke[];
   openness: MazeOpenness; sounds: readonly SoundEvent[]; traps: readonly TrapState[]; time: number;
   monsters: readonly Monster[]; bolts: readonly Bolt[]; globs: readonly Glob[]; monstersOn: boolean; containers: readonly Container[]; relicHome: boolean;
-  thread: readonly (readonly { x: number; z: number }[])[]; trace: { x: number; z: number; chalk: readonly ChalkStroke[] } | null; held: HeldState; torch: boolean };
+  thread: readonly (readonly { x: number; z: number }[])[]; trace: { x: number; z: number; chalk: readonly ChalkStroke[] } | null; held: HeldState; torch: boolean;
+  // M18: whether the night core extract is open, and how far the stand on it has got (0..1).
+  core?: { active: boolean; progress: number } };
 
 export type SceneMode = 'room' | 'junction' | 'maze' | 'generated';
 export function createScene(canvas: HTMLCanvasElement, mode: SceneMode, generated?: GeneratedWorld) {
@@ -149,6 +151,7 @@ export function createScene(canvas: HTMLCanvasElement, mode: SceneMode, generate
       mazeView?.update(maze);
       if (expedition) {
         mazeView?.setRelic(!expedition.relicHome, performance.now() / 1000, expedition.beams);
+        if (expedition.core) mazeView?.setCore(expedition.core.active, expedition.core.progress);
         containerView?.update(expedition.containers, expedition.thread, expedition.trace);
         mazeView?.setFadedChalk(expedition.trace?.chalk ?? [], expedition.openness);
         mazeView?.setChalk(expedition.chalk, expedition.openness);

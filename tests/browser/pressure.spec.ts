@@ -42,8 +42,8 @@ function reportAt(seconds: number) {
 test('free-draw chalk strokes, rule switches in the address, and positional sound on a shift', async ({ page }) => {
   test.setTimeout(150_000);
   const errors = watchErrors(page);
-  await installBrowserClock(page); await page.goto('/?seed=41');
-  await expect(page).toHaveTitle('Shifting Labyrinth · M17');
+  await installBrowserClock(page); await page.goto('/?layout=square&seed=41');
+  await expect(page).toHaveTitle('Shifting Labyrinth · M18');
   await page.getByRole('button', { name: 'F2 · Debug map' }).click();
   await expect(page.getByTestId('chalk-left')).toHaveText('100% chalk');
   await startRunning(page, 'Start exploring');
@@ -102,7 +102,7 @@ test('the first bell rings at 150 s with a visible notice; after the third, nigh
   test.setTimeout(150_000);
   const errors = watchErrors(page);
   await installBrowserClock(page);
-  await page.goto(`/?seed=41#repro=${encodeURIComponent(reportAt(149.5))}`);
+  await page.goto(`/?layout=square&seed=41#repro=${encodeURIComponent(reportAt(149.5))}`);
   await expect(page.locator('[data-message]')).toContainText('Gate state matches the report exactly.');
   await page.getByRole('button', { name: 'F2 · Debug map' }).click();
   await startRunning(page, 'Start exploring');
@@ -117,7 +117,7 @@ test('the first bell rings at 150 s with a visible notice; after the third, nigh
   // Night: reload just before the third bell.
   await page.clock.resume();
   // A different query string forces a real page load (a hash-only change would not reload).
-  await page.goto(`/?seed=41&visit=2#repro=${encodeURIComponent(reportAt(239.5))}`);
+  await page.goto(`/?layout=square&seed=41&visit=2#repro=${encodeURIComponent(reportAt(239.5))}`);
   await page.getByRole('button', { name: 'F2 · Debug map' }).click();
   await startRunning(page, 'Start exploring');
   await page.clock.runFor(1000);

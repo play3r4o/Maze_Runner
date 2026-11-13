@@ -21,7 +21,20 @@ export type GeneratedMaze = MazeLayout & {
   // Gate IDs g1..gN in selection order, and each gate's starting openness (1 open, 0 closed).
   gates: readonly string[];
   initialOpenness: Readonly<Record<string, number>>;
+  // M18 octagon only. homeGate: the lobby gate (not part of shifts; opens when the match starts).
+  // hub: the room just inside it. core: the centre of the core chamber (night extract).
+  // sanctuaries: all eight team bases (one is home, the other seven are sealed in solo).
+  // ringNames: what the HUD calls each danger tier. counts: spawn tables for this layout.
+  homeGate?: string; hub?: string; core?: { x: number; z: number };
+  sanctuaries?: readonly Sanctuary[]; ringNames?: Readonly<Record<Ring, string>>; counts?: SpawnCounts;
 };
+export type Sanctuary = { id: string; name: string; column: number; row: number; inner: { column: number; row: number }; home: boolean };
+type TierCounts = Readonly<Record<Exclude<Ring, 'sanctuary'>, number>>;
+export type SpawnCounts = {
+  traps: TierCounts; chests: TierCounts;
+  monsters: Readonly<Record<Exclude<Ring, 'sanctuary'>, Readonly<{ husk: number; skitter: number; spitter: number; brute: number }>>>;
+};
+export const isOctagon = (maze: GeneratedMaze) => maze.homeGate !== undefined;
 
 const LANDMARKS = [
   { id: 'amber', name: 'Amber Spire', color: '#e9b857' },

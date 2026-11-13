@@ -25,7 +25,7 @@ test('sell to the right traders, buy from one, and keep gold and stock after a r
   await page.addInitScript(([key, value]) => { if (!sessionStorage.getItem('seeded')) { localStorage.setItem(key, value); sessionStorage.setItem('seeded', '1'); } },
     [SAVE_KEY, JSON.stringify({ format: 4, runs: 2, bag: [], inRun: false, traces: [], equipment: {}, gold: 0, market: null, stash: [mail, ruby, scrap] })]);
   await installBrowserClock(page);
-  await page.goto('/?seed=41&off=monsters,traps');
+  await page.goto('/?layout=square&seed=41&off=monsters,traps');
   await startRunning(page, 'Start exploring');
   await page.keyboard.press('Tab'); await page.clock.runFor(200);
   await expect(page.getByTestId('gold')).toHaveText('0 gold');
@@ -59,7 +59,7 @@ test('sell to the right traders, buy from one, and keep gold and stock after a r
   // Reload: gold, purchase and stock survive.
   await page.keyboard.press('Tab'); await page.clock.runFor(100);
   await page.clock.resume();
-  await page.goto('/?seed=41&off=monsters,traps&visit=2');
+  await page.goto('/?layout=square&seed=41&off=monsters,traps&visit=2');
   await startRunning(page, 'Start exploring');
   await page.keyboard.press('Tab'); await page.clock.runFor(200);
   await expect(page.getByTestId('gold')).toHaveText(`${gold - buyPrice(cheapest)} gold`);

@@ -22,7 +22,7 @@ test('number keys bandage, drink and light a torch; the belt and progress bar fo
     player: { x: world.relic.x, z: world.relic.z, yaw: 0 },
     bag: [{ uid: 'b', item: 'bandage', x: 0, y: 0, rotated: false }, { uid: 'p', item: 'healingPotion', x: 1, y: 0, rotated: false }, { uid: 't', item: 'torch', x: 2, y: 0, rotated: false }] };
   await installBrowserClock(page);
-  await page.goto(`/?seed=41&off=traps,monsters#repro=${encodeURIComponent(JSON.stringify(createRunReport(world, run)))}`);
+  await page.goto(`/?layout=square&seed=41&off=traps,monsters#repro=${encodeURIComponent(JSON.stringify(createRunReport(world, run)))}`);
   await clickWithBrowserFrames(page, page.getByRole('button', { name: 'Start exploring' }));
   await expect.poll(() => page.evaluate(() => document.pointerLockElement?.id)).toBe('scene');
   await freezeBrowserClock(page);

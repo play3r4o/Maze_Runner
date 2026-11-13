@@ -25,7 +25,7 @@ test('the map shows the new threats; a mimic chest bites when opened and wakes',
   const run: GeneratedRun = { ...base, status: 'out', leftSanctuary: true, player: { x: chest.x + 1, z: chest.z, yaw: Math.PI / 2 },
     monsters: base.monsters.map((m) => (m.kind === 'mimic' ? m : { ...m, mode: 'dead' as const })) };
   await installBrowserClock(page);
-  await page.goto(`/?seed=41&off=traps#repro=${encodeURIComponent(JSON.stringify(createRunReport(world, run)))}`);
+  await page.goto(`/?layout=square&seed=41&off=traps#repro=${encodeURIComponent(JSON.stringify(createRunReport(world, run)))}`);
   await expect(page.locator('[data-message]')).toContainText('Gate state matches the report exactly.');
   await page.getByRole('button', { name: 'F2 · Debug map' }).click();
   for (const kind of ['spitter', 'brute', 'ram', 'mimic']) await expect(page.locator(`[data-testid="debug-monster"][data-kind="${kind}"]`).first()).toBeAttached();

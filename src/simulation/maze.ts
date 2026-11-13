@@ -13,7 +13,14 @@ export type Landmark = { id: string; name: string; color: string; cell: string }
 export type CellBlock = { minColumn: number; maxColumn: number; minRow: number; maxRow: number };
 // Geometry needs columns/rows; graph-only fixtures may omit them (5×5 is assumed).
 export type MazeLayout = { cells: readonly MazeCell[]; edges: readonly MazeEdge[]; landmarks: readonly Landmark[]; start: string;
-  columns?: number; rows?: number; plaza?: CellBlock };
+  columns?: number; rows?: number; plaza?: CellBlock;
+  // M18: room and doorway half-sizes (the square mazes use 4 m rooms and 4 m-wide corridors).
+  roomHalf?: number; doorHalf?: number;
+  // M18: extra blocks carved open like the plaza (the octagon's core chamber).
+  chambers?: readonly CellBlock[] };
+export const roomHalfOf = (layout: MazeLayout) => layout.roomHalf ?? ROOM_HALF_DEFAULT;
+export const doorHalfOf = (layout: MazeLayout) => layout.doorHalf ?? 2;
+const ROOM_HALF_DEFAULT = 2;
 
 export const CELL_SPACING = 12;
 export const CORRIDOR_WIDTH = 4;
@@ -31,12 +38,14 @@ export function cellPosition(cell: MazeCell, layout: MazeLayout = HAND_BUILT_MAZ
     z: (cell.row - ((layout.rows ?? 5) - 1) / 2) * CELL_SPACING };
 }
 export const findCell = (layout: MazeLayout, id: string) => layout.cells.find((cell) => cell.id === id)!;
-export function plazaRect(layout: MazeLayout): WallRect | null {
-  if (!layout.plaza) return null;
-  const { minColumn, maxColumn, minRow, maxRow } = layout.plaza;
+export const plazaRect = (layout: MazeLayout): WallRect | null => layout.plaza ? blockRect(layout, layout.plaza, 'plaza') : null;
+export const chamberRects = (layout: MazeLayout): WallRect[] => (layout.chambers ?? []).map((block, i) => blockRect(layout, block, `chamber-${i + 1}`));
+export function blockRect(layout: MazeLayout, block: CellBlock, id: string): WallRect {
+  const { minColumn, maxColumn, minRow, maxRow } = block;
   const a = cellPosition({ id: '', column: minColumn, row: minRow }, layout);
   const b = cellPosition({ id: '', column: maxColumn, row: maxRow }, layout);
-  return { id: 'plaza', minX: a.x - ROOM_HALF, maxX: b.x + ROOM_HALF, minZ: a.z - ROOM_HALF, maxZ: b.z + ROOM_HALF, height: 3 };
+  const h = roomHalfOf(layout);
+  return { id, minX: a.x - h, maxX: b.x + h, minZ: a.z - h, maxZ: b.z + h, height: 3 };
 }
 
 // Explicit rows/columns of connections, not a procedural generator.
@@ -78,11 +87,12 @@ export function corridorRect(layout: MazeLayout, edge: MazeEdge): WallRect {
   const a = cellPosition(findCell(layout, edge.a), layout);
   const b = cellPosition(findCell(layout, edge.b), layout);
   const vertical = a.x === b.x;
+  const room = roomHalfOf(layout), door = doorHalfOf(layout);
   return { id: edge.id, height: 3,
-    minX: vertical ? a.x - 2 : Math.min(a.x, b.x) + 2,
-    maxX: vertical ? a.x + 2 : Math.max(a.x, b.x) - 2,
-    minZ: vertical ? Math.min(a.z, b.z) + 2 : a.z - 2,
-    maxZ: vertical ? Math.max(a.z, b.z) - 2 : a.z + 2,
+    minX: vertical ? a.x - door : Math.min(a.x, b.x) + room,
+    maxX: vertical ? a.x + door : Math.max(a.x, b.x) - room,
+    minZ: vertical ? Math.min(a.z, b.z) + room : a.z - door,
+    maxZ: vertical ? Math.max(a.z, b.z) - room : a.z + door,
   };
 }
 
@@ -124,13 +134,15 @@ const contains = (rect: WallRect, x: number, z: number) => x > rect.minX && x < 
 export function deriveMazeWalls(layout: MazeLayout): WallRect[] {
   const rooms = layout.cells.map((cell) => {
     const { x, z } = cellPosition(cell, layout);
-    return { id: cell.id, minX: x - 2, maxX: x + 2, minZ: z - 2, maxZ: z + 2, height: 3 };
+    const h = roomHalfOf(layout);
+    return { id: cell.id, minX: x - h, maxX: x + h, minZ: z - h, maxZ: z + h, height: 3 };
   });
   const plaza = plazaRect(layout);
-  const passages = [...rooms, ...layout.edges.map((edge) => corridorRect(layout, edge)), ...(plaza ? [plaza] : [])];
+  const corridors = layout.edges.map((edge) => corridorRect(layout, edge));
+  const passages = [...rooms, ...corridors, ...(plaza ? [plaza] : []), ...chamberRects(layout)];
   const { width, depth } = mazeExtent(layout);
   const cuts = (axis: 'x' | 'z') => [...new Set([axis === 'x' ? -width / 2 : -depth / 2, axis === 'x' ? width / 2 : depth / 2,
-    ...rooms.flatMap((room) => axis === 'x' ? [room.minX, room.maxX] : [room.minZ, room.maxZ])])].sort((a, b) => a - b);
+    ...[...rooms, ...corridors].flatMap((room) => axis === 'x' ? [room.minX, room.maxX] : [room.minZ, room.maxZ])])].sort((a, b) => a - b);
   const xs = cuts('x'), zs = cuts('z');
   const walls: WallRect[] = [];
   for (let x = 0; x < xs.length - 1; x++) for (let z = 0; z < zs.length - 1; z++) {
@@ -148,7 +160,8 @@ export const MAZE_SOLIDS = [...MAZE_WALLS, ...HAND_BUILT_MAZE.landmarks.map((lan
 
 export function inCellRoom(player: PlayerState, id: string, layout: MazeLayout = HAND_BUILT_MAZE): boolean {
   const { x, z } = cellPosition(findCell(layout, id), layout);
-  return Math.abs(player.x - x) < 2 && Math.abs(player.z - z) < 2;
+  const h = roomHalfOf(layout);
+  return Math.abs(player.x - x) < h && Math.abs(player.z - z) < h;
 }
 
 // Compatibility predicate; the shared graph queries also power diagnostics.

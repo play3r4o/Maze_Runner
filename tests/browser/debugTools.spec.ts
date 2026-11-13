@@ -23,8 +23,8 @@ test('freeze holds a shift in place, teleport moves rings, and events record bot
   test.setTimeout(120_000);
   const errors = watchErrors(page);
   const maze = generateMaze(41);
-  await installBrowserClock(page); await page.goto('/?seed=41&off=monsters');
-  await expect(page).toHaveTitle('Shifting Labyrinth · M17');
+  await installBrowserClock(page); await page.goto('/?layout=square&seed=41&off=monsters');
+  await expect(page).toHaveTitle('Shifting Labyrinth · M18');
   await page.getByRole('button', { name: 'F2 · Debug map' }).click();
   await startRunning(page, 'Start exploring');
   await freezeBrowserClock(page);
@@ -58,7 +58,7 @@ test('freeze holds a shift in place, teleport moves rings, and events record bot
 test('a copied report reloads its seed and reproduces gate state and position exactly', async ({ page }) => {
   test.setTimeout(150_000);
   const errors = watchErrors(page);
-  await installBrowserClock(page); await page.goto('/?seed=41&off=monsters');
+  await installBrowserClock(page); await page.goto('/?layout=square&seed=41&off=monsters');
   await page.getByRole('button', { name: 'F2 · Debug map' }).click();
   await startRunning(page, 'Start exploring');
   await freezeBrowserClock(page);
@@ -76,7 +76,7 @@ test('a copied report reloads its seed and reproduces gate state and position ex
   expect(Number(before.g7)).toBeGreaterThan(0); expect(Number(before.g7)).toBeLessThan(1);
 
   // Load it from a different seed: the page reloads seed 41 and replays the report.
-  await page.goto('/?seed=1');
+  await page.goto('/?layout=square&seed=1');
   await page.getByRole('button', { name: 'F2 · Debug map' }).click();
   await page.locator('.debug-report summary').click();
   await page.getByTestId('report-text').fill(text);
@@ -103,7 +103,7 @@ test('a copied report reloads its seed and reproduces gate state and position ex
 test('repeated regeneration: ten seeds in a row rebuild correctly without page errors', async ({ page }) => {
   test.setTimeout(150_000);
   const errors = watchErrors(page);
-  await page.goto('/?seed=5');
+  await page.goto('/?layout=square&seed=5');
   for (let i = 0; i < 10; i++) {
     await page.getByRole('button', { name: 'F2 · Debug map' }).click();
     await page.getByRole('button', { name: 'Random' }).click();

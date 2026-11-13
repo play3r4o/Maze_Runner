@@ -22,8 +22,8 @@ const world = buildGeneratedWorld(generateMaze(41));
 test('leave (automatic countdown starts), loot the relic from its reliquary, come home: extracted with it, then Retry this seed', async ({ page }) => {
   test.setTimeout(180_000);
   const errors = watchErrors(page);
-  await installBrowserClock(page); await page.goto('/?seed=41&off=monsters');
-  await expect(page).toHaveTitle('Shifting Labyrinth · M17');
+  await installBrowserClock(page); await page.goto('/?layout=square&seed=41&off=monsters');
+  await expect(page).toHaveTitle('Shifting Labyrinth · M18');
   await expect(page.locator('#panel-title')).toHaveText('Loot the maze. Get out alive.');
   await page.getByRole('button', { name: 'F2 · Debug map' }).click();
   await startRunning(page, 'Start exploring');
@@ -97,7 +97,7 @@ test('leave (automatic countdown starts), loot the relic from its reliquary, com
 test('abandon ends the run with nothing secured; New run loads a different seed', async ({ page }) => {
   test.setTimeout(120_000);
   const errors = watchErrors(page);
-  await installBrowserClock(page); await page.goto('/?seed=41&off=monsters');
+  await installBrowserClock(page); await page.goto('/?layout=square&seed=41&off=monsters');
   // Abandon is not offered before the first start.
   await expect(page.getByRole('button', { name: 'Abandon run' })).toBeHidden();
   await startRunning(page, 'Start exploring');

@@ -7,12 +7,13 @@ import { WARNING_SECONDS } from '../simulation/shift';
 import { HAND_BUILT_MAZE, MAZE_GATE_IDS } from '../simulation/maze';
 import type { MazeRun } from '../game/mazeRun';
 import { isRunOver } from '../game/generatedRun';
-import { CHALK_INK_METRES } from '../game/tuning';
+import { CHALK_INK_METRES, MATCH } from '../game/tuning';
+import { isNight } from '../game/pressure';
 import { maxHealthOf } from '../game/equipment';
 import { activeWeapon } from '../game/generatedRun';
 
 // Result-screen wording for deaths other than gate crushes.
-const DEATH_TEXT: Record<string, string> = {"boulder": "A rolling boulder flattened you", "pit": "The floor opened and you fell", "spears": "Spears from the walls ran you through", "floorSpikes": "Spikes burst from the floor beneath you", "darts": "Darts from the walls brought you down", "blade": "A swinging blade cut you down", "husk": "A husk caught you and tore you down", "skitter": "A skitter swarmed over you", "warden": "The Warden found you", "spitter": "A spitter's glob finished you", "brute": "A brute's blow crushed you", "mimic": "The chest had teeth", "ram": "The Ram ran you down"};
+const DEATH_TEXT: Record<string, string> = {"boulder": "A rolling boulder flattened you", "pit": "The floor opened and you fell", "spears": "Spears from the walls ran you through", "floorSpikes": "Spikes burst from the floor beneath you", "darts": "Darts from the walls brought you down", "blade": "A swinging blade cut you down", "husk": "A husk caught you and tore you down", "skitter": "A skitter swarmed over you", "warden": "The Warden found you", "spitter": "A spitter's glob finished you", "brute": "A brute's blow crushed you", "mimic": "The chest had teeth", "ram": "The Ram ran you down", "seal": "The labyrinth sealed with you inside"};
 import type { GeneratedRun } from '../game/generatedRun';
 import type { GeneratedMaze } from '../simulation/mazeGenerator';
 import type { SceneMode } from '../rendering/scene';
@@ -28,7 +29,7 @@ export function createHud(root: HTMLElement, scene: SceneMode, generated?: Gener
   const startTitle = isGenerated ? 'Loot the maze. Get out alive.' : isMaze ? 'Find your way home.' : isJunction ? 'The walls can move.' : 'A place to begin.';
   root.innerHTML = `
     <header class="prototype-header">
-      <span class="eyebrow">DEVELOPMENT BUILD / ${isGenerated ? 'M17 · THREATS' : isMaze ? 'M3 · GRAPH DIAGNOSTICS' : isJunction ? 'M1 · PUSH &amp; CRUSH' : 'M0'}</span>
+      <span class="eyebrow">DEVELOPMENT BUILD / ${isGenerated ? generated?.homeGate ? 'M18 · THE OCTAGON' : 'M18 · SQUARE MAZE' : isMaze ? 'M3 · GRAPH DIAGNOSTICS' : isJunction ? 'M1 · PUSH &amp; CRUSH' : 'M0'}</span>
       <p class="wordmark">Shifting Labyrinth<span>Working title</span></p>
     </header>
     <div class="session-status" role="status" aria-live="polite">
@@ -224,10 +225,15 @@ export function createHud(root: HTMLElement, scene: SceneMode, generated?: Gener
       if ((root.dataset.chalk === 'out') !== chalkOut) { if (chalkOut) root.dataset.chalk = 'out'; else delete root.dataset.chalk; }
       if (!ringLabel || timestamp - lastJunctionUpdate < 100) return;
       lastJunctionUpdate = timestamp;
-      ringLabel.textContent = run.ring === 'sanctuary' ? 'Sanctuary' : `${run.ring[0].toUpperCase()}${run.ring.slice(1)} ring`;
+      ringLabel.textContent = generated?.ringNames?.[run.ring] ?? (run.ring === 'sanctuary' ? 'Sanctuary' : `${run.ring[0].toUpperCase()}${run.ring.slice(1)} ring`);
       ringLabel.dataset.ring = run.ring;
       runTime!.textContent = clock(run.runTicks);
-      const goal = run.status === 'ready' ? 'Leave Sanctuary, loot what you can, and come back alive. Tab opens your stash.'
+      const octagon = Boolean(generated?.homeGate);
+      const opensIn = run.match.opensAt === null ? null : Math.max(0, (run.match.opensAt - run.tick) / 60);
+      const goal = octagon && run.status === 'ready' ? opensIn === null ? 'Lobby · press E to open your gate and start the match. Tab opens your stash.'
+          : `Your gate opens in ${Math.ceil(opensIn)}…`
+        : octagon && run.status === 'out' && isNight(run.rules, run.runTicks) ? `Night · the core extract is open (stand on it ${MATCH.coreSeconds}s), or get home. Gates seal in ${Math.max(0, Math.ceil(MATCH.finalSeal - run.runTicks / 60))}s.`
+        : run.status === 'ready' ? 'Leave Sanctuary, loot what you can, and come back alive. Tab opens your stash.'
         : run.carrying ? 'The Heart of the Maze is in your bag · get back to Sanctuary under the gold beam.'
         : 'Loot chests and remains (E). Step back into Sanctuary to keep what you carry.';
       if (objective!.textContent !== goal) { objective!.textContent = goal; objective!.dataset.carrying = String(run.carrying); }
@@ -266,9 +272,10 @@ export function createHud(root: HTMLElement, scene: SceneMode, generated?: Gener
         ? `The Sanctuary bell tolls ${['once', 'twice', 'three times'][run.bells - 1] ?? ''}.${run.bells === 3 ? ' Night falls: the maze will shift constantly.' : ''}` : null;
       const fell = [...run.events].reverse().find((event) => event.kind === 'monster' && event.detail.includes('warden killed by'));
       const wardenNotice = fell && run.tick - fell.tick < 5 * 60 ? 'The Warden has fallen. It will return.' : null;
-      const notice = run.pushedBy ? `${run.pushedBy.toUpperCase()} stone is pushing you. Escape along the passage!`
+      const coreNotice = octagon && run.match.channel > 0 ? `Extracting through the core… ${Math.ceil(MATCH.coreSeconds - run.match.channel)}s` : null;
+      const notice = coreNotice ?? (run.pushedBy ? `${run.pushedBy.toUpperCase()} stone is pushing you. Escape along the passage!`
         : wardenNotice ?? bellNotice ?? (run.status === 'out' && state.phase === 'idle' && state.completedShifts === 0
-          ? 'The maze shifts by itself, after a 2 second warning. Listen for grinding stone.' : state.notice);
+          ? 'The maze shifts by itself, after a 2 second warning. Listen for grinding stone.' : state.notice));
       if (generatedNotice!.textContent !== notice) generatedNotice!.textContent = notice;
     },
     // M8 stage 2: the gate-jam prompt (T6) and thread left (T5).
@@ -302,7 +309,7 @@ export function createHud(root: HTMLElement, scene: SceneMode, generated?: Gener
       const lost = run.bag.length ? ` Lost: ${haul}.` : '';
       const copy = {
         extracted: [run.carrying ? 'The Heart is yours.' : run.bag.length ? 'Loot secured.' : 'Back alive.', 'EXTRACTED',
-          `You came home in ${time}, through ${shifts}, carrying ${haul}.${debug} It stays in your bag; Tab in Sanctuary moves it to your stash.`],
+          `${run.match.via === 'core' ? 'You escaped through the core extract' : 'You came home'} in ${time}, through ${shifts}, carrying ${haul}.${debug} It stays in your bag; Tab in Sanctuary moves it to your stash.`],
         failed: run.crushedBy
           ? ['Crushed.', 'CRUSHED', `The ${run.crushedBy.toUpperCase()} gate pinned you against the opposite wall after ${time} and ${shifts}.${lost}`]
           : ['You died.', 'DEAD', `${DEATH_TEXT[run.killedBy ?? ''] ?? `Killed by ${run.killedBy}`} after ${time} and ${shifts}.${lost}`],

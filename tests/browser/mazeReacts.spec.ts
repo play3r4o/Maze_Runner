@@ -40,7 +40,7 @@ test('T lays thread from the free spool; F jams a closing gate with the last ite
   while (run.shift.phase !== 'closing') run = stepGeneratedRun(world, run, { forward: 0, strafe: 0 }, 0, 1 / 60);
   for (let i = 0; i < 30; i++) run = stepGeneratedRun(world, run, { forward: 0, strafe: 0 }, 0, 1 / 60);
   await installBrowserClock(page);
-  await page.goto(`/?seed=41&off=traps,monsters#repro=${encodeURIComponent(JSON.stringify(createRunReport(world, run)))}`);
+  await page.goto(`/?layout=square&seed=41&off=traps,monsters#repro=${encodeURIComponent(JSON.stringify(createRunReport(world, run)))}`);
   await expect(page.locator('[data-message]')).toContainText('Gate state matches the report exactly.');
   await page.getByRole('button', { name: 'F2 · Debug map' }).click();
   await startRunning(page, 'Start exploring');
@@ -68,7 +68,7 @@ test('dying leaves a cairn that the next run of the same seed shows', async ({ p
   test.setTimeout(150_000);
   const errors = watchErrors(page);
   await installBrowserClock(page);
-  await page.goto('/?seed=41&off=monsters');
+  await page.goto('/?layout=square&seed=41&off=monsters');
   await page.getByRole('button', { name: 'F2 · Debug map' }).click();
   await expect(page.getByTestId('debug-cairn')).toHaveCount(0);
   await startRunning(page, 'Start exploring');
@@ -80,7 +80,7 @@ test('dying leaves a cairn that the next run of the same seed shows', async ({ p
   await page.clock.runFor(1500);
   await expect(page.locator('#panel-title')).toHaveText('You died.');
   await page.clock.resume();
-  await page.goto('/?seed=41&off=monsters&visit=2');
+  await page.goto('/?layout=square&seed=41&off=monsters&visit=2');
   await page.getByRole('button', { name: 'F2 · Debug map' }).click();
   await expect(page.getByTestId('debug-cairn')).toHaveCount(1);
   const cairn = page.getByTestId('debug-cairn');
@@ -88,7 +88,7 @@ test('dying leaves a cairn that the next run of the same seed shows', async ({ p
   expect(Math.abs(Number(await cairn.getAttribute('cx')) - pitCentre.x)).toBeLessThan(1.5);
   expect(Math.abs(Number(await cairn.getAttribute('cy')) - pitCentre.z)).toBeLessThan(1.5);
   // Another seed has no cairn.
-  await page.goto('/?seed=42&off=monsters');
+  await page.goto('/?layout=square&seed=42&off=monsters');
   await page.getByRole('button', { name: 'F2 · Debug map' }).click();
   await expect(page.getByTestId('debug-cairn')).toHaveCount(0);
   expect(errors).toEqual([]);

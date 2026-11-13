@@ -1,7 +1,9 @@
-import { BoxGeometry, BufferGeometry, CanvasTexture, DoubleSide, Float32BufferAttribute, Group, InstancedMesh, Matrix4, Mesh,
+import { BoxGeometry, BufferGeometry, CanvasTexture, CylinderGeometry, DoubleSide, Float32BufferAttribute, Group, InstancedMesh, Matrix4, Mesh,
   MeshBasicMaterial, MeshStandardMaterial, OctahedronGeometry, PlaneGeometry, SRGBColorSpace } from 'three';
 import type { Scene } from 'three';
-import { HAND_BUILT_MAZE, MAZE_WALLS, cellPosition, findCell, gateEdges, gateRect, landmarkRect, plazaRect } from '../simulation/maze';
+import { HAND_BUILT_MAZE, MAZE_WALLS, cellPosition, chamberRects, findCell, gateEdges, gateRect, landmarkRect, plazaRect } from '../simulation/maze';
+import type { GeneratedMaze } from '../simulation/mazeGenerator';
+import { MATCH } from '../game/tuning';
 import type { MazeLayout, MazeOpenness } from '../simulation/maze';
 import type { WallRect } from '../simulation/player';
 import type { ShiftPhase } from '../simulation/shift';
@@ -50,6 +52,7 @@ export type GateView = { phase: ShiftPhase; phaseSeconds: number; openness: Maze
 // M7: an optional relic (crystal + light beam) and a gold beam over Sanctuary for wayfinding.
 export function createMazeView(scene: Scene, layout: MazeLayout = HAND_BUILT_MAZE, mazeWalls: readonly WallRect[] = MAZE_WALLS,
   relic?: { x: number; z: number }) {
+  const octagon = 'homeGate' in layout && (layout as GeneratedMaze).homeGate ? layout as GeneratedMaze : null;
   const group = new Group();
   scene.add(group);
   const box = new BoxGeometry(1, 1, 1);
@@ -59,7 +62,7 @@ export function createMazeView(scene: Scene, layout: MazeLayout = HAND_BUILT_MAZ
   mazeWalls.forEach((wall, i) => walls.setMatrixAt(i, matrix.makeScale(wall.maxX - wall.minX, wall.height, wall.maxZ - wall.minZ)
     .setPosition((wall.minX + wall.maxX) / 2, wall.height / 2, (wall.minZ + wall.maxZ) / 2)));
   group.add(walls);
-  const geometries: (BoxGeometry | PlaneGeometry | OctahedronGeometry)[] = [box];
+  const geometries: BufferGeometry[] = [box];
   const materials: (MeshBasicMaterial | MeshStandardMaterial)[] = [wallMaterial];
   const textures: CanvasTexture[] = [];
   function block(width: number, height: number, depth: number, x: number, y: number, z: number, color: string) {
@@ -136,9 +139,34 @@ export function createMazeView(scene: Scene, layout: MazeLayout = HAND_BUILT_MAZ
     relicBeam = beam(relic.x, relic.z, '#57d6f5', 0.6);
   }
   const plaza = plazaRect(layout);
-  if (plaza) block(plaza.maxX - plaza.minX - 0.2, 0.02, plaza.maxZ - plaza.minZ - 0.2, 0, 0.02, 0, '#bba36b');
+  const home = plaza ? { x: (plaza.minX + plaza.maxX) / 2, z: (plaza.minZ + plaza.maxZ) / 2 } : { x: 0, z: 0 };
+  if (plaza) block(plaza.maxX - plaza.minX - 0.2, 0.02, plaza.maxZ - plaza.minZ - 0.2, home.x, 0.02, home.z, '#bba36b');
   else block(3.8, 0.02, 3.8, 0, 0.02, 0, '#bba36b');
-  sign('SANCTUARY / START', 0, 3.5, -1.8);
+  if (homeBeam && (home.x !== 0 || home.z !== 0)) homeBeam.position.set(home.x, homeBeam.position.y, home.z);
+  sign('SANCTUARY / START', home.x, 3.5, home.z + (octagon ? 3 : -1.8), octagon ? Math.PI : 0);
+  // M18: the core chamber floor, the night extract disc and the seven sealed team bases.
+  for (const chamber of chamberRects(layout)) {
+    block(chamber.maxX - chamber.minX - 0.2, 0.015, chamber.maxZ - chamber.minZ - 0.2, (chamber.minX + chamber.maxX) / 2, 0.015, (chamber.minZ + chamber.maxZ) / 2, '#5b4a6e');
+  }
+  let coreDisc: Mesh<CylinderGeometry, MeshBasicMaterial> | null = null;
+  if (octagon?.core) {
+    const geometry = new CylinderGeometry(MATCH.coreRadius, MATCH.coreRadius, 0.06, 32);
+    const material = new MeshBasicMaterial({ color: '#7fe0a8', transparent: true, opacity: 0.25 });
+    coreDisc = new Mesh(geometry, material);
+    coreDisc.position.set(octagon.core.x, 0.05, octagon.core.z);
+    geometries.push(geometry); materials.push(material); group.add(coreDisc);
+    sign('CORE / NIGHT EXTRACT', octagon.core.x, 3.8, octagon.core.z, 0, '#7fe0a8');
+  }
+  for (const base of octagon?.sanctuaries ?? []) {
+    if (base.home) continue;
+    const inner = cellPosition({ id: '', column: base.inner.column, row: base.inner.row }, layout);
+    const dx = Math.sign(base.column - base.inner.column), dz = Math.sign(base.row - base.inner.row);
+    const half = layout.roomHalf ?? 2;
+    const x = inner.x + dx * (half - 0.05), z = inner.z + dz * (half - 0.05);
+    // A sealed slab set into the wall where that team's gate will be.
+    block(dx ? 0.2 : 4, 3, dz ? 0.2 : 4, x, 1.5, z, '#6d5f86');
+    sign(`SEALED · ${base.name.toUpperCase()} BASE`, x - dx * 0.15, 3.5, z - dz * 0.15, Math.atan2(-dx, -dz), '#cbbde8');
+  }
   for (const landmark of layout.landmarks) {
     const rect = landmarkRect(landmark, layout);
     block(rect.maxX - rect.minX, rect.height, rect.maxZ - rect.minZ,
@@ -151,7 +179,9 @@ export function createMazeView(scene: Scene, layout: MazeLayout = HAND_BUILT_MAZ
     const rect = gateRect(layout, edge, 0);
     const centerX = (rect.minX + rect.maxX) / 2, centerZ = (rect.minZ + rect.maxZ) / 2;
     const mesh = block(rect.maxX - rect.minX, rect.height, rect.maxZ - rect.minZ, 0, rect.height / 2, 0, '#ae965f');
-    const vertical = rect.maxZ - rect.minZ > rect.maxX - rect.minX;
+    // Along the passage (M18 doorways are wider than they are long).
+    const vertical = findCell(layout, edge.a).column === findCell(layout, edge.b).column;
+    const label = id === 'home' ? 'HOME GATE' : `${id.toUpperCase()} / ${octagon ? '' : '8m '}CRUSH`;
     const outlines = [
       block(rect.maxX - rect.minX, 0.015, 0.035, (rect.minX + rect.maxX) / 2, 0.025, rect.minZ, '#c4ad6e'),
       block(rect.maxX - rect.minX, 0.015, 0.035, (rect.minX + rect.maxX) / 2, 0.025, rect.maxZ, '#c4ad6e'),
@@ -159,11 +189,11 @@ export function createMazeView(scene: Scene, layout: MazeLayout = HAND_BUILT_MAZ
       block(0.035, 0.015, rect.maxZ - rect.minZ, rect.maxX, 0.025, (rect.minZ + rect.maxZ) / 2, '#c4ad6e'),
     ];
     if (vertical) {
-      sign(`${id.toUpperCase()} / 8m CRUSH`, centerX, 3.5, rect.maxZ + 0.05);
-      sign(`${id.toUpperCase()} / 8m CRUSH`, centerX, 3.5, rect.minZ - 0.05, Math.PI);
+      sign(label, centerX, 3.5, rect.maxZ + 0.05);
+      sign(label, centerX, 3.5, rect.minZ - 0.05, Math.PI);
     } else {
-      sign(`${id.toUpperCase()} / 8m CRUSH`, rect.minX - 0.05, 3.5, centerZ, -Math.PI / 2);
-      sign(`${id.toUpperCase()} / 8m CRUSH`, rect.maxX + 0.05, 3.5, centerZ, Math.PI / 2);
+      sign(label, rect.minX - 0.05, 3.5, centerZ, -Math.PI / 2);
+      sign(label, rect.maxX + 0.05, 3.5, centerZ, Math.PI / 2);
     }
     return { id, edge, mesh, outlines };
   });
@@ -174,6 +204,12 @@ export function createMazeView(scene: Scene, layout: MazeLayout = HAND_BUILT_MAZ
       if (relicBeam) relicBeam.visible = beamsOn && !carried;
       if (homeBeam) homeBeam.visible = beamsOn;
       if (crystal) { crystal.rotation.y = seconds * 1.2; crystal.position.y = 1.25 + Math.sin(seconds * 2) * 0.08; }
+    },
+    // M18: the core extract glows at night and fills while you stand on it.
+    setCore(active: boolean, progress: number) {
+      if (!coreDisc) return;
+      coreDisc.material.opacity = active ? 0.35 + 0.5 * progress : 0.08;
+      coreDisc.material.color.set(active ? '#7fe0a8' : '#4d5a52');
     },
     // T4 free-draw chalk. Rebuilds geometry only when strokes change; gate drawings follow their slab.
     setChalk(strokes: readonly ChalkStroke[], openness: MazeOpenness) { chalkLayer.set(strokes, openness); },

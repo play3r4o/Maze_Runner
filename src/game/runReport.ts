@@ -7,7 +7,8 @@ import { overlapsBody } from '../simulation/movingWalls';
 import { advanceGeneratedShift, createGeneratedShift, requestGeneratedShift } from '../simulation/generatedShift';
 import type { GeneratedShift } from '../simulation/generatedShift';
 import type { ShiftPhase } from '../simulation/shift';
-import { RUN_EVENT_LIMIT, addRunEvent, createGeneratedRun, teleportTarget } from './generatedRun';
+import { RUN_EVENT_LIMIT, addRunEvent, createGeneratedRun, homeOpenness, teleportTarget } from './generatedRun';
+import { OCTAGON_CONFIG, OCTAGON_VERSION } from '../simulation/octagon';
 import type { GeneratedRun, GeneratedWorld, RunEvent, RunStatus } from './generatedRun';
 import { RULE_KEYS } from './pressure';
 import type { RuleToggles } from './pressure';
@@ -26,7 +27,7 @@ import { BAG_SIZE } from './tuning';
 // A bug report is plain JSON. With the same build it rebuilds the maze (seed + config),
 // replays the same shift requests to the same gate poses, and puts the player back.
 // Bump REPORT_FORMAT if fields change meaning.
-export const REPORT_FORMAT = 11;
+export const REPORT_FORMAT = 12;
 export type RunReport = {
   format: number; version: string; seed: number; config: GeneratorConfig; fingerprint: string;
   // Replay inputs.
@@ -48,6 +49,7 @@ export type RunReport = {
   equipment: Equipment; activeHand: 'main' | 'off'; attackCooldown: number; blocking: boolean;
   using: { uid: string; item: string; seconds: number; total: number } | null; regen: { seconds: number; carry: number } | null; torch: number;
   globs: Glob[];
+  match: GeneratedRun['match'];
   // Recorded results, compared after replay.
   expect: { phase: ShiftPhase; revision: number; completedShifts: number; openness: MazeOpenness };
   // Context for a human reader; not used for replay.
@@ -71,7 +73,7 @@ export function createRunReport(world: GeneratedWorld, run: GeneratedRun, contex
     footstep: run.footstep, thread: structuredClone(run.thread), threadLeft: run.threadLeft, laying: run.laying,
     jam: run.jam ? { ...run.jam } : null, jams: structuredClone(run.jams),
     equipment: structuredClone(run.equipment), activeHand: run.activeHand, attackCooldown: run.attackCooldown, blocking: run.blocking,
-    using: run.using ? { ...run.using } : null, regen: run.regen ? { ...run.regen } : null, torch: run.torch, globs: run.globs.map((glob) => ({ ...glob })),
+    using: run.using ? { ...run.using } : null, regen: run.regen ? { ...run.regen } : null, torch: run.torch, globs: run.globs.map((glob) => ({ ...glob })), match: { ...run.match },
     expect: { phase: run.shift.phase, revision: run.shift.revision, completedShifts: run.shift.completedShifts, openness: { ...run.shift.openness } },
     events: run.events.slice(-20), shiftLog: context.shiftLog ?? [], errors: (context.errors ?? []).slice(-10), note: context.note ?? '',
   };
@@ -91,11 +93,11 @@ export function parseRunReport(text: string): { ok: true; report: RunReport } | 
   try { data = JSON.parse(text); } catch { return { ok: false, error: 'Report is not valid JSON.' }; }
   if (!isObject(data)) return { ok: false, error: 'Report must be a JSON object.' };
   if (data.format !== REPORT_FORMAT) return { ok: false, error: `Unsupported report format ${String(data.format)}; expected ${REPORT_FORMAT}.` };
-  if (data.version !== GENERATOR_VERSION) {
-    return { ok: false, error: `Report is from generator ${String(data.version)}; this build is ${GENERATOR_VERSION}. Use a matching build.` };
+  if (data.version !== GENERATOR_VERSION && data.version !== OCTAGON_VERSION) {
+    return { ok: false, error: `Report is from generator ${String(data.version)}; this build is ${GENERATOR_VERSION} / ${OCTAGON_VERSION}. Use a matching build.` };
   }
   if (!isInt(data.seed, 0, MAX_SEED)) return { ok: false, error: 'Report seed must be a whole number from 0 to 4294967295.' };
-  if (!isObject(data.config) || JSON.stringify(data.config) !== JSON.stringify(DEFAULT_GENERATOR_CONFIG)) {
+  if (!isObject(data.config) || JSON.stringify(data.config) !== JSON.stringify(data.version === OCTAGON_VERSION ? OCTAGON_CONFIG : DEFAULT_GENERATOR_CONFIG)) {
     return { ok: false, error: 'Report uses a different generator config than this build.' };
   }
   if (!isInt(data.requests, 0, 100_000) || !isInt(data.shiftTicks, 0, 10_000_000) || !isInt(data.tick, 0, 1e9)) {
@@ -152,6 +154,8 @@ export function parseRunReport(text: string): { ok: true; report: RunReport } | 
     return { ok: false, error: 'Report consumable state is missing or invalid.' };
   }
   if (!Array.isArray(data.globs)) return { ok: false, error: 'Report globs are missing.' };
+  if (!isObject(data.match) || !(data.match.opensAt === null || isInt(data.match.opensAt, 0, 1e9)) || !isNumber(data.match.channel)
+    || ![null, 'home', 'core'].includes(data.match.via as string | null)) return { ok: false, error: 'Report match state is missing or invalid.' };
   const report = {
     events: [], shiftLog: [], errors: [], note: '', frozen: false, cell: null, ring: 'sanctuary', leftSanctuary: false,
     returned: false, teleports: 0, crushedBy: null, killedBy: null, fingerprint: '', ...data,
@@ -180,7 +184,12 @@ export function reproduceRun(world: GeneratedWorld, report: RunReport): { run: G
   const mismatches: string[] = [];
   if (report.seed !== world.maze.seed) mismatches.push(`Seed ${report.seed} does not match loaded seed ${world.maze.seed}.`);
   if (report.fingerprint && report.fingerprint !== layoutFingerprint(world.maze)) mismatches.push('Layout fingerprint differs.');
-  const shift = replayShift(world, report.requests, report.shiftTicks);
+  let shift = replayShift(world, report.requests, report.shiftTicks);
+  // M18: the home gate is not replayed; it follows the match clock.
+  if (world.maze.homeGate) {
+    const status = report.status === 'failed' ? 'out' : report.status;
+    shift = { ...shift, openness: { ...shift.openness, [world.maze.homeGate]: homeOpenness({ match: report.match, tick: report.tick, status }) } };
+  }
   const expect = report.expect;
   if (shift.phase !== expect.phase) mismatches.push(`Phase ${shift.phase}, report says ${expect.phase}.`);
   if (shift.revision !== expect.revision) mismatches.push(`Revision ${shift.revision}, report says ${expect.revision}.`);
@@ -217,7 +226,7 @@ export function reproduceRun(world: GeneratedWorld, report: RunReport): { run: G
     footstep: report.footstep, thread: structuredClone(report.thread), threadLeft: report.threadLeft, laying: report.laying,
     jam: report.jam ? { ...report.jam } : null, jams: structuredClone(report.jams),
     equipment: structuredClone(report.equipment), activeHand: report.activeHand, attackCooldown: report.attackCooldown, blocking: report.blocking, swing: null,
-    using: report.using ? { ...report.using } : null, regen: report.regen ? { ...report.regen } : null, torch: report.torch, globs: report.globs.map((glob) => ({ ...glob })) };
+    using: report.using ? { ...report.using } : null, regen: report.regen ? { ...report.regen } : null, torch: report.torch, globs: report.globs.map((glob) => ({ ...glob })), match: { ...report.match } };
   return { mismatches, run: { ...run, events: addRunEvent(run, 'report',
     `reproduced seed ${report.seed}, ${report.requests} requests${mismatches.length ? `; ${mismatches.length} mismatch(es)` : ''}`) } };
 }

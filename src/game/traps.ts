@@ -63,9 +63,10 @@ export function placeTraps(maze: GeneratedMaze, relicCell: string): TrapSpec[] {
   const traps: TrapSpec[] = [];
   for (const ring of ['inner', 'middle', 'outer'] as const) {
     // Variety: no kind takes more than a third of a ring's traps (rounded up).
-    const cap = Math.ceil(TRAPS_PER_RING[ring] / 3);
+    const perRing = maze.counts?.traps ?? TRAPS_PER_RING;
+    const cap = Math.ceil(perRing[ring] / 3);
     const counts: Partial<Record<TrapKind, number>> = {};
-    for (let n = 0; n < TRAPS_PER_RING[ring]; n++) {
+    for (let n = 0; n < perRing[ring]; n++) {
       const weights = KIND_WEIGHTS[ring].filter(([kind]) => (counts[kind] ?? 0) < cap);
       let roll = rng.next() * weights.reduce((sum, [, w]) => sum + w, 0);
       let kind = weights[0][0];
@@ -97,7 +98,8 @@ export function placeTraps(maze: GeneratedMaze, relicCell: string): TrapSpec[] {
       used.add(edge.a); used.add(edge.b);
       const r = corridorRect(maze, edge);
       const x = (r.minX + r.maxX) / 2, z = (r.minZ + r.maxZ) / 2;
-      const axis = r.maxZ - r.minZ > r.maxX - r.minX ? 'z' : 'x';
+      // Along the corridor (M18 doorways are wider than they are long).
+      const axis = findCell(maze, edge.a).column === findCell(maze, edge.b).column ? 'z' : 'x';
       const half = CORRIDOR_ZONE_LENGTH / 2;
       const zone = axis === 'z' ? { minX: r.minX, maxX: r.maxX, minZ: z - half, maxZ: z + half }
         : { minX: x - half, maxX: x + half, minZ: r.minZ, maxZ: r.maxZ };

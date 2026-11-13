@@ -58,7 +58,7 @@ test('monsters on the map; the crossbow fires limited bolts and one bolt kills a
   const from = pos(open.b), to = pos(open.a);
   const yaw = Math.atan2(-(to.x - from.x), -(to.z - from.z));
   await installBrowserClock(page);
-  await page.goto(`/?seed=41&off=traps#repro=${encodeURIComponent(reportWith(skitter, { ...to, at: open.a, path: [], goal: null, wait: 5 }, { ...from, yaw }))}`);
+  await page.goto(`/?layout=square&seed=41&off=traps#repro=${encodeURIComponent(reportWith(skitter, { ...to, at: open.a, path: [], goal: null, wait: 5 }, { ...from, yaw }))}`);
   await expect(page.locator('[data-message]')).toContainText('Gate state matches the report exactly.');
   await page.getByRole('button', { name: 'F2 · Debug map' }).click();
   await expect(page.getByTestId('debug-monster')).toHaveCount(world.monsters.length);
@@ -90,7 +90,7 @@ test('the warden falls into a pit it walks over and the notice shows', async ({ 
   const pit = world.traps.find((trap) => trap.kind === 'pit')!;
   const centre = { x: (pit.plate!.minX + pit.plate!.maxX) / 2, z: (pit.plate!.minZ + pit.plate!.maxZ) / 2 };
   await installBrowserClock(page);
-  await page.goto(`/?seed=41#repro=${encodeURIComponent(reportWith(warden, { ...centre, at: pit.cell, mode: 'investigate', path: [], goal: null, wait: 10 },
+  await page.goto(`/?layout=square&seed=41#repro=${encodeURIComponent(reportWith(warden, { ...centre, at: pit.cell, mode: 'investigate', path: [], goal: null, wait: 10 },
     { x: world.relic.x, z: world.relic.z, yaw: 0 }))}`);
   await expect(page.locator('[data-message]')).toContainText('Gate state matches the report exactly.');
   await page.getByRole('button', { name: 'F2 · Debug map' }).click();

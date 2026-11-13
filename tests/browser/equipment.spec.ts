@@ -38,7 +38,7 @@ test('equip by dragging and right-click, stats update, and an axe cuts down a hu
     bag: [{ uid: 't.axe', item: 'battleAxe', x: 0, y: 0, rotated: false, roll: common }, { uid: 't.mail', item: 'chainmail', x: 2, y: 0, rotated: false, roll: common }],
     monsters: base.monsters.map((m, i) => (i === husk ? { ...m, x: from.x + 1.8, z: from.z, mode: 'chase' as const, path: [], goal: null } : { ...m, mode: 'dead' as const })) };
   await installBrowserClock(page);
-  await page.goto(`/?seed=41&off=traps#repro=${encodeURIComponent(JSON.stringify(createRunReport(world, run)))}`);
+  await page.goto(`/?layout=square&seed=41&off=traps#repro=${encodeURIComponent(JSON.stringify(createRunReport(world, run)))}`);
   await expect(page.locator('[data-message]')).toContainText('Gate state matches the report exactly.');
   await page.getByRole('button', { name: 'F2 · Debug map' }).click();
   await startRunning(page, 'Start exploring');
@@ -83,7 +83,7 @@ test('at the base, gear from the stash is worn and stays worn after a reload', a
     [SAVE_KEY, JSON.stringify({ format: 3, runs: 1, bag: [], inRun: false, traces: [], equipment: {},
       stash: [{ uid: 's.boots', item: 'leatherBoots', x: 0, y: 0, rotated: false, roll: { rarity: 'rare', bonuses: [{ stat: 'maxHealth', value: 12 }, { stat: 'stealth', value: 8 }] } }] })]);
   await installBrowserClock(page);
-  await page.goto('/?seed=41&off=monsters,traps');
+  await page.goto('/?layout=square&seed=41&off=monsters,traps');
   await startRunning(page, 'Start exploring');
   await page.keyboard.press('Tab'); await page.clock.runFor(200);
   await expect(page.getByTestId('inventory-left-title')).toHaveText('Stash');
@@ -98,7 +98,7 @@ test('at the base, gear from the stash is worn and stays worn after a reload', a
   await expect(stat(page, 'Stealth')).toHaveText('+8%');
   await page.keyboard.press('Tab'); await page.clock.runFor(200);
   await page.clock.resume();
-  await page.goto('/?seed=41&off=monsters,traps&visit=2');
+  await page.goto('/?layout=square&seed=41&off=monsters,traps&visit=2');
   await startRunning(page, 'Start exploring');
   await page.keyboard.press('Tab'); await page.clock.runFor(300);
   await expect(slotItem(page, 'boots')).toHaveAttribute('data-uid', 's.boots');

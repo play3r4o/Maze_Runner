@@ -164,3 +164,8 @@ export const TRADER_RARITY_WEIGHTS = [60, 32, 8, 0] as const;
 export const BANDAGE = { seconds: 3, heal: 35, speed: 0.5 } as const;
 export const POTION = { seconds: 1, heal: 50, overSeconds: 5 } as const;
 export const TORCH = { seconds: 120, sightBonus: 0.5 } as const;
+
+// M18 The Octagon. countdown: seconds from pressing E in the lobby until the home gate starts to
+// open. finalSeal: run seconds at which every gate seals for good (night falls at 240 s); anyone
+// still inside is lost. coreRadius/coreSeconds: the night extract in the core (stand on it).
+export const MATCH = { countdown: 3, finalSeal: 330, coreRadius: 2, coreSeconds: 5 } as const;

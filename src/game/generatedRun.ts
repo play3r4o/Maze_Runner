@@ -11,7 +11,7 @@ import type { GeneratedMaze, Ring } from '../simulation/mazeGenerator';
 import { findMazeRoute } from '../simulation/mazeGraph';
 import { FIXED_DT } from '../loop';
 import { CLOSING_SECONDS, OPENING_SECONDS } from '../simulation/shift';
-import { AUTO_SHIFT_SECONDS, CHALK_INK_METRES, RELIC_REACH, ticks } from './tuning';
+import { AUTO_SHIFT_SECONDS, CHALK_INK_METRES, MATCH, RELIC_REACH, ticks } from './tuning';
 import { ALL_RULES_ON, BELL_TICKS, LOUD_SOUNDS, SOUND_LIMIT, autoShiftTicks, bellsDue, isNight } from './pressure';
 import type { RuleKey, RuleToggles, SoundEvent, SoundKind } from './pressure';
 import { aimRay, drawChalkStep, raycastChalk } from './chalk';
@@ -51,7 +51,7 @@ export type RelicSpot = { cell: string; x: number; z: number };
 export function placeRelic(maze: GeneratedMaze): RelicSpot {
   const taken = new Set(maze.landmarks.map((landmark) => landmark.cell));
   const outer = maze.cells.filter((cell) => maze.rings[cell.id] === 'outer' && !taken.has(cell.id))
-    .map((cell) => ({ cell, length: findMazeRoute(maze, {}, cell.id, maze.start)!.edges.length }));
+    .map((cell) => ({ cell, length: findMazeRoute(maze, { home: 1 }, cell.id, maze.start)!.edges.length }));
   const lengths = outer.map((item) => item.length).sort((a, b) => a - b);
   const median = lengths[Math.floor(lengths.length / 2)];
   const far = outer.filter((item) => item.length >= median).map((item) => item.cell);
@@ -123,7 +123,27 @@ export type GeneratedRun = {
   regen: { seconds: number; carry: number } | null; torch: number;
   // M17: spitter globs in flight.
   globs: Glob[];
+  // M18 octagon: tick at which the home gate starts to open (null until the match is started
+  // from the lobby), seconds spent on the night core extract, and how the run was extracted.
+  match: { opensAt: number | null; channel: number; via: 'home' | 'core' | null };
 };
+// M18: where a run starts (the home sanctuary; the centre of the square maze).
+export const spawnPoint = (maze: GeneratedMaze) => cellPosition(maze.cells.find((cell) => cell.id === maze.start)!, maze);
+// M18: the home gate's openness at a tick: shut until the match starts, then it slides open;
+// shut again once the run has ended.
+export function homeOpenness(run: Pick<GeneratedRun, 'match' | 'tick' | 'status'>) {
+  if (run.match.opensAt === null || run.tick < run.match.opensAt || isRunOver(run.status)) return 0;
+  return Math.min(1, (run.tick - run.match.opensAt) / ticks(OPENING_SECONDS));
+}
+export const coreExtractActive = (world: GeneratedWorld, run: GeneratedRun) =>
+  world.maze.core !== undefined && run.status === 'out' && isNight(run.rules, run.runTicks);
+export const finalSealTick = () => ticks(MATCH.finalSeal);
+// M18 lobby: E in the home sanctuary starts the match countdown (once).
+export function startMatch(world: GeneratedWorld, run: GeneratedRun): GeneratedRun {
+  if (!world.maze.homeGate || run.status !== 'ready' || run.match.opensAt !== null || !insideRect(run.player, world.plaza)) return run;
+  const opensAt = run.tick + ticks(MATCH.countdown);
+  return { ...run, match: { ...run.match, opensAt }, events: addRunEvent(run, 'run', `match starting: gate opens in ${MATCH.countdown}s`) };
+}
 export const hasRelic = (bag: readonly GridItem[]) => bag.some((entry) => entry.item === RELIC_ITEM);
 // Replace the bag, keeping `carrying` in step with it.
 export const withBag = (run: GeneratedRun, bag: GridItem[]): GeneratedRun => ({ ...run, bag, carrying: hasRelic(bag) });
@@ -141,7 +161,7 @@ export function createGeneratedRun(world: GeneratedWorld, rules: RuleToggles = A
     const spot = firstFit(bag, BAG_SIZE, THREAD_ITEM, `r${runNumber}.spool`);
     if (spot) bag.push(spot);
   }
-  return { player: { x: 0, z: 0, yaw: 0 }, visited: [], leftSanctuary: false, returned: false, cell: null, ring: 'sanctuary',
+  return { player: { ...spawnPoint(world.maze), yaw: 0 }, visited: [], leftSanctuary: false, returned: false, cell: null, ring: 'sanctuary',
     shift: createGeneratedShift(world.maze), crushedBy: null, pushedBy: null,
     tick: 0, shiftTicks: 0, frozen: false, teleports: 0, events: [],
     status: 'ready', carrying: hasRelic(bag), runTicks: 0, autoTicks: 0,
@@ -151,7 +171,8 @@ export function createGeneratedRun(world: GeneratedWorld, rules: RuleToggles = A
     bolts: [], boltsLeft: CROSSBOW_BOLTS, reload: 0, nextBoltId: 1,
     bag, containers: forRun(world.containers, runNumber), openContainer: null, runNumber, nextSack: 1,
     footstep: 0, thread: [], threadLeft: THREAD_METRES, laying: false, jam: null, jams: [],
-    equipment, activeHand: 'main', attackCooldown: 0, blocking: false, swing: null, using: null, regen: null, torch: 0, globs: [] };
+    equipment, activeHand: 'main', attackCooldown: 0, blocking: false, swing: null, using: null, regen: null, torch: 0, globs: [],
+    match: { opensAt: null, channel: 0, via: null } };
 }
 
 // T3: queue a positioned sound if sound is enabled. Returns the updated sound fields.
@@ -323,7 +344,14 @@ export function stepGeneratedRun(world: GeneratedWorld, previous: GeneratedRun, 
     run = withSound({ ...run, bells: strikes, events: addRunEvent(run, 'bell', `${strikes} strike${strikes === 1 ? '' : 's'}${strikes === BELL_TICKS.length ? ' · night falls' : ''}`) },
       'bellToll', 0, 0, { strikes });
   }
-  const shift = previous.frozen || jammed ? run.shift : advanceGeneratedShift(run.shift, dt, maze);
+  let shift = previous.frozen || jammed ? run.shift : advanceGeneratedShift(run.shift, dt, maze);
+  if (maze.homeGate) {
+    shift = { ...shift, openness: { ...shift.openness, [maze.homeGate]: homeOpenness(run) } };
+    // The match starts the moment the gate begins to move: the clock runs from here.
+    if (run.status === 'ready' && run.match.opensAt !== null && run.tick >= run.match.opensAt) {
+      run = { ...run, status: 'out', events: addRunEvent(run, 'run', 'started: the home gate opens') };
+    }
+  }
   // T3: a slab is heard grinding from the moment it starts to move.
   if (shift.plan && shift.phase !== run.shift.phase && (shift.phase === 'opening' || shift.phase === 'closing')) {
     const gate = shift.phase === 'opening' ? shift.plan.open : shift.plan.close;
@@ -356,14 +384,30 @@ export function stepGeneratedRun(world: GeneratedWorld, previous: GeneratedRun, 
   let status = run.status;
   if (status === 'ready' && !atHome) { status = 'out'; note('run', 'started: left Sanctuary'); }
   // Extraction (M8): stepping back into the Sanctuary plaza ends the run once, with the bag.
+  let match = run.match;
   if (status === 'out' && run.leftSanctuary && atHome) {
-    status = 'extracted';
+    status = 'extracted'; match = { ...match, via: 'home' };
     note('run', `extracted in ${(run.runTicks * FIXED_DT).toFixed(1)}s, ${shift.completedShifts} shifts, ${run.bag.length} items${run.carrying ? ' including the relic' : ''}${run.teleports ? `, ${run.teleports} debug teleports` : ''}`);
   }
+  // M18 night extract: stand on the core extract for a few seconds (resets when you step off).
+  if (status === 'out' && maze.core && isNight(run.rules, run.runTicks)) {
+    const on = Math.hypot(player.x - maze.core.x, player.z - maze.core.z) <= MATCH.coreRadius;
+    const channel = on ? match.channel + dt : 0;
+    match = { ...match, channel };
+    if (channel >= MATCH.coreSeconds - 1e-9) {
+      status = 'extracted'; match = { ...match, via: 'core' };
+      note('run', `extracted through the core in ${(run.runTicks * FIXED_DT).toFixed(1)}s, ${run.bag.length} items${run.carrying ? ' including the relic' : ''}`);
+    }
+  }
   let next: GeneratedRun = {
-    ...run, ...contact, shift, player, visited, cell: room, ring, events, returned, status,
+    ...run, ...contact, shift, player, visited, cell: room, ring, events, returned, status, match,
     leftSanctuary: run.leftSanctuary || !atHome,
   };
+  // M18 final seal: when the last bell's grace runs out, every gate seals and the maze keeps you.
+  if (maze.homeGate && next.status === 'out' && next.runTicks >= finalSealTick()) {
+    next = { ...next, status: 'failed', health: 0, killedBy: 'seal', events: addRunEvent(next, 'run', `sealed in after ${MATCH.finalSeal}s${next.carrying ? ', relic lost' : ''}`) };
+  }
+  if (maze.homeGate && isRunOver(next.status)) next = { ...next, shift: { ...next.shift, openness: { ...next.shift.openness, [maze.homeGate]: 0 } } };
   next = applyCombat(world, next, run, previous.frozen, dt);
   // Footstep noise is heard on the next step, like trap noises.
   next = walkEffects(next, run.player, dt);

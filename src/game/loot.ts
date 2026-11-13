@@ -72,7 +72,7 @@ export function placeContainers(maze: GeneratedMaze, relic: { cell: string; x: n
   const containers: Container[] = [];
   for (const ring of ['inner', 'middle', 'outer'] as const) {
     const options = rng.shuffle(maze.cells.filter((cell) => maze.rings[cell.id] === ring && !blocked.has(cell.id)));
-    for (const cell of options.slice(0, CHESTS_PER_RING[ring])) {
+    for (const cell of options.slice(0, (maze.counts?.chests ?? CHESTS_PER_RING)[ring])) {
       const id = `c${containers.length + 1}`;
       const size = CONTAINER_SIZES.chest;
       containers.push({ id, kind: 'chest', cell: cell.id, ...chestSpot(maze, cell.id), ...size, opened: false,

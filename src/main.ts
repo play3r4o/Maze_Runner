@@ -11,15 +11,16 @@ import { createMazeDebug } from './ui/mazeDebug';
 import { debugViewOfMazeRun } from './simulation/mazeDiagnostics';
 import type { DebugView } from './simulation/mazeDiagnostics';
 import type { SceneMode } from './rendering/scene';
-import { MAX_SEED, generateMaze, layoutFingerprint, parseSeed, serializeMaze } from './simulation/mazeGenerator';
+import { GENERATOR_VERSION, MAX_SEED, generateMaze, layoutFingerprint, parseSeed, serializeMaze } from './simulation/mazeGenerator';
+import { OCTAGON_VERSION, generateOctagon } from './simulation/octagon';
 import { abandonGeneratedRun, drawChalk, isDead, setRule, buildGeneratedWorld, createGeneratedRun, isRunOver,
   requestGeneratedRunShift, setGeneratedRunFrozen, stepGeneratedRun, teleportGeneratedRun } from './game/generatedRun';
 import { createRunReport, parseRunReport, reproduceRun } from './game/runReport';
 import { ALL_RULES_ON, RULE_KEYS, autoShiftTicks, isNight, nextBellTick, nightFactor, unrestOf } from './game/pressure';
 import type { RuleKey, RuleToggles } from './game/pressure';
-import { CROSSBOW_RELOAD, dailySeed } from './game/tuning';
+import { CROSSBOW_RELOAD, MATCH, dailySeed } from './game/tuning';
 import { closeLoot, containerInReach, dropFromBag, interactGeneratedRun, lootMove, lootQuickMove, openContainerOf } from './game/looting';
-import { useConsumable, activeWeapon, attackGeneratedRun, hasSpool, jamGate, jamTarget, setBlocking, swapHands, toggleThread, withBag, withEquipment } from './game/generatedRun';
+import { coreExtractActive, startMatch, useConsumable, activeWeapon, attackGeneratedRun, hasSpool, jamGate, jamTarget, setBlocking, swapHands, toggleThread, withBag, withEquipment } from './game/generatedRun';
 import { equipItem, isGear, maxHealthOf, statsOf, unequipItem } from './game/equipment';
 import { lootEquip, lootUnequip, smartSlot } from './game/looting';
 import { TRADERS, buyFrom, buyPrice, marketFor, sellTo, traderBuys } from './game/traders';
@@ -44,7 +45,7 @@ const requestedScene = params.get('scene');
 // M0 room, M1 junction and M2/M3 hand-built maze stay reachable for regression checks.
 const mode: SceneMode = requestedScene === 'room' ? 'room' : requestedScene === 'junction' ? 'junction'
   : requestedScene === 'maze' ? 'maze' : 'generated';
-document.title = `Shifting Labyrinth · ${{ generated: 'M17', maze: 'M3', junction: 'M1', room: 'M0' }[mode]}`;
+document.title = `Shifting Labyrinth · ${{ generated: 'M18', maze: 'M3', junction: 'M1', room: 'M0' }[mode]}`;
 canvas.setAttribute('aria-label', { generated: 'First-person shifting seeded maze', maze: 'First-person hand-built maze',
   junction: 'First-person shifting junction', room: 'First-person gray room' }[mode]);
 
@@ -62,7 +63,11 @@ const seed = parsedSeed ?? (requestedSeed === null ? dailySeed(new Date()) : ran
 // M7b rule switches: `?off=dusk,sound` starts runs with those rules off, so comparisons survive New run.
 const offRules = (params.get('off') ?? '').split(',').filter((key): key is RuleKey => (RULE_KEYS as readonly string[]).includes(key));
 const initialRules: RuleToggles = { ...ALL_RULES_ON, ...Object.fromEntries(offRules.map((key) => [key, false])) };
-const world = mode === 'generated' ? buildGeneratedWorld(generateMaze(seed)) : null;
+// M18: the Octagon is the default; `?layout=square` keeps the M4–M17 square maze. A bug report
+// in the address picks the layout it was made on.
+const reproVersion = (() => { try { return JSON.parse(decodeURIComponent(location.hash.slice('#repro='.length))).version as string; } catch { return null; } })();
+const layoutKind = reproVersion === GENERATOR_VERSION || (reproVersion !== OCTAGON_VERSION && params.get('layout') === 'square') ? 'square' : 'octagon';
+const world = mode === 'generated' ? buildGeneratedWorld(layoutKind === 'square' ? generateMaze(seed) : generateOctagon(seed)) : null;
 if (world && parsedSeed === null) history.replaceState(null, '', seedUrl(seed));
 if (world) {
   // Exposed for bug reports and automated reproducibility checks; read-only copies.
@@ -173,7 +178,7 @@ function startRoom() {
       let next = generatedRun!;
       const wasOver = isRunOver(next.status);
       if (input.consumeInteractRequest()) {
-        next = interactGeneratedRun(next);
+        next = world.maze.homeGate && next.status === 'ready' ? startMatch(world, next) : interactGeneratedRun(next);
         if (next.openContainer && !input.isPanelOpen()) { input.openPanel(); stashMode = false; inventory.open(inventoryView(next)); }
       }
       next = drawChalk(world, { ...next, player: { ...next.player, yaw: state.yaw } }, state.pitch, input.isChalkHeld());
@@ -524,7 +529,8 @@ function startRoom() {
         monsters: live.monsters, bolts: live.bolts, globs: live.globs, monstersOn: live.rules.monsters,
         thread: live.thread, trace: activeTrace,
         containers: live.containers, relicHome: live.containers.some((c) => c.kind === 'reliquary' && c.items.length > 0),
-        held: heldState(live), torch: live.torch > 0 } : undefined);
+        held: heldState(live), torch: live.torch > 0,
+        core: { active: coreExtractActive(world, live), progress: Math.min(1, live.match.channel / MATCH.coreSeconds) } } : undefined);
       // Read-only audio diagnostics for tests and bug reports.
       if (scene.audio) {
         document.documentElement.dataset.audioState = scene.audio.state;

@@ -32,7 +32,7 @@ test('loot a chest by dragging and right-click, drop into a sack, extract, stash
   test.setTimeout(180_000);
   const errors = watchErrors(page);
   await installBrowserClock(page);
-  await page.goto('/?seed=41&off=monsters,traps');
+  await page.goto('/?layout=square&seed=41&off=monsters,traps');
   await page.getByRole('button', { name: 'F2 · Debug map' }).click();
   await expect(page.locator('[data-testid="debug-container"][data-kind="chest"]')).toHaveCount(world.containers.filter((c) => c.kind === 'chest').length);
   await startRunning(page, 'Start exploring');
@@ -99,7 +99,7 @@ test('loot a chest by dragging and right-click, drop into a sack, extract, stash
 
   // Reload: bag and stash come back from the save.
   await page.clock.resume();
-  await page.goto('/?seed=41&off=monsters,traps&visit=2');
+  await page.goto('/?layout=square&seed=41&off=monsters,traps&visit=2');
   await startRunning(page, 'Start exploring');
   await page.keyboard.press('Tab'); await page.clock.runFor(300);
   await expect(page.locator(`[data-grid="left"] [data-uid="${stashed}"]`)).toHaveCount(1);
@@ -115,7 +115,7 @@ test('death loses the bag; closing the page mid-run counts as abandoning it', as
   await page.addInitScript(([key, value]) => { if (!sessionStorage.getItem('seeded')) { localStorage.setItem(key, value); sessionStorage.setItem('seeded', '1'); } },
     [SAVE_KEY, JSON.stringify({ format: 1, runs: 9, bag: [ruby], stash: [], inRun: false })]);
   await installBrowserClock(page);
-  await page.goto('/?seed=41&off=monsters');
+  await page.goto('/?layout=square&seed=41&off=monsters');
   await page.getByRole('button', { name: 'F2 · Debug map' }).click();
   await expect(page.getByTestId('bag-summary')).toContainText(`bag 2 items · ${itemDef('ruby').value + 2}g`);
   await startRunning(page, 'Start exploring');
@@ -131,12 +131,12 @@ test('death loses the bag; closing the page mid-run counts as abandoning it', as
   // Mid-run reload: put a ruby back in the save, leave Sanctuary, reload.
   await page.evaluate(([key, value]) => localStorage.setItem(key, value), [SAVE_KEY, JSON.stringify({ format: 1, runs: 10, bag: [ruby], stash: [], inRun: false })]);
   await page.clock.resume();
-  await page.goto('/?seed=41&off=monsters,traps&visit=2');
+  await page.goto('/?layout=square&seed=41&off=monsters,traps&visit=2');
   await page.getByRole('button', { name: 'F2 · Debug map' }).click();
   await startRunning(page, 'Start exploring');
   await teleport(page, chest.cell);
   await expect.poll(() => page.evaluate((key) => JSON.parse(localStorage.getItem(key)!).inRun, SAVE_KEY)).toBe(true);
-  await page.goto('/?seed=41&off=monsters,traps&visit=3');
+  await page.goto('/?layout=square&seed=41&off=monsters,traps&visit=3');
   await expect(page.locator('[data-message]')).toContainText('never finished');
   // The ruby is gone; only a fresh starter spool is in the bag.
   await expect(page.getByTestId('bag-summary')).toHaveText('bag 1 item · 2g');

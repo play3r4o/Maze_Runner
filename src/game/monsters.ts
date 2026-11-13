@@ -136,6 +136,7 @@ export function spawnMonsters(maze: GeneratedMaze, relicCell: string, traps: rea
   const entranceCells = new Set(maze.entrances.flatMap((id) => maze.edges.filter((edge) => edge.id === id)).flatMap((edge) => [edge.a, edge.b]));
   const used = new Set([relicCell, ...entranceCells, ...traps.filter((trap) => trap.edge === null).map((trap) => trap.cell)]);
   const monsters: Monster[] = [];
+  const perRing = maze.counts?.monsters ?? MONSTERS_PER_RING;
   const place = (kind: MonsterKind, ring: HomeRing, home: HomeRing[]) => {
     const options = maze.cells.filter((cell) => maze.rings[cell.id] === ring && !used.has(cell.id));
     if (!options.length) return;
@@ -144,12 +145,12 @@ export function spawnMonsters(maze: GeneratedMaze, relicCell: string, traps: rea
     monsters.push(freshMonster(`m${monsters.length + 1}`, kind, home, cell.id, maze));
   };
   for (const ring of ['inner', 'middle', 'outer'] as const) {
-    for (const kind of ['husk', 'skitter'] as const) for (let n = 0; n < MONSTERS_PER_RING[ring][kind]; n++) place(kind, ring, [ring]);
+    for (const kind of ['husk', 'skitter'] as const) for (let n = 0; n < perRing[ring][kind]; n++) place(kind, ring, [ring]);
   }
   for (let n = 0; n < WARDEN_COUNT; n++) place('warden', 'outer', ['outer', 'middle']);
   // M17 (placed after the M10 monsters so their seeded spots do not change).
   for (const ring of ['inner', 'middle', 'outer'] as const) {
-    for (const kind of ['spitter', 'brute'] as const) for (let n = 0; n < MONSTERS_PER_RING[ring][kind]; n++) place(kind, ring, [ring]);
+    for (const kind of ['spitter', 'brute'] as const) for (let n = 0; n < perRing[ring][kind]; n++) place(kind, ring, [ring]);
   }
   place('ram', 'outer', ['outer']);
   for (const chest of containers.filter((container) => container.mimic)) {

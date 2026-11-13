@@ -22,26 +22,26 @@ async function walk(page: Page, key: string, ms: number) {
 
 test('a seed rebuilds the same maze; other seeds, reloads and the seed form behave', async ({ page }) => {
   const errors = watchErrors(page);
-  await page.goto('/?seed=1');
-  await expect(page).toHaveTitle('Shifting Labyrinth · M17');
-  await expect(page.getByText('DEVELOPMENT BUILD / M17 · THREATS')).toBeVisible();
+  await page.goto('/?layout=square&seed=1');
+  await expect(page).toHaveTitle('Shifting Labyrinth · M18');
+  await expect(page.getByText('DEVELOPMENT BUILD / M18 · SQUARE MAZE')).toBeVisible();
   await expect(page.getByTestId('hud-seed')).toHaveText('seed 1');
   expect(await fingerprint(page)).toBe(layoutFingerprint(generateMaze(1)));
   await page.reload();
   expect(await fingerprint(page)).toBe(layoutFingerprint(generateMaze(1)));
-  await page.goto('/?seed=2');
+  await page.goto('/?layout=square&seed=2');
   expect(await fingerprint(page)).toBe(layoutFingerprint(generateMaze(2)));
   expect(layoutFingerprint(generateMaze(2))).not.toBe(layoutFingerprint(generateMaze(1)));
 
   // No seed: today's seed is used and written into the address so the URL reproduces it.
-  await page.goto('/');
+  await page.goto('/?layout=square');
   await expect(page).toHaveURL(/[?&]seed=\d+/);
   const chosen = Number(new URL(page.url()).searchParams.get('seed'));
   // M7b daily seed: the UTC date (checked either side of a midnight that might fall mid-test).
   expect([dailySeed(new Date(Date.now() - 60_000)), dailySeed(new Date())]).toContain(chosen);
   expect(await fingerprint(page)).toBe(layoutFingerprint(generateMaze(chosen)));
   // Invalid seeds are reported and replaced, never coerced.
-  await page.goto('/?seed=abc');
+  await page.goto('/?layout=square&seed=abc');
   await expect(page.locator('[data-message]')).toContainText('Seed “abc” is not a whole number');
   await expect(page).toHaveURL(/[?&]seed=\d+/);
 
@@ -61,7 +61,7 @@ test('debug map shows the generated graph, rings, gates and a rejected entrance 
   test.setTimeout(90_000);
   const errors = watchErrors(page);
   const maze = generateMaze(1);
-  await installBrowserClock(page); await page.goto('/?seed=1&off=monsters');
+  await installBrowserClock(page); await page.goto('/?layout=square&seed=1&off=monsters');
   await page.getByRole('button', { name: 'F2 · Debug map' }).click();
   await expect(page.getByTestId('maze-debug')).toBeVisible();
   await expect(page.getByTestId('debug-room')).toHaveCount(121);
@@ -100,7 +100,7 @@ test('G runs a validated seeded shift: warning, opening, closing, revisions and 
   test.setTimeout(120_000);
   const errors = watchErrors(page);
   const maze = generateMaze(1);
-  await installBrowserClock(page); await page.goto('/?seed=1');
+  await installBrowserClock(page); await page.goto('/?layout=square&seed=1');
   await page.getByRole('button', { name: 'F2 · Debug map' }).click();
   await page.getByRole('button', { name: 'Start exploring' }).click();
   await expect.poll(() => page.evaluate(() => document.pointerLockElement?.id)).toBe('scene');

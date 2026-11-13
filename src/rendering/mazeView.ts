@@ -189,9 +189,11 @@ export function createMazeView(scene: Scene, layout: MazeLayout = HAND_BUILT_MAZ
       block(0.035, 0.015, rect.maxZ - rect.minZ, rect.minX, 0.025, (rect.minZ + rect.maxZ) / 2, '#c4ad6e'),
       block(0.035, 0.015, rect.maxZ - rect.minZ, rect.maxX, 0.025, (rect.minZ + rect.maxZ) / 2, '#c4ad6e'),
     ];
+    // The home gate is signed on the lobby side only.
+    const homeSide = id === 'home' && octagon ? cellPosition(findCell(layout, layout.start), layout) : null;
     if (vertical) {
-      sign(label, centerX, 3.5, rect.maxZ + 0.05);
-      sign(label, centerX, 3.5, rect.minZ - 0.05, Math.PI);
+      if (!homeSide || homeSide.z > centerZ) sign(label, centerX, 3.5, rect.maxZ + 0.05);
+      if (!homeSide || homeSide.z < centerZ) sign(label, centerX, 3.5, rect.minZ - 0.05, Math.PI);
     } else {
       sign(label, rect.minX - 0.05, 3.5, centerZ, -Math.PI / 2);
       sign(label, rect.maxX + 0.05, 3.5, centerZ, Math.PI / 2);

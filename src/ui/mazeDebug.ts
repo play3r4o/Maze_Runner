@@ -10,7 +10,7 @@ import type { DebugView } from '../simulation/mazeDiagnostics';
 export type MazeDebugOptions = {
   layout: MazeLayout; walls: readonly WallRect[];
   // Generated mazes only: ring colouring, the entrances used by the dry-run probe, and seed controls.
-  rings?: Readonly<Record<string, Ring>>; entrances?: readonly string[];
+  rings?: Readonly<Record<string, Ring>>; entrances?: readonly string[]; ringNames?: Readonly<Record<Ring, string>>;
   seed?: { seed: number; version: string; fingerprint: string; onLoad(seed: number): void; onRandom(): void };
   // M6 debug tools. Each callback returns a status message for the panel.
   tools?: {
@@ -51,7 +51,7 @@ export function createMazeDebug(root: HTMLElement,
       <p class="debug-validation" data-testid="seed-error" role="alert"></p></form>` : ''}
     <p class="debug-summary">Topology <output data-testid="debug-revision">0</output> · <output data-testid="debug-phase">idle</output></p>
     <div class="debug-map"></div>
-    <p class="debug-legend">${rings ? 'N ↑ · pale line: route home · rooms: gold Sanctuary, green inner, ochre middle, red outer' : 'N ↑ · pale line: route · red: closed stone · amber: warning / motion'}</p>
+    <p class="debug-legend">${rings ? `N ↑ · pale line: route home · rooms: gold Sanctuary, green ${(options?.ringNames?.inner ?? 'inner').toLowerCase()}, ochre ${(options?.ringNames?.middle ?? 'middle').toLowerCase()}, red ${(options?.ringNames?.outer ?? 'outer').toLowerCase()}` : 'N ↑ · pale line: route · red: closed stone · amber: warning / motion'}</p>
     <p class="debug-location" data-testid="debug-location"></p>
     <p class="debug-route" data-testid="debug-route"></p>
     ${options.tools ? `<section class="debug-tools" aria-label="Debug tools">
@@ -230,7 +230,7 @@ export function createMazeDebug(root: HTMLElement,
       const data = buildLayoutDiagnostics(view);
       element('[data-testid="debug-revision"]').textContent = String(view.revision);
       element('[data-testid="debug-phase"]').textContent = hasGates ? view.phase : 'static · shifts arrive in M5';
-      const ring = rings && data.cell ? ` · ${rings[data.cell]} ring` : '';
+      const ring = rings && data.cell ? ` · ${options?.ringNames ? options.ringNames[rings[data.cell]].toLowerCase() : `${rings[data.cell]} ring`}` : '';
       element('[data-testid="debug-location"]').textContent = `${data.location}${ring} · X ${data.player.x.toFixed(2)} / Z ${data.player.z.toFixed(2)}`;
       element('[data-testid="debug-route"]').textContent = data.route ? `${data.route.edges.length} connections home from ${data.origin}.` : data.routeNote;
       element('[data-testid="debug-plan"]').textContent = view.validation ?? (hasGates ? 'No shift checked yet.' : 'This layout has no gates yet.');

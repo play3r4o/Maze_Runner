@@ -388,3 +388,5 @@ Stop for the rules-on versus rules-off comparison. M8 and M9 remain unapproved. 
   - Match: lobby, countdown, home extract, night core extract and reset, final seal, shifts while shut, report round trip.
   - Rings: schedule, doors in a run, a closing ring door pushes, reports.
 - Browser: every earlier scenario now loads `?layout=square`. New Octagon scenario (default header and title; gate shut until E; through it into the outer ring; back home extracts) passes (2.5 min).
+- Full local browser suite on the stage 1 build: all 37 scenarios pass (32.0 min). After stage 2, the Octagon, generated and debug map scenarios pass again on the final build.
+- Visual check (screenshots): lobby facing the shut HOME GATE (now signed on the lobby side only), a 10 m outer-ring room, the core chamber with purple ring doors, the relic beam and the CORE / NIGHT EXTRACT sign, and the debug map of the octagon. Found and fixed: the debug panel called 10 m rooms "outside walkable maze" (diagnostics used 4 m rooms) and named rings by their tier keys; it now uses the layout's room size and ring names.

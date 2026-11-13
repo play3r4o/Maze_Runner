@@ -1,4 +1,4 @@
-import { HAND_BUILT_MAZE, MAZE_GATE_IDS, cellPosition, corridorRect, findCell, gateEdges, gateRect, plazaRect } from './maze';
+import { HAND_BUILT_MAZE, MAZE_GATE_IDS, cellPosition, chamberRects, corridorRect, findCell, gateEdges, gateRect, plazaRect, roomHalfOf } from './maze';
 import type { MazeLayout, MazeOpenness } from './maze';
 import type { MazeRun } from '../game/mazeRun';
 import type { PlayerState } from './player';
@@ -37,9 +37,13 @@ export function buildLayoutDiagnostics(view: DebugView) {
   const { layout, player, openness } = view;
   const plaza = plazaRect(layout);
   const inPlaza = plaza !== null && player.x >= plaza.minX && player.x <= plaza.maxX && player.z >= plaza.minZ && player.z <= plaza.maxZ;
+  const half = roomHalfOf(layout);
+  const inChamber = chamberRects(layout).some((rect) => player.x >= rect.minX && player.x <= rect.maxX && player.z >= rect.minZ && player.z <= rect.maxZ);
   const room = inPlaza ? findCell(layout, layout.start) : layout.cells.find((cell) => {
     const { x, z } = cellPosition(cell, layout);
-    return Math.abs(player.x - x) <= 2 && Math.abs(player.z - z) <= 2;
+    // Inside an open chamber the strips between its rooms count as the nearest room.
+    const reach = inChamber ? half + 1 : half;
+    return Math.abs(player.x - x) <= reach && Math.abs(player.z - z) <= reach;
   });
   const passage = room ? undefined : layout.edges.find((edge) => {
     const rect = corridorRect(layout, edge);

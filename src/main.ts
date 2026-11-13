@@ -100,11 +100,11 @@ if (world && requestedSeed !== null && parsedSeed === null) {
   hud.setMode(false, `Seed “${requestedSeed}” is not a whole number from 0 to ${MAX_SEED}. Using random seed ${seed}.`);
 }
 const debug = mode === 'maze' ? createMazeDebug(hudRoot)
-  : world ? createMazeDebug(hudRoot, { layout: world.maze, walls: world.walls, rings: world.maze.rings, entrances: world.maze.entrances,
+  : world ? createMazeDebug(hudRoot, { layout: world.maze, walls: world.walls, rings: world.maze.rings, entrances: world.maze.entrances, ringNames: world.maze.ringNames,
     seed: { seed, version: world.maze.version, fingerprint: layoutFingerprint(world.maze),
       onLoad: (value) => location.assign(seedUrl(value)), onRandom: () => location.assign(seedUrl(randomSeed())) },
     tools: {
-      config: `${world.maze.config.size}×${world.maze.config.size} · loops ${world.maze.config.loopChance} · ${world.maze.config.gateCount} gates`,
+      config: `${world.maze.homeGate ? 'octagon · ' : ''}${world.maze.config.size}×${world.maze.config.size} · loops ${world.maze.config.loopChance} · ${world.maze.config.gateCount} gates`,
       teleports: [{ label: 'Sanctuary', cell: world.maze.start },
         ...world.maze.landmarks.map((landmark) => ({ label: landmark.name.split(' ')[0], cell: landmark.cell }))],
       rules: RULE_KEYS, onRule: (key, on) => debugTools?.onRule?.(key, on) ?? '', traps: world.traps,

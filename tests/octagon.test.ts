@@ -1,20 +1,21 @@
 import { describe, expect, it } from 'vitest';
 import { cellPosition, corridorRect, deriveMazeWalls, findCell, gateRect, plazaRect } from '../src/simulation/maze';
 import { serializeMaze } from '../src/simulation/mazeGenerator';
-import { reachableMazeCells } from '../src/simulation/mazeGraph';
-import { HOME_GATE, OCTAGON_ROOM_HALF, RING_SLOTS, generateOctagon, inOctagon } from '../src/simulation/octagon';
+import { reachableMazeCells, scheduledOpen } from '../src/simulation/mazeGraph';
+import { HOME_GATE, OCTAGON_WALL_HEIGHT, RING_SLOTS, generateOctagon, inOctagon } from '../src/simulation/octagon';
 import { buildGeneratedWorld, createGeneratedRun, finalSealTick, homeOpenness, requestGeneratedRunShift, spawnPoint, startMatch,
   stepGeneratedRun, teleportGeneratedRun } from '../src/game/generatedRun';
 import type { GeneratedRun, GeneratedWorld } from '../src/game/generatedRun';
 import { ALL_RULES_ON, BELL_TICKS } from '../src/game/pressure';
 import { createRunReport, parseRunReport, reproduceRun } from '../src/game/runReport';
 import { MATCH, RING_TURN, ticks } from '../src/game/tuning';
-import { nextRingTurn, ringDoorOpenness, ringTurnAt } from '../src/game/ringTurns';
+import { nextRingTurn, ringDoorOpenness, ringTurnAt, turnsAt } from '../src/game/ringTurns';
+import { ringAtPoint, rotatePoint, turnedMaze, worldFor } from '../src/game/ringRotation';
 import { overlapsBody } from '../src/simulation/movingWalls';
 
 const SAFE = { ...ALL_RULES_ON, traps: false, monsters: false, unrest: false };
 const DT = 1 / 60;
-const worldFor = (seed: number) => buildGeneratedWorld(generateOctagon(seed));
+const worldFor0 = (seed: number) => buildGeneratedWorld(generateOctagon(seed));
 const steps = (world: GeneratedWorld, run: GeneratedRun, count: number, intent = { forward: 0, strafe: 0 }, yaw = 0) => {
   for (let i = 0; i < count; i++) run = stepGeneratedRun(world, run, intent, yaw, DT);
   return run;
@@ -39,9 +40,9 @@ describe('M18 octagon layout', () => {
     const maze = generateOctagon(41);
     const inside = maze.cells.filter((cell) => maze.rings[cell.id] !== 'sanctuary');
     expect(inside).toHaveLength(109);
+    expect(maze.wallHeight).toBe(OCTAGON_WALL_HEIGHT);
     expect(inside.every((cell) => inOctagon(cell.column - centre, cell.row - centre))).toBe(true);
     expect(maze.rings[maze.start]).toBe('sanctuary');
-    expect(maze.roomHalf).toBe(OCTAGON_ROOM_HALF);
     expect(maze.sanctuaries).toHaveLength(8);
     expect(maze.sanctuaries!.filter((base) => base.home)).toHaveLength(1);
     // Core = 3×3 chamber, middle ring = distance 2–3, outer (entry) ring = distance 4–5.
@@ -59,49 +60,39 @@ describe('M18 octagon layout', () => {
     const home = maze.edges.find((edge) => edge.gate === HOME_GATE)!;
     expect([home.a, home.b]).toContain(maze.start);
     expect([home.a, home.b]).toContain(maze.hub);
-    // The home sanctuary has no other way in.
-    expect(maze.edges.filter((edge) => edge.a === maze.start || edge.b === maze.start)).toHaveLength(1);
+    // The home base (a three-room yard) has no other way in.
+    const yard = new Set(maze.cells.filter((cell) => maze.rings[cell.id] === 'sanctuary').map((cell) => cell.id));
+    expect(yard.size).toBe(3);
+    expect(maze.edges.filter((edge) => yard.has(edge.a) !== yard.has(edge.b)).map((edge) => edge.gate)).toEqual([HOME_GATE]);
   });
 
-  it('joins rings by a few doorways only and keeps every room reachable with every shift gate closed', () => {
+  it('joins rings only at eight fixed ring doors per boundary, all open, and keeps every room reachable', () => {
     for (const seed of [1, 41, 99]) {
       const maze = generateOctagon(seed);
       const crossing = (a: string, b: string) => maze.edges.filter((edge) => [maze.rings[edge.a], maze.rings[edge.b]].sort().join() === [a, b].sort().join());
-      // Rings meet only at ring doors, one per side per boundary, half open at the start.
       for (const [a, b, n] of [['inner', 'middle', 1], ['middle', 'outer', 2]] as const) {
         const doors = crossing(a, b);
         expect(doors).toHaveLength(RING_SLOTS);
-        expect(doors.every((edge) => edge.gate?.startsWith(`ring${n}-`))).toBe(true);
-        expect(doors.filter((edge) => maze.initialOpenness[edge.gate!] === 1)).toHaveLength(RING_SLOTS / 2);
+        expect(doors.every((edge) => edge.gate?.startsWith(`ring${n}-`) && maze.initialOpenness[edge.gate] === 1)).toBe(true);
       }
-      // With either half of the ring doors open and every shift gate closed, every room connects.
-      for (const parity of [0, 1]) {
-        const rings = Object.fromEntries(maze.edges.filter((edge) => edge.gate?.startsWith('ring')).map((edge) => [edge.gate!, Number(Number(edge.gate!.slice(-1)) % 2 === parity)]));
-        expect(reachableMazeCells(maze, { [HOME_GATE]: 1, ...rings }, maze.start).size).toBe(maze.cells.length);
-      }
+      expect(reachableMazeCells(maze, scheduledOpen(maze), maze.start).size).toBe(maze.cells.length);
     }
   });
 
-  it('builds 10 m rooms with 4 m doorways, and the closed home gate fills its doorway', () => {
-    const world = worldFor(41);
+  it('builds the square maze\'s corridors with walls 12 m tall, and the shut home gate fills its corridor', () => {
+    const world = worldFor0(41);
     const home = world.maze.edges.find((edge) => edge.gate === HOME_GATE)!;
-    const door = corridorRect(world.maze, home);
-    expect(door.maxX - door.minX).toBe(4);
-    expect(door.maxZ - door.minZ).toBe(2);
-    const shut = gateRect(world.maze, home, 0);
-    expect(shut).toMatchObject({ minX: door.minX, maxX: door.maxX });
-    // Open, the slab sits fully in stone beside the doorway.
-    const open = gateRect(world.maze, home, 1);
-    expect(open.minX >= door.maxX || open.maxX <= door.minX).toBe(true);
-    const rect = plazaRect(world.maze)!;
-    expect(rect.maxX - rect.minX).toBe(10);
+    const corridor = corridorRect(world.maze, home);
+    expect([corridor.maxX - corridor.minX, corridor.maxZ - corridor.minZ]).toEqual([4, 8]);
+    expect(gateRect(world.maze, home, 0)).toMatchObject({ minX: corridor.minX, maxX: corridor.maxX, height: 12 });
+    expect(world.walls.every((wall) => wall.height === 12)).toBe(true);
     const spawn = spawnPoint(world.maze);
     expect(deriveMazeWalls(world.maze).some((wall) => overlapsBody({ ...spawn, yaw: 0 }, wall))).toBe(false);
   });
 
   it('puts the relic and the Ram in the core and keeps the lobby and hub free of traps and monsters', () => {
     for (const seed of [3, 41]) {
-      const world = worldFor(seed);
+      const world = worldFor0(seed);
       expect(world.maze.rings[world.relic.cell]).toBe('outer');
       expect(world.monsters.find((m) => m.kind === 'ram')!.home).toEqual(['outer']);
       expect(world.maze.rings[world.monsters.find((m) => m.kind === 'ram')!.at]).toBe('outer');
@@ -115,7 +106,7 @@ describe('M18 octagon layout', () => {
 
 describe('M18 match flow', () => {
   it('starts in the closed lobby; walking at the gate does nothing until the match starts', () => {
-    const world = worldFor(41);
+    const world = worldFor0(41);
     let run = createGeneratedRun(world, SAFE);
     const spawn = spawnPoint(world.maze);
     expect(run.player).toMatchObject(spawn);
@@ -127,7 +118,7 @@ describe('M18 match flow', () => {
   });
 
   it('E in the lobby counts down, opens the gate, starts the clock and lets you out', () => {
-    const world = worldFor(41);
+    const world = worldFor0(41);
     let run = startMatch(world, createGeneratedRun(world, SAFE));
     expect(run.match.opensAt).toBe(ticks(MATCH.countdown));
     expect(startMatch(world, run).match.opensAt).toBe(run.match.opensAt);
@@ -144,7 +135,7 @@ describe('M18 match flow', () => {
   });
 
   it('extracting through your own gate shuts it behind you', () => {
-    const world = worldFor(41);
+    const world = worldFor0(41);
     let run = leaveLobby(world, createGeneratedRun(world, SAFE));
     expect(run.leftSanctuary).toBe(true);
     run = steps(world, run, ticks(5), { forward: -1, strafe: 0 });
@@ -154,7 +145,7 @@ describe('M18 match flow', () => {
   });
 
   it('opens the core extract only at night; standing on it extracts, stepping off resets', () => {
-    const world = worldFor(41);
+    const world = worldFor0(41);
     let run = leaveLobby(world, createGeneratedRun(world, SAFE));
     const coreCell = world.maze.cells.find((cell) => cell.column === centre && cell.row === centre)!.id;
     const landmarkThere = world.maze.landmarks.some((landmark) => landmark.cell === coreCell);
@@ -175,7 +166,7 @@ describe('M18 match flow', () => {
   });
 
   it('seals everyone in when the final seal comes', () => {
-    const world = worldFor(41);
+    const world = worldFor0(41);
     let run = leaveLobby(world, createGeneratedRun(world, SAFE));
     run = steps(world, { ...run, runTicks: finalSealTick() - 2, bells: 3 }, 3);
     expect(run.status).toBe('failed');
@@ -184,13 +175,13 @@ describe('M18 match flow', () => {
   });
 
   it('shifts work while the lobby gate is still shut', () => {
-    const world = worldFor(41);
+    const world = worldFor0(41);
     const run = requestGeneratedRunShift(world, createGeneratedRun(world, SAFE));
     expect(run.shift.log.at(-1)!.outcome).toBe('accepted');
   });
 
   it('a bug report round-trips on the octagon, home gate included', () => {
-    const world = worldFor(41);
+    const world = worldFor0(41);
     let run = leaveLobby(world, createGeneratedRun(world, SAFE));
     run = steps(world, run, ticks(3), { forward: 1, strafe: 0.3 });
     const parsed = parseRunReport(JSON.stringify(createRunReport(world, run)));
@@ -206,63 +197,82 @@ describe('M18 match flow', () => {
   });
 });
 
-describe('M18 stage 2: rings seal and turn', () => {
-  const at = (seconds: number) => Math.round(seconds * 60);
-  it('follows the schedule: warning, closing, sealed, opening the other half; boundaries alternate', () => {
-    expect(ringTurnAt(at(59))).toBeNull();
-    expect(ringTurnAt(at(60))).toMatchObject({ index: 0, boundary: 1, phase: 'warning' });
-    expect(ringTurnAt(at(RING_TURN.first + RING_TURN.warning + 0.5))).toMatchObject({ boundary: 1, phase: 'closing' });
-    expect(ringTurnAt(at(RING_TURN.first + RING_TURN.warning + RING_TURN.closing + 1))).toMatchObject({ phase: 'sealed' });
-    expect(ringTurnAt(at(120))).toMatchObject({ index: 1, boundary: 2, phase: 'warning' });
-    expect(nextRingTurn(0)).toEqual({ index: 0, boundary: 1, seconds: 60 });
-    // Before: even doors open. Sealed: all shut. After: odd doors open. The core boundary waits.
-    expect([ringDoorOpenness('ring1-0', 0), ringDoorOpenness('ring1-1', 0)]).toEqual([1, 0]);
-    expect(ringDoorOpenness('ring1-0', at(61))).toBe(1);
-    expect(ringDoorOpenness('ring1-0', at(65))).toBeCloseTo(0.5, 5);
-    expect([ringDoorOpenness('ring1-0', at(67)), ringDoorOpenness('ring1-1', at(67))]).toEqual([0, 0]);
-    expect(ringDoorOpenness('ring1-1', at(71))).toBeCloseTo(0.5, 5);
-    expect([ringDoorOpenness('ring1-0', at(80)), ringDoorOpenness('ring1-1', at(80))]).toEqual([0, 1]);
-    expect([ringDoorOpenness('ring2-0', at(80)), ringDoorOpenness('ring2-1', at(80))]).toEqual([1, 0]);
-    expect([ringDoorOpenness('ring2-0', at(140)), ringDoorOpenness('ring2-1', at(140))]).toEqual([0, 1]);
-    // The outer boundary turns back at 180 s.
-    expect([ringDoorOpenness('ring1-0', at(200)), ringDoorOpenness('ring1-1', at(200))]).toEqual([1, 0]);
-    expect(ringDoorOpenness('g1', 0)).toBeNull();
+describe('M18 rework: rings turn on each bell and you ride them', () => {
+  const bell = (index: number) => BELL_TICKS[index];
+  const mid = (index: number) => bell(index) + ticks(RING_TURN.closing) + ticks(RING_TURN.sealed) / 2;
+  it('turns the outer ring on bell 1, the middle on bell 2, both on bell 3, sealing their doors around it', () => {
+    expect(ringTurnAt(bell(0) - 1)).toBeNull();
+    expect(ringTurnAt(bell(0))).toMatchObject({ index: 0, rings: ['inner'], phase: 'closing' });
+    expect(ringTurnAt(bell(1) + ticks(3))).toMatchObject({ rings: ['middle'], phase: 'sealed' });
+    expect(ringTurnAt(bell(2) + ticks(7))).toMatchObject({ rings: ['inner', 'middle'], phase: 'opening' });
+    expect(ringTurnAt(bell(0), false)).toBeNull();
+    expect(nextRingTurn(0)).toMatchObject({ index: 0, rings: ['inner'] });
+    expect(turnsAt(mid(0) - 1)).toEqual({ inner: 0, middle: 0 });
+    expect(turnsAt(mid(0))).toEqual({ inner: 1, middle: 0 });
+    expect(turnsAt(mid(1))).toEqual({ inner: 1, middle: 3 });
+    expect(turnsAt(mid(2))).toEqual({ inner: 2, middle: 2 });
+    expect(turnsAt(mid(2), false)).toEqual({ inner: 0, middle: 0 });
+    // Bell 1 seals the home gate and the outer ring's doors; the core doors stay open.
+    const during = bell(0) + ticks(3);
+    expect([ringDoorOpenness('home', during), ringDoorOpenness('ring1-3', during), ringDoorOpenness('ring2-3', during)]).toEqual([0, 0, 1]);
+    expect(ringDoorOpenness('ring1-3', bell(0) + ticks(1))).toBeCloseTo(0.5, 5);
+    expect([ringDoorOpenness('home', bell(1) + ticks(3)), ringDoorOpenness('ring1-0', bell(1) + ticks(3)), ringDoorOpenness('ring2-0', bell(1) + ticks(3))]).toEqual([1, 0, 0]);
+    expect(ringDoorOpenness('g1', bell(0) + ticks(3))).toBeNull();
   });
 
-  it('the run applies the ring doors to the maze: a closed ring door blocks, a turn moves the way through', () => {
-    const world = worldFor(41);
-    let run = leaveLobby(world, createGeneratedRun(world, SAFE));
-    const doors = world.maze.edges.filter((edge) => edge.gate?.startsWith('ring1-'));
-    expect(doors.filter((edge) => run.shift.openness[edge.gate!] === 1).map((edge) => edge.gate).sort()).toEqual(['ring1-0', 'ring1-2', 'ring1-4', 'ring1-6']);
-    run = steps(world, { ...run, runTicks: at(66) - 1 }, 2);
-    expect(doors.every((edge) => run.shift.openness[edge.gate!] === 0)).toBe(true);
-    expect(run.events.some((event) => event.detail.includes('outer ring is sealed'))).toBe(true);
-    run = steps(world, { ...run, runTicks: at(80) }, 1);
-    expect(doors.filter((edge) => run.shift.openness[edge.gate!] === 1).map((edge) => edge.gate).sort()).toEqual(['ring1-1', 'ring1-3', 'ring1-5', 'ring1-7']);
-    // Shifts still validate while the ring is sealed.
-    run = steps(world, { ...run, runTicks: at(66) }, 1);
-    expect(requestGeneratedRunShift(world, run).shift.log.at(-1)!.outcome).toBe('accepted');
+  it('turns a ring\'s corridors, gates, traps and chests a quarter about the centre; doors, core and base stay', () => {
+    const world = worldFor0(41);
+    const turned = worldFor(world, { inner: 1, middle: 0 });
+    expect(worldFor(world, { inner: 1, middle: 0 })).toBe(turned);
+    expect(worldFor(turned, { inner: 0, middle: 0 })).toBe(world);
+    expect(turned.maze.edges).toHaveLength(world.maze.edges.length);
+    const four = turnedMaze(turnedMaze(world.maze, { inner: 2, middle: 0 }), { inner: 2, middle: 0 });
+    expect(four.edges.map((edge) => edge.id)).toEqual(world.maze.edges.map((edge) => edge.id));
+    for (const edge of world.maze.edges.filter((item) => item.gate?.startsWith('ring') || item.gate === HOME_GATE)) expect(turned.maze.edges).toContainEqual(edge);
+    expect(turned.maze.edges.map((edge) => edge.gate).filter(Boolean).sort()).toEqual(world.maze.edges.map((edge) => edge.gate).filter(Boolean).sort());
+    const outerChest = world.containers.find((container) => world.maze.rings[container.cell] === 'inner')!;
+    const moved = turned.containers.find((container) => container.id === outerChest.id)!;
+    expect({ x: moved.x, z: moved.z }).toEqual(rotatePoint({ x: outerChest.x, z: outerChest.z }, 1));
+    const coreChest = world.containers.find((container) => world.maze.rings[container.cell] === 'outer')!;
+    expect(turned.containers.find((container) => container.id === coreChest.id)).toEqual(coreChest);
+    expect(reachableMazeCells(turned.maze, scheduledOpen(turned.maze), turned.maze.start).size).toBe(turned.maze.cells.length);
   });
 
-  it('a closing ring door pushes a body standing in it, like any gate', () => {
-    const world = worldFor(41);
+  it('you ride the ring: standing in the outer ring at the turn moves you a quarter round, facing turns too', () => {
+    const world = worldFor0(41);
     let run = leaveLobby(world, createGeneratedRun(world, SAFE));
-    const door = world.maze.edges.find((edge) => edge.gate === 'ring1-0')!;
-    const rect = corridorRect(world.maze, door);
-    const x = (rect.minX + rect.maxX) / 2, z = (rect.minZ + rect.maxZ) / 2;
-    run = { ...run, player: { ...run.player, x, z }, runTicks: at(RING_TURN.first + RING_TURN.warning) };
-    run = steps(world, run, ticks(RING_TURN.closing) + 2);
-    const pushed = Math.hypot(run.player.x - x, run.player.z - z) > 0.5 || run.crushedBy === 'ring1-0';
-    expect(pushed).toBe(true);
+    expect(ringAtPoint(world, run.player)).toBe('inner');
+    const before = { ...run.player };
+    run = steps(world, { ...run, runTicks: mid(0) - 2, bells: 1 }, 2);
+    expect(run.player.x).toBeCloseTo(rotatePoint(before, 1).x, 1);
+    expect(run.player.z).toBeCloseTo(rotatePoint(before, 1).z, 1);
+    expect(run.player.yaw).toBeCloseTo(before.yaw - Math.PI / 2, 5);
+    expect(run.events.some((event) => event.detail.includes('ring turned'))).toBe(true);
+    // Now west of the centre; still in a junction or corridor, not in stone.
+    const live = worldFor(world, { inner: 1, middle: 0 });
+    expect(live.walls.some((wall) => overlapsBody(run.player, wall))).toBe(false);
   });
 
-  it('bug reports replay ring doors from the run clock', () => {
-    const world = worldFor(41);
+  it('someone in the core is not moved; chalk in a turning ring is ground away', () => {
+    const world = worldFor0(41);
     let run = leaveLobby(world, createGeneratedRun(world, SAFE));
-    run = steps(world, { ...run, runTicks: at(68) }, 1);
+    const coreCell = world.maze.cells.find((cell) => cell.column === centre && cell.row === centre + 1)!.id;
+    run = teleportGeneratedRun(world, run, coreCell).run;
+    const at = { ...run.player };
+    const stroke = { id: 99, surface: 'x', normal: [0, 0, 1] as [number, number, number], points: [[0, 1, 60] as [number, number, number]] };
+    run = steps(world, { ...run, chalk: [stroke], runTicks: mid(0) - 2, bells: 1 }, 3);
+    expect(run.player).toMatchObject({ x: at.x, z: at.z });
+    expect(run.chalk).toEqual([]);
+  });
+
+  it('bug reports rebuild the turned rings from the run clock', () => {
+    const world = worldFor0(41);
+    let run = leaveLobby(world, createGeneratedRun(world, SAFE));
+    run = steps(world, { ...run, runTicks: mid(0) - 2, bells: 1 }, 4);
     const parsed = parseRunReport(JSON.stringify(createRunReport(world, run)));
     if (!parsed.ok) throw new Error(parsed.error);
-    const back = reproduceRun(world, parsed.report).run;
-    for (const edge of world.maze.edges.filter((item) => item.gate?.startsWith('ring'))) expect(back.shift.openness[edge.gate!]).toBe(run.shift.openness[edge.gate!]);
+    const { run: back, mismatches } = reproduceRun(world, parsed.report);
+    expect(mismatches).toEqual([]);
+    expect(back.player).toMatchObject({ x: run.player.x, z: run.player.z });
   });
 });

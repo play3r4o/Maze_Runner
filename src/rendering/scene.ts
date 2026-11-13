@@ -71,7 +71,7 @@ export function createScene(canvas: HTMLCanvasElement, mode: SceneMode, generate
 
   // M7b: positional audio for the generated expedition only.
   const audio = mode === 'generated' ? createAudio(scene, camera) : null;
-  const trapView = mode === 'generated' && generated ? createTrapView(scene, generated.traps) : null;
+  let trapView = mode === 'generated' && generated ? createTrapView(scene, generated.traps) : null;
   if (mode === 'generated') scene.add(camera); // so the held crossbow renders
   const monsterView = mode === 'generated' && generated ? createMonsterView(scene, generated.monsters) : null;
   const containerView = mode === 'generated' ? createContainerView(scene) : null;
@@ -82,7 +82,7 @@ export function createScene(canvas: HTMLCanvasElement, mode: SceneMode, generate
   torchLight.visible = false;
   camera.add(torchLight);
   const dayBackground = new Color('#a8b3b0'), nightBackground = new Color('#27302f');
-  const mazeView = mode === 'maze' ? createMazeView(scene)
+  let mazeView = mode === 'maze' ? createMazeView(scene)
     : mode === 'generated' && generated ? createMazeView(scene, generated.maze, generated.walls, generated.relic) : null;
   const gates = mode !== 'junction' ? [] : GATE_IDS.map((id) => {
     const rect = gateRect(id, 0);
@@ -146,6 +146,13 @@ export function createScene(canvas: HTMLCanvasElement, mode: SceneMode, generate
   resize();
 
   return {
+    // M18 rework: a ring turned; rebuild the maze and its traps for the turned world.
+    setWorld(world: GeneratedWorld) {
+      if (mode !== 'generated') return;
+      mazeView?.dispose(); trapView?.dispose();
+      mazeView = createMazeView(scene, world.maze, world.walls, world.relic);
+      trapView = createTrapView(scene, world.traps);
+    },
     audio,
     render(player: PlayerState, yaw: number, pitch: number, junction: JunctionState, maze?: GateView, expedition?: ExpeditionView) {
       mazeView?.update(maze);

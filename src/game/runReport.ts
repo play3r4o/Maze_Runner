@@ -7,8 +7,9 @@ import { overlapsBody } from '../simulation/movingWalls';
 import { advanceGeneratedShift, createGeneratedShift, requestGeneratedShift } from '../simulation/generatedShift';
 import type { GeneratedShift } from '../simulation/generatedShift';
 import type { ShiftPhase } from '../simulation/shift';
-import { RUN_EVENT_LIMIT, addRunEvent, createGeneratedRun, homeOpenness, ringOpenness, teleportTarget } from './generatedRun';
+import { RUN_EVENT_LIMIT, addRunEvent, createGeneratedRun, homeOpenness, liveWorld, ringOpenness, teleportTarget } from './generatedRun';
 import { OCTAGON_CONFIG, OCTAGON_VERSION } from '../simulation/octagon';
+import { ringDoorOpenness } from './ringTurns';
 import type { GeneratedRun, GeneratedWorld, RunEvent, RunStatus } from './generatedRun';
 import { RULE_KEYS } from './pressure';
 import type { RuleToggles } from './pressure';
@@ -56,7 +57,8 @@ export type RunReport = {
   events: RunEvent[]; shiftLog: string[]; errors: string[]; note: string;
 };
 
-export function createRunReport(world: GeneratedWorld, run: GeneratedRun, context: { errors?: string[]; note?: string; shiftLog?: string[] } = {}): RunReport {
+export function createRunReport(generated: GeneratedWorld, run: GeneratedRun, context: { errors?: string[]; note?: string; shiftLog?: string[] } = {}): RunReport {
+  const world = liveWorld(generated, run);
   const { maze } = world;
   return {
     format: REPORT_FORMAT, version: maze.version, seed: maze.seed, config: { ...maze.config }, fingerprint: layoutFingerprint(maze),
@@ -180,7 +182,9 @@ export function replayShift(world: GeneratedWorld, requests: number, shiftTicks:
   return shift;
 }
 
-export function reproduceRun(world: GeneratedWorld, report: RunReport): { run: GeneratedRun; mismatches: string[] } {
+export function reproduceRun(generated: GeneratedWorld, report: RunReport): { run: GeneratedRun; mismatches: string[] } {
+  // M18 rework: the rings stand as the run clock has turned them.
+  const world = liveWorld(generated, report);
   const mismatches: string[] = [];
   if (report.seed !== world.maze.seed) mismatches.push(`Seed ${report.seed} does not match loaded seed ${world.maze.seed}.`);
   if (report.fingerprint && report.fingerprint !== layoutFingerprint(world.maze)) mismatches.push('Layout fingerprint differs.');
@@ -188,7 +192,8 @@ export function reproduceRun(world: GeneratedWorld, report: RunReport): { run: G
   // M18: the home gate is not replayed; it follows the match clock.
   if (world.maze.homeGate) {
     const status = report.status === 'failed' ? 'out' : report.status;
-    shift = { ...shift, openness: { ...shift.openness, [world.maze.homeGate]: homeOpenness({ match: report.match, tick: report.tick, status }), ...ringOpenness(world, report.runTicks) } };
+    shift = { ...shift, openness: { ...shift.openness, ...ringOpenness(world, report.runTicks, report.rules.dusk),
+      [world.maze.homeGate]: Math.min(homeOpenness({ match: report.match, tick: report.tick, status }), ringDoorOpenness(world.maze.homeGate, report.runTicks, report.rules.dusk) ?? 1) } };
   }
   const expect = report.expect;
   if (shift.phase !== expect.phase) mismatches.push(`Phase ${shift.phase}, report says ${expect.phase}.`);

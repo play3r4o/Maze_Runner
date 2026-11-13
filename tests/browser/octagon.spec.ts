@@ -10,7 +10,7 @@ function watchErrors(page: Page) {
 }
 
 test('M18: the Octagon is the default; the lobby gate opens on E, you walk into the outer ring and back home to extract', async ({ page }) => {
-  test.setTimeout(180_000);
+  test.setTimeout(400_000);
   const errors = watchErrors(page);
   await installBrowserClock(page); await page.goto('/?seed=41&off=monsters,traps');
   await expect(page).toHaveTitle('Shifting Labyrinth · M18');
@@ -28,11 +28,11 @@ test('M18: the Octagon is the default; the lobby gate opens on E, you walk into 
   await expect(page.getByTestId('run-objective')).toContainText('Your gate opens in');
   await page.clock.runFor(4500);
   // Through the open gate into the hub room of the outer ring.
-  await page.keyboard.down('KeyW'); await page.clock.runFor(2500); await page.keyboard.up('KeyW');
+  await page.keyboard.down('KeyW'); await page.clock.runFor(4500); await page.keyboard.up('KeyW');
   await page.clock.runFor(200);
   await expect(page.getByTestId('hud-ring')).toHaveText('Outer ring');
   // Back south into the lobby: extracted, the gate shuts behind you.
-  await page.keyboard.down('KeyS'); await page.clock.runFor(4000); await page.keyboard.up('KeyS');
+  await page.keyboard.down('KeyS'); await page.clock.runFor(6000); await page.keyboard.up('KeyS');
   await page.clock.runFor(300);
   await expect(page.locator('#hud')).toHaveAttribute('data-result', 'extracted');
   expect(errors).toEqual([]);

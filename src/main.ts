@@ -20,7 +20,7 @@ import { ALL_RULES_ON, RULE_KEYS, autoShiftTicks, isNight, nextBellTick, nightFa
 import type { RuleKey, RuleToggles } from './game/pressure';
 import { CROSSBOW_RELOAD, MATCH, dailySeed } from './game/tuning';
 import { closeLoot, containerInReach, dropFromBag, interactGeneratedRun, lootMove, lootQuickMove, openContainerOf } from './game/looting';
-import { coreExtractActive, startMatch, useConsumable, activeWeapon, attackGeneratedRun, hasSpool, jamGate, jamTarget, setBlocking, swapHands, toggleThread, withBag, withEquipment } from './game/generatedRun';
+import { coreExtractActive, liveWorld, startMatch, useConsumable, activeWeapon, attackGeneratedRun, hasSpool, jamGate, jamTarget, setBlocking, swapHands, toggleThread, withBag, withEquipment } from './game/generatedRun';
 import { equipItem, isGear, maxHealthOf, statsOf, unequipItem } from './game/equipment';
 import { lootEquip, lootUnequip, smartSlot } from './game/looting';
 import { TRADERS, buyFrom, buyPrice, marketFor, sellTo, traderBuys } from './game/traders';
@@ -148,7 +148,7 @@ function startRoom() {
   const logLine = (entry: ShiftLogEntry) => `#${entry.request + 1} rev ${entry.revision} ${entry.outcome.toUpperCase()}`
     + `${entry.plan ? ` · ${entry.plan.open.toUpperCase()} opens, ${entry.plan.close.toUpperCase()} closes` : ''}`
     + `${entry.rejectedCandidates ? ` · ${entry.rejectedCandidates} rejected` : ''} · ${entry.reason}`;
-  const debugView = (): DebugView => world && generatedRun ? { layout: world.maze, player: generatedRun.player,
+  const debugView = (): DebugView => world && generatedRun ? { layout: liveWorld(world, generatedRun).maze, player: generatedRun.player,
     openness: generatedRun.shift.openness, crushed: isDead(generatedRun), phase: generatedRun.shift.phase,
     opening: generatedRun.shift.plan?.open ?? null, closing: generatedRun.shift.plan?.close ?? null,
     revision: generatedRun.shift.revision, validation: generatedRun.shift.validation?.reason ?? null,
@@ -177,25 +177,29 @@ function startRoom() {
     if (world) {
       let next = generatedRun!;
       const wasOver = isRunOver(next.status);
+      // M18 rework: the world with its rings turned by the run clock.
+      const now = liveWorld(world, next);
       if (input.consumeInteractRequest()) {
-        next = world.maze.homeGate && next.status === 'ready' ? startMatch(world, next) : interactGeneratedRun(next);
+        next = now.maze.homeGate && next.status === 'ready' ? startMatch(now, next) : interactGeneratedRun(next);
         if (next.openContainer && !input.isPanelOpen()) { input.openPanel(); stashMode = false; inventory.open(inventoryView(next)); }
       }
-      next = drawChalk(world, { ...next, player: { ...next.player, yaw: state.yaw } }, state.pitch, input.isChalkHeld());
+      next = drawChalk(now, { ...next, player: { ...next.player, yaw: state.yaw } }, state.pitch, input.isChalkHeld());
       if (input.consumeThreadRequest()) next = toggleThread(next);
-      if (input.consumeJamRequest() && next.bag.length) next = jamGate(world, next, next.bag[next.bag.length - 1].uid);
+      if (input.consumeJamRequest() && next.bag.length) next = jamGate(now, next, next.bag[next.bag.length - 1].uid);
       next = setBlocking(next, input.isBlockHeld());
       if (input.consumeSwapRequest()) next = swapHands(next);
       const use = input.consumeUseRequest();
       if (use) next = useConsumable(next, use);
-      if (input.consumeFireRequest()) next = attackGeneratedRun(world, { ...next, player: { ...next.player, yaw: state.yaw } });
+      if (input.consumeFireRequest()) next = attackGeneratedRun(now, { ...next, player: { ...next.player, yaw: state.yaw } });
       if (shiftRequested) {
-        next = requestGeneratedRunShift(world, next);
+        next = requestGeneratedRunShift(now, next);
         const entry = next.shift.log.at(-1);
         if (entry && entry !== generatedRun!.shift.log.at(-1)) console.info('Maze shift', { seed, ...entry });
       }
       const before = generatedRun!;
       generatedRun = next = stepGeneratedRun(world, next, state.intent, state.yaw, dt);
+      // M18 rework: riding a turning ring turns your view with it.
+      if (Math.abs(next.player.yaw - state.yaw) > 1e-6 && !isDead(next)) input.setLook(next.player.yaw, state.pitch);
       trackProfile(before, next);
       if (!wasOver && isRunOver(next.status)) {
         closeInventory(false);
@@ -239,7 +243,7 @@ function startRoom() {
     else if (key === 'paused') closeInventory(false);
     else if (key === 'jam' && generatedRun && world) {
       const uid = inventory.hoveredBagItem ?? generatedRun.bag.at(-1)?.uid;
-      if (uid) generatedRun = jamGate(world, generatedRun, uid);
+      if (uid) generatedRun = jamGate(liveWorld(world, generatedRun), generatedRun, uid);
     }
     else if (key === 'bag' && generatedRun && !isDead(generatedRun) && !isRunOver(generatedRun.status)) {
       // Tab: the bag; in Sanctuary before leaving, the bag beside the stash.
@@ -464,7 +468,7 @@ function startRoom() {
       return generatedRun.frozen ? 'Shift timers frozen. Gates hold their pose; walking continues.' : 'Shift timers resumed.';
     },
     onTeleport(cell) {
-      const result = teleportGeneratedRun(world, generatedRun!, cell);
+      const result = teleportGeneratedRun(liveWorld(world, generatedRun!), generatedRun!, cell);
       generatedRun = result.run;
       return result.error ?? `Teleported to ${cell} (${generatedRun.ring}). Resume to continue from there.`;
     },
@@ -513,6 +517,7 @@ function startRoom() {
   canvas.addEventListener('webglcontextlost', onContextLost);
 
   let frameId = 0;
+  let shownWorld = world;
   function frame(timestamp: number) {
     const state = input.read();
     const playerDead = mode === 'maze' ? mazeRun.crushedBy !== null : mode === 'generated' ? (generatedRun ? isDead(generatedRun) : false)
@@ -523,6 +528,9 @@ function startRoom() {
       const gates = generatedRun ? { ...generatedRun.shift, closing: generatedRun.shift.plan?.close ?? null }
         : mode === 'maze' ? { ...mazeRun.shift, closing: MAZE_GATE_IDS.find((id) => id !== mazeRun.shift.target)! } : undefined;
       const live = generatedRun;
+      // M18 rework: rebuild the maze when a ring has turned.
+      const shown = live && world ? liveWorld(world, live) : null;
+      if (shown && shown !== shownWorld) { shownWorld = shown; scene.setWorld?.(shown); }
       scene.render(player, state.yaw, state.pitch, run.junction, gates, live && world ? {
         carried: live.carrying, beams: live.rules.beams, night: nightFactor(live.rules, live.runTicks), chalk: live.chalk,
         openness: live.shift.openness, sounds: live.sounds, traps: live.traps, time: live.tick / 60,
@@ -530,7 +538,7 @@ function startRoom() {
         thread: live.thread, trace: activeTrace,
         containers: live.containers, relicHome: live.containers.some((c) => c.kind === 'reliquary' && c.items.length > 0),
         held: heldState(live), torch: live.torch > 0,
-        core: { active: coreExtractActive(world, live), progress: Math.min(1, live.match.channel / MATCH.coreSeconds) } } : undefined);
+        core: { active: coreExtractActive(shown!, live), progress: Math.min(1, live.match.channel / MATCH.coreSeconds) } } : undefined);
       // Read-only audio diagnostics for tests and bug reports.
       if (scene.audio) {
         document.documentElement.dataset.audioState = scene.audio.state;
@@ -545,7 +553,7 @@ function startRoom() {
     const reach = generatedRun && !inventory.isOpen ? containerInReach(generatedRun) : null;
     if (generatedRun) hud.updateGenerated(generatedRun, timestamp, reach ? (KIND_TITLES[reach.kind] ?? reach.kind) : null, input.isChalkOut());
     if (generatedRun && world) {
-      const gate = jamTarget(world, generatedRun);
+      const gate = jamTarget(liveWorld(world, generatedRun), generatedRun);
       const sacrifice = gate ? (inventory.isOpen && inventory.hoveredBagItem ? generatedRun.bag.find((e) => e.uid === inventory.hoveredBagItem) : generatedRun.bag.at(-1)) : null;
       hud.updateTools(gate && sacrifice ? { gate, item: itemDef(sacrifice.item).name } : null,
         hasSpool(generatedRun) ? { left: generatedRun.threadLeft, laying: generatedRun.laying } : null);

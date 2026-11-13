@@ -12,8 +12,8 @@ import { findMazeRoute, scheduledOpen } from '../simulation/mazeGraph';
 import { FIXED_DT } from '../loop';
 import { CLOSING_SECONDS, OPENING_SECONDS } from '../simulation/shift';
 import { AUTO_SHIFT_SECONDS, CHALK_INK_METRES, MATCH, RELIC_REACH, RING_TURN, ticks } from './tuning';
-import { RING_BOUNDARY_NAMES, ringDoorOpenness, ringTurnAt } from './ringTurns';
-import { parseRingGate } from '../simulation/octagon';
+import { ringDoorOpenness, ringTurnAt, ringsLabel, sameTurns, turnsAt } from './ringTurns';
+import { turnRun, worldFor } from './ringRotation';
 import { ALL_RULES_ON, BELL_TICKS, LOUD_SOUNDS, SOUND_LIMIT, autoShiftTicks, bellsDue, isNight } from './pressure';
 import type { RuleKey, RuleToggles, SoundEvent, SoundKind } from './pressure';
 import { aimRay, drawChalkStep, raycastChalk } from './chalk';
@@ -63,7 +63,9 @@ export function placeRelic(maze: GeneratedMaze): RelicSpot {
 
 // Everything physical derived once from a generated layout. Rendering, collision and the
 // debug map all read these same descriptors; nothing is hand-placed separately.
-export type GeneratedWorld = { maze: GeneratedMaze; walls: WallRect[]; solids: WallRect[]; plaza: WallRect; relic: RelicSpot; traps: TrapSpec[]; monsters: Monster[]; containers: Container[] };
+export type GeneratedWorld = { maze: GeneratedMaze; walls: WallRect[]; solids: WallRect[]; plaza: WallRect; relic: RelicSpot; traps: TrapSpec[]; monsters: Monster[]; containers: Container[];
+  // M18 rework: the generated world this one was turned from (absent on the generated world).
+  base?: GeneratedWorld };
 export function buildGeneratedWorld(maze: GeneratedMaze): GeneratedWorld {
   const walls = deriveMazeWalls(maze);
   const relic = placeRelic(maze);
@@ -137,28 +139,29 @@ export function homeOpenness(run: Pick<GeneratedRun, 'match' | 'tick' | 'status'
   if (run.match.opensAt === null || run.tick < run.match.opensAt || isRunOver(run.status)) return 0;
   return Math.min(1, (run.tick - run.match.opensAt) / ticks(OPENING_SECONDS));
 }
-// M18 stage 2: every ring door's openness at this run tick.
-export const ringOpenness = (world: GeneratedWorld, runTicks: number): Record<string, number> =>
-  Object.fromEntries(gateEdges(world.maze).flatMap((edge) => { const value = ringDoorOpenness(edge.gate!, runTicks); return value === null ? [] : [[edge.gate!, value]]; }));
+// M18 rework: ring doors held shut by a ring turn at this run tick (the home gate separately).
+export const ringOpenness = (world: GeneratedWorld, runTicks: number, dusk = true): Record<string, number> =>
+  Object.fromEntries(gateEdges(world.maze).flatMap((edge) => {
+    if (edge.gate === world.maze.homeGate) return [];
+    const value = ringDoorOpenness(edge.gate!, runTicks, dusk); return value === null ? [] : [[edge.gate!, value]];
+  }));
+// The current world for a run: the generated one with its rings turned by the run clock.
+export const liveWorld = (world: GeneratedWorld, run: Pick<GeneratedRun, 'runTicks' | 'rules'>) => world.maze.homeGate ? worldFor(world, turnsAt(run.runTicks, run.rules.dusk)) : world;
 // Sounds and log lines when a ring turn changes phase.
 function ringTurnEffects(world: GeneratedWorld, run: GeneratedRun, before: number): GeneratedRun {
-  const was = ringTurnAt(before), now = ringTurnAt(run.runTicks);
+  const was = ringTurnAt(before, run.rules.dusk), now = ringTurnAt(run.runTicks, run.rules.dusk);
   if (!now || (was && was.index === now.index && was.phase === now.phase)) return run;
-  const name = RING_BOUNDARY_NAMES[now.boundary];
-  if (now.phase === 'warning') {
-    run = withSound({ ...run, events: addRunEvent(run, 'shift', `the ${name} is about to seal and turn`) }, 'shiftWarning', run.player.x, run.player.z);
-  }
+  const name = ringsLabel(now.rings);
+  if (now.phase === 'closing') run = { ...run, events: addRunEvent(run, 'shift', `the ${name} seals to turn`) };
+  if (now.phase === 'sealed') run = withSound({ ...run, events: addRunEvent(run, 'shift', `the ${name} is turning`) }, 'shiftWarning', 0, 0);
   if (now.phase === 'closing' || now.phase === 'opening') {
     for (const edge of gateEdges(world.maze)) {
-      const door = parseRingGate(edge.gate!);
-      if (!door || door.boundary !== now.boundary) continue;
-      const opening = ringDoorOpenness(edge.gate!, run.runTicks)!, previousValue = ringDoorOpenness(edge.gate!, before)!;
-      if (opening === previousValue) continue;
+      const value = ringDoorOpenness(edge.gate!, run.runTicks, run.rules.dusk), previousValue = ringDoorOpenness(edge.gate!, before, run.rules.dusk);
+      if (value === null || value === previousValue) continue;
       const { x, z } = gateCentre(world, edge.gate!);
       run = withSound(run, 'gateGrind', x, z, { seconds: now.phase === 'closing' ? RING_TURN.closing : RING_TURN.opening });
     }
   }
-  if (now.phase === 'sealed') run = { ...run, events: addRunEvent(run, 'shift', `the ${name} is sealed and turning`) };
   return run;
 }
 export const coreExtractActive = (world: GeneratedWorld, run: GeneratedRun) =>
@@ -343,8 +346,9 @@ const insideRect = (player: PlayerState, rect: WallRect) =>
 // Same order as the accepted M2 maze: advance gates, let closing stone push (or crush) the
 // body, then apply walking against walls plus the gates' new poses. After death the gates
 // keep moving but the body does not.
-export function stepGeneratedRun(world: GeneratedWorld, previous: GeneratedRun, intent: MoveIntent, yaw: number, dt: number): GeneratedRun {
-  const { maze } = world;
+export function stepGeneratedRun(generated: GeneratedWorld, previous: GeneratedRun, intent: MoveIntent, yaw: number, dt: number): GeneratedRun {
+  let world = liveWorld(generated, previous);
+  let { maze } = world;
   // A finished run is a fixed record.
   if (previous.status === 'extracted' || previous.status === 'abandoned') return previous;
   let start = previous;
@@ -364,6 +368,17 @@ export function stepGeneratedRun(world: GeneratedWorld, previous: GeneratedRun, 
   const moving = !start.frozen && !jammed && start.shift.phase !== 'idle';
   let run: GeneratedRun = { ...start, tick: start.tick + 1, shiftTicks: start.shiftTicks + Number(moving),
     runTicks: start.runTicks + Number(start.status === 'out' && !isDead(start)) };
+  // M18 rework: a ring turns halfway through its seal; everything in it rides along.
+  if (maze.homeGate) {
+    const from = turnsAt(start.runTicks, start.rules.dusk), to = turnsAt(run.runTicks, run.rules.dusk);
+    if (!sameTurns(from, to)) {
+      const facing = run.player.yaw;
+      run = turnRun(generated, run, from, to);
+      yaw += run.player.yaw - facing; // you ride the ring: your view turns with it
+      run = { ...run, events: addRunEvent(run, 'shift', `the ring turned a quarter`) };
+      world = liveWorld(generated, run); maze = world.maze;
+    }
+  }
   // T2: the dusk bell rings once per threshold the run clock reaches while dusk is enabled.
   if (run.rules.dusk && bellsDue(run.runTicks) > run.bells) {
     const strikes = bellsDue(run.runTicks);
@@ -372,7 +387,8 @@ export function stepGeneratedRun(world: GeneratedWorld, previous: GeneratedRun, 
   }
   let shift = previous.frozen || jammed ? run.shift : advanceGeneratedShift(run.shift, dt, maze);
   if (maze.homeGate) {
-    shift = { ...shift, openness: { ...shift.openness, [maze.homeGate]: homeOpenness(run), ...ringOpenness(world, run.runTicks) } };
+    shift = { ...shift, openness: { ...shift.openness, ...ringOpenness(world, run.runTicks, run.rules.dusk),
+      [maze.homeGate]: Math.min(homeOpenness(run), ringDoorOpenness(maze.homeGate, run.runTicks, run.rules.dusk) ?? 1) } };
     run = ringTurnEffects(world, run, previous.runTicks);
     // The match starts the moment the gate begins to move: the clock runs from here.
     if (run.status === 'ready' && run.match.opensAt !== null && run.tick >= run.match.opensAt) {

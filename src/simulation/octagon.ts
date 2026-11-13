@@ -7,12 +7,13 @@ import { LOBBY_GATE, reachableMazeCells } from './mazeGraph';
 import { MAX_SEED, createRng, findBridgeToSanctuary } from './mazeGenerator';
 import type { GeneratedMaze, GeneratorConfig, Ring, Sanctuary, SpawnCounts } from './mazeGenerator';
 
-export const OCTAGON_VERSION = 'o1';
+export const OCTAGON_VERSION = 'o2';
 // 13×13 grid: the octagon fills distance ≤ 5 from the centre with the corners cut; the
 // sanctuaries sit one cell outside it. gateCount shift gates, as in the square maze.
-export const OCTAGON_CONFIG: Readonly<GeneratorConfig> = { size: 13, loopChance: 0.15, gateCount: 8 };
-export const OCTAGON_ROOM_HALF = 5; // 10 m rooms
-export const OCTAGON_DOOR_HALF = 2; // 4 m doorways, 2 m deep
+export const OCTAGON_CONFIG: Readonly<GeneratorConfig> = { size: 13, loopChance: 0.12, gateCount: 8 };
+// M18 rework: the square maze's corridors (4 m junctions, 8 m × 4 m corridors) with walls
+// four times as tall, so the maze towers over you as in the films.
+export const OCTAGON_WALL_HEIGHT = 12;
 export const HOME_GATE = LOBBY_GATE;
 // Ring doors per boundary (one per octagon side); boundary 1 is outer↔middle, 2 middle↔core.
 export const RING_SLOTS = 8;
@@ -69,18 +70,19 @@ export function generateOctagon(seed: number): GeneratedMaze {
     id: `base-${name}`, name, column: centre + sx, row: centre + sy, inner: { column: centre + ix, row: centre + iy }, home: name === HOME_SLOT }));
   const home = sanctuaries.find((base) => base.home)!;
   const homeCell: MazeCell = { id: cellId(home.column, home.row), column: home.column, row: home.row };
-  cells.push(homeCell);
-  rings[homeCell.id] = 'sanctuary';
+  // The home base is a 3-room-wide yard outside the south side (its middle room holds the gate).
+  const yard = [-1, 1].map((side): MazeCell => ({ id: cellId(home.column + side, home.row), column: home.column + side, row: home.row }));
+  for (const cell of [homeCell, ...yard]) { cells.push(cell); rings[cell.id] = 'sanctuary'; }
   const hub = cellId(home.inner.column, home.inner.row);
 
   const byPos = new Map(cells.map((cell) => [`${cell.column},${cell.row}`, cell]));
   const pairEdge = (a: MazeCell, b: MazeCell): MazeEdge => ({ id: edgeId(a.id, b.id), a: a.id, b: b.id });
   const candidates: MazeEdge[] = [];
   for (const cell of cells) {
-    if (cell === homeCell) continue;
+    if (rings[cell.id] === 'sanctuary') continue;
     for (const [dc, dr] of [[1, 0], [0, 1]]) {
       const other = byPos.get(`${cell.column + dc},${cell.row + dr}`);
-      if (other && other !== homeCell) candidates.push(pairEdge(cell, other));
+      if (other && rings[other.id] !== 'sanctuary') candidates.push(pairEdge(cell, other));
     }
   }
   const tierOf = (id: string) => rings[id];
@@ -106,8 +108,7 @@ export function generateOctagon(seed: number): GeneratedMaze {
   }
   for (const edge of leftovers) if (rng.next() < config.loopChance) add(edge);
   // Rings are joined only by ring doors: one doorway per octagon side (eight per boundary),
-  // seeded. Half are open at a time; when a ring turns, the open half seals and the other
-  // half opens (see ringDoorOpenness), so the way into the next ring moves round by 45°.
+  // seeded. They stay where they are; the rings turn behind them on each bell (ringTurns).
   const sectorOf = (edge: MazeEdge) => {
     const a = cells.find((cell) => cell.id === edge.a)!, b = cells.find((cell) => cell.id === edge.b)!;
     const angle = Math.atan2((a.row + b.row) / 2 - centre, (a.column + b.column) / 2 - centre);
@@ -126,6 +127,7 @@ export function generateOctagon(seed: number): GeneratedMaze {
   // The home gate: the only way from the lobby into the maze. Closed until the match starts.
   const homeEdge: MazeEdge = { ...pairEdge(homeCell, cells.find((cell) => cell.id === hub)!), gate: HOME_GATE };
   open.set(homeEdge.id, homeEdge);
+  for (const cell of yard) open.set(edgeId(cell.id, homeCell.id), pairEdge(cell, homeCell));
 
   // One landmark per ring, in different quadrants.
   const quadrant = (cell: MazeCell) => Math.floor(((Math.atan2(cell.row - centre, cell.column - centre) + Math.PI) / (2 * Math.PI)) * 4) % 4;
@@ -141,7 +143,7 @@ export function generateOctagon(seed: number): GeneratedMaze {
   // Checks run from the hub (the room inside the home gate), with the home gate ignored.
   const fromHub = (): MazeLayout => ({ cells, edges: [...open.values()].filter((edge) => edge.gate !== HOME_GATE), landmarks, start: hub,
     columns: size, rows: size });
-  const mazeCells = cells.length - 1;
+  const mazeCells = cells.length - 1 - yard.length;
   const ALL_OPEN: MazeOpenness = {};
   // Repair: no single connection may cut a landmark off from the hub.
   for (const landmark of landmarks) {
@@ -159,7 +161,6 @@ export function generateOctagon(seed: number): GeneratedMaze {
   // Shift gates, as in the square maze but never in the core chamber, at a ring doorway or
   // beside the hub. Open-starting gates must be removable with every chosen gate closed.
   const ringsOpen: MazeOpenness = Object.fromEntries(ringDoors.map((door) => [door.gate!, 1]));
-  const ringsAt = (parity: number): MazeOpenness => Object.fromEntries(ringDoors.map((door) => [door.gate!, Number(parseRingGate(door.gate!)!.slot % 2 === parity)]));
   const gateRng = createRng((seed ^ 0x9e3779b9) >>> 0);
   const grid: MazeLayout = { cells, edges: [], landmarks: [], start: hub, columns: size, rows: size };
   const blockOf = (edge: MazeEdge) => { const { block } = gatePocket(grid, edge); return `${block.column},${block.row}`; };
@@ -170,7 +171,7 @@ export function generateOctagon(seed: number): GeneratedMaze {
   const closedPool = gateRng.shuffle(sortById(candidates.filter((edge) => allowed(edge) && !open.has(edge.id))));
   const gates: string[] = [];
   const initialOpenness: Record<string, number> = { [HOME_GATE]: 0 };
-  for (const door of ringDoors) initialOpenness[door.gate!] = parseRingGate(door.gate!)!.slot % 2 === 0 ? 1 : 0;
+  for (const door of ringDoors) initialOpenness[door.gate!] = 1;
   for (let i = 0; i < config.gateCount; i++) {
     const startsOpen = i % 2 === 0;
     const pool = startsOpen ? openPool : closedPool;
@@ -178,8 +179,7 @@ export function generateOctagon(seed: number): GeneratedMaze {
       if (usedBlocks.has(blockOf(edge))) return false;
       if (!startsOpen) return true;
       const trial = { ...fromHub(), edges: fromHub().edges.filter((other) => other.id !== edge.id) };
-      // Whichever half of the ring doors is open, the static rooms alone still connect.
-      return [0, 1].every((parity) => reachableMazeCells(trial, ringsAt(parity), hub).size === mazeCells)
+      return reachableMazeCells(trial, ringsOpen, hub).size === mazeCells
         && landmarks.every((landmark) => findBridgeToSanctuary(trial, landmark.cell, ringsOpen) === null);
     });
     let index = findCandidate();
@@ -200,8 +200,8 @@ export function generateOctagon(seed: number): GeneratedMaze {
   const edges = [...open.values()].sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
   return {
     seed, version: OCTAGON_VERSION, config: { ...config }, columns: size, rows: size,
-    plaza: { minColumn: home.column, maxColumn: home.column, minRow: home.row, maxRow: home.row },
-    chambers: [core], roomHalf: OCTAGON_ROOM_HALF, doorHalf: OCTAGON_DOOR_HALF,
+    plaza: { minColumn: home.column - 1, maxColumn: home.column + 1, minRow: home.row, maxRow: home.row },
+    chambers: [core], wallHeight: OCTAGON_WALL_HEIGHT,
     cells, edges, landmarks, start: homeCell.id, rings, entrances: [homeEdge.id], gates, initialOpenness,
     homeGate: HOME_GATE, hub, core: { x: 0, z: 0 }, sanctuaries, ringNames: OCTAGON_RING_NAMES, counts: OCTAGON_COUNTS,
   };

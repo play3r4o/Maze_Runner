@@ -143,7 +143,7 @@ export function createMazeView(scene: Scene, layout: MazeLayout = HAND_BUILT_MAZ
   if (plaza) block(plaza.maxX - plaza.minX - 0.2, 0.02, plaza.maxZ - plaza.minZ - 0.2, home.x, 0.02, home.z, '#bba36b');
   else block(3.8, 0.02, 3.8, 0, 0.02, 0, '#bba36b');
   if (homeBeam && (home.x !== 0 || home.z !== 0)) homeBeam.position.set(home.x, homeBeam.position.y, home.z);
-  sign('SANCTUARY / START', home.x, 3.5, home.z + (octagon ? 3 : -1.8), octagon ? Math.PI : 0);
+  sign('SANCTUARY / START', home.x, 3.5, home.z + (octagon ? 1.9 : -1.8), octagon ? Math.PI : 0);
   // M18: the core chamber floor, the night extract disc and the seven sealed team bases.
   for (const chamber of chamberRects(layout)) {
     block(chamber.maxX - chamber.minX - 0.2, 0.015, chamber.maxZ - chamber.minZ - 0.2, (chamber.minX + chamber.maxX) / 2, 0.015, (chamber.minZ + chamber.maxZ) / 2, '#5b4a6e');

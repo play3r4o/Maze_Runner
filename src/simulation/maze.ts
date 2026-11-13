@@ -17,7 +17,10 @@ export type MazeLayout = { cells: readonly MazeCell[]; edges: readonly MazeEdge[
   // M18: room and doorway half-sizes (the square mazes use 4 m rooms and 4 m-wide corridors).
   roomHalf?: number; doorHalf?: number;
   // M18: extra blocks carved open like the plaza (the octagon's core chamber).
-  chambers?: readonly CellBlock[] };
+  chambers?: readonly CellBlock[];
+  // M18 rework: how tall walls and gates stand (3 m in the square mazes).
+  wallHeight?: number };
+export const wallHeightOf = (layout: MazeLayout) => layout.wallHeight ?? 3;
 export const roomHalfOf = (layout: MazeLayout) => layout.roomHalf ?? ROOM_HALF_DEFAULT;
 export const doorHalfOf = (layout: MazeLayout) => layout.doorHalf ?? 2;
 const ROOM_HALF_DEFAULT = 2;
@@ -45,7 +48,7 @@ export function blockRect(layout: MazeLayout, block: CellBlock, id: string): Wal
   const a = cellPosition({ id: '', column: minColumn, row: minRow }, layout);
   const b = cellPosition({ id: '', column: maxColumn, row: maxRow }, layout);
   const h = roomHalfOf(layout);
-  return { id, minX: a.x - h, maxX: b.x + h, minZ: a.z - h, maxZ: b.z + h, height: 3 };
+  return { id, minX: a.x - h, maxX: b.x + h, minZ: a.z - h, maxZ: b.z + h, height: wallHeightOf(layout) };
 }
 
 // Explicit rows/columns of connections, not a procedural generator.
@@ -88,7 +91,7 @@ export function corridorRect(layout: MazeLayout, edge: MazeEdge): WallRect {
   const b = cellPosition(findCell(layout, edge.b), layout);
   const vertical = a.x === b.x;
   const room = roomHalfOf(layout), door = doorHalfOf(layout);
-  return { id: edge.id, height: 3,
+  return { id: edge.id, height: wallHeightOf(layout),
     minX: vertical ? a.x - door : Math.min(a.x, b.x) + room,
     maxX: vertical ? a.x + door : Math.max(a.x, b.x) - room,
     minZ: vertical ? Math.min(a.z, b.z) + room : a.z - door,
@@ -135,7 +138,7 @@ export function deriveMazeWalls(layout: MazeLayout): WallRect[] {
   const rooms = layout.cells.map((cell) => {
     const { x, z } = cellPosition(cell, layout);
     const h = roomHalfOf(layout);
-    return { id: cell.id, minX: x - h, maxX: x + h, minZ: z - h, maxZ: z + h, height: 3 };
+    return { id: cell.id, minX: x - h, maxX: x + h, minZ: z - h, maxZ: z + h, height: wallHeightOf(layout) };
   });
   const plaza = plazaRect(layout);
   const corridors = layout.edges.map((edge) => corridorRect(layout, edge));
@@ -146,7 +149,7 @@ export function deriveMazeWalls(layout: MazeLayout): WallRect[] {
   const xs = cuts('x'), zs = cuts('z');
   const walls: WallRect[] = [];
   for (let x = 0; x < xs.length - 1; x++) for (let z = 0; z < zs.length - 1; z++) {
-    const rect = { id: `stone-${x}-${z}`, minX: xs[x], maxX: xs[x + 1], minZ: zs[z], maxZ: zs[z + 1], height: 3 };
+    const rect = { id: `stone-${x}-${z}`, minX: xs[x], maxX: xs[x + 1], minZ: zs[z], maxZ: zs[z + 1], height: wallHeightOf(layout) };
     if (!passages.some((passage) => contains(passage, (rect.minX + rect.maxX) / 2, (rect.minZ + rect.maxZ) / 2))) walls.push(rect);
   }
   return walls;

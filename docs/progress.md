@@ -391,3 +391,27 @@ Stop for the rules-on versus rules-off comparison. M8 and M9 remain unapproved. 
 - Full local browser suite on the stage 1 build: all 37 scenarios pass (32.0 min). After stage 2, the Octagon, generated and debug map scenarios pass again on the final build.
 - Visual check (screenshots): lobby facing the shut HOME GATE (now signed on the lobby side only), a 10 m outer-ring room, the core chamber with purple ring doors, the relic beam and the CORE / NIGHT EXTRACT sign, and the debug map of the octagon. Found and fixed: the debug panel called 10 m rooms "outside walkable maze" (diagnostics used 4 m rooms) and named rings by their tier keys; it now uses the layout's room size and ring names.
 - CI: with M18 the single browser job passed GitHub's 35-minute limit and was cancelled. The workflow now builds and unit-tests once, then runs the browser suite in four parallel shards (`playwright test --shard=N/4`, 35 min each); deploy waits for all of them.
+
+### M18 rework stage 1: tall corridors and turning rings — 2026-11-13
+
+- Direction from the developer after playing the room version: "The maze idea is kinda lost here"; "the maze will move on each bell ding. Also let's do the height and scale"; and "you can ride the ring" for what a turning ring does to you. Upper level (wooden bridges, roofs, stairs) and hanging blocks are agreed as the next two stages. See the [M18 specification](milestones/M18.md#rework-2026-11-13-tall-corridors-and-turning-rings).
+- **Generator `o2`:** corridor geometry, 12 m walls (`wallHeight` per layout), a three-room home yard, and eight fixed, normally open ring doors per boundary.
+- **Turning:**
+  - `game/ringTurns.ts`: the bell schedule (outer ring, middle ring, then both) and door seals, as pure functions of the run clock.
+  - `game/ringRotation.ts` (the turned world):
+    - Builds turned layouts (cached), rotating the ring's corridors, gates, traps, chests, landmarks and the relic.
+    - `turnRun` turns the run's bodies inside the ring: the player (and the view in `main.ts`), monsters, opened chests and remains.
+    - It drops chalk, thread, bolts and globs inside the ring.
+  - The run step, reports, debug map and scene (`setWorld`) use the turned world.
+- **Unit tests:** 1478 pass. Octagon tests rewritten for the corridor layout, plus new tests for:
+  - the schedule and door seals;
+  - turned layouts (four half turns give the original; doors, core and base unmoved; everything still reachable);
+  - riding the ring (position a quarter round, view turned, not inside stone);
+  - the core not moving and chalk being ground away;
+  - reports after a turn.
+- **Visual check (screenshots):** 12 m corridors with a strip of sky, a 12 m shift gate, and the debug map of the octagon.
+- **Limitations:**
+  - The turn is instant while the ring is sealed (no visible rotation).
+  - Two shift gates' sliding pockets may meet after a turn (not seen in tests).
+  - Shift replays in bug reports use the current turns.
+- Browser: the Octagon scenario (walk timings adjusted for the 8 m home corridor) passes locally in 5.6 min; the generated and debug map scenarios pass. The full suite runs in CI's four shards.
